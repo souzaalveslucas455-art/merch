@@ -41,6 +41,16 @@ textarea:focus{border-color:var(--azul);background:var(--papel)}
 .msg .h{font-size:11px;color:var(--ink3);text-align:right;margin-top:3px}
 .msg .anexo{font-size:12.5px;color:var(--ink2);background:var(--fundo);border-radius:9px;
   padding:8px 10px;margin-top:6px}
+.cartao-msg{margin-top:7px;border:1px solid var(--linha);border-radius:11px;overflow:hidden;background:var(--fundo)}
+.cartao-msg .cab{background:var(--azul-bg);color:var(--azul);padding:8px 12px;font-size:13px;font-weight:600}
+.cartao-msg .cab.rup{background:var(--verm-bg);color:var(--verm)}
+.cartao-msg .cab.val{background:#FDF2DC;color:#96620F}
+.cartao-msg ul{margin:0;padding:7px 12px 9px;list-style:none}
+.cartao-msg li{font-size:13px;padding:4px 0;border-bottom:1px solid var(--linha)}
+.cartao-msg li:last-child{border:none}
+.cartao-msg li b{font-weight:600;display:block}
+.cartao-msg li span{color:var(--ink2)}
+.cartao-msg .pe{font-size:11.5px;color:var(--ink3);padding:0 12px 9px}
 .msg img{max-width:100%;border-radius:10px;margin-top:6px;display:block}
 .dia{text-align:center;font-size:12px;color:var(--ink3);margin:14px 0 10px}
 .aviso{padding:13px 15px;border-radius:12px;font-size:14px;margin-bottom:12px;
@@ -93,6 +103,18 @@ const hora=d=>new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-d
 const diaDe=d=>new Date(d).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
 const hoje=()=>new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
 
+/* Mesmo desenho do app: o servidor entrega titulo e lista, e a tela so pinta. */
+function desenhaCartao(c){
+  if(!c) return "";
+  const rotulo={ruptura:"Ruptura",validade:"Validade",preco:"Preço",
+                geladeira:"Materiais",estoque:"Estoque"}[c.tipo]||c.tipo;
+  const cor=c.tipo==="ruptura"?"rup":c.tipo==="validade"?"val":"";
+  return `<div class="cartao-msg">
+    <div class="cab ${cor}">${rotulo} · ${esc(c.titulo)}</div>
+    <ul>${(c.linhas||[]).map(l=>`<li><b>${esc(l.n)}</b><span>${esc(l.d)}</span></li>`).join("")}</ul>
+    <div class="pe">${esc(c.loja||"")} · ${diaDe(c.data+"T12:00:00")} · por ${esc(String(c.autor||"").split(" ")[0])}</div>
+  </div>`;
+}
 function pintar(){
   const ms=DADOS.mensagens||[];
   if(!ms.length){ $("corpo").innerHTML=`<div class="vazio">A conversa começa aqui.<br>
@@ -104,7 +126,8 @@ function pintar(){
     ultimo=d;
     return sep+`<div class="msg ${m.eu?"minha":""}">
       <div class="quem">${esc(m.eu?"Você":m.autor||"Merchandising")}</div>
-      <div class="txt">${esc(m.texto||"")}</div>
+      ${m.texto?`<div class="txt">${esc(m.texto)}</div>`:""}
+      ${desenhaCartao(m.cartao)}
       ${m.anexo_url?`<div class="anexo">Há uma foto nesta mensagem. Peça ao repositor,
         ou abra pelo painel: por enquanto a foto não sai do sistema.</div>`:""}
       <div class="h">${hora(m.criado_em)}</div></div>`;

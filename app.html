@@ -181,6 +181,18 @@ h2.tit:first-child{margin-top:2px}
 .msg .h{font-size:10.5px;color:var(--ink3);text-align:right;margin-top:3px}
 .msg .anexo{font-size:12px;color:var(--ink2);background:var(--fundo);border-radius:9px;padding:7px 9px;margin-top:5px}
 .diamsg{text-align:center;font-size:11.5px;color:var(--ink3);margin:12px 0 9px}
+.cartao-msg{margin-top:7px;border:1px solid var(--linha);border-radius:11px;overflow:hidden;background:var(--fundo)}
+.cartao-msg .cab{background:var(--azul-bg);color:var(--azul);padding:7px 11px;font-size:12.5px;font-weight:600}
+.cartao-msg .cab.rup{background:var(--verm-bg);color:var(--verm)}
+.cartao-msg .cab.val{background:var(--amb-bg);color:var(--amb)}
+.cartao-msg ul{margin:0;padding:6px 11px 8px;list-style:none}
+.cartao-msg li{font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--linha)}
+.cartao-msg li:last-child{border:none}
+.cartao-msg li b{font-weight:600;display:block}
+.cartao-msg li span{color:var(--ink2)}
+.cartao-msg .pe{font-size:11px;color:var(--ink3);padding:0 11px 8px}
+.anexar{flex:none;width:42px;height:42px;border-radius:50%;background:var(--papel);
+  border:1px solid var(--linha);color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .escrever{display:flex;gap:8px;align-items:flex-end;width:100%}
 .escrever textarea{flex:1;font:inherit;font-size:14.5px;border:1px solid var(--linha);border-radius:18px;
   padding:10px 14px;resize:none;max-height:110px;background:var(--fundo);color:var(--ink);outline:none}
@@ -255,6 +267,7 @@ const IC={
   pessoa:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0113 0"/></svg>',
   fone:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h3l2 5-2.5 1.5a12 12 0 006 6L16 13l5 2v3a2 2 0 01-2.2 2A17 17 0 014 5.2 2 2 0 016 3z"/></svg>',
   fala:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 15a2 2 0 01-2 2H8l-4 3V6a2 2 0 012-2h12a2 2 0 012 2z"/></svg>',
+  mais:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   env:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 12L4 4l6 8-6 8z"/></svg>',
   cam:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5h3.2L8 6h8l1.8 2.5H21v11H3z"/><circle cx="12" cy="14" r="3.4"/></svg>',
   seta:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 18-8-5-8 5z"/></svg>'
@@ -546,6 +559,8 @@ function traduz(m){ const s=String(m).toLowerCase();
   if(s.includes("vinculada")) return "Esta rota já está em outro aparelho. Seu líder precisa liberar.";
   if(s.includes("vinculado")) return "Sua rota está sem repositor cadastrado. Fale com seu líder.";
   if(s.includes("failed to fetch")) return "Sem conexão com o sistema agora.";
+  if(s.includes("nada para mandar")) return "Não há nada para mandar neste cartão. Registre na visita primeiro.";
+  if(s.includes("nao participa")) return "Você não participa desta conversa.";
   if(s.includes("already registered")) return "Rota já cadastrada. Confira a senha.";
   return m; }
 
@@ -1014,8 +1029,10 @@ function telaConversa(){ montar(()=>{ TELA="mod"; esconderTudo();
   $("corpo").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{
     CANAL_TIPO=b.dataset.t; telaConversa(); });
   rodape(`<div class="escrever">
+    <button class="anexar" id="anx" aria-label="Anexar dados">${IC.mais}</button>
     <textarea id="txt" rows="1" placeholder="Escreva para ${CANAL_TIPO==="interno"?"seu líder":"o consultor"}"></textarea>
     <button class="env" id="env" aria-label="Enviar">${IC.env}</button></div>`);
+  $("anx").onclick=telaAnexar;
   $("txt").addEventListener("input",e=>{ e.target.style.height="auto";
     e.target.style.height=Math.min(e.target.scrollHeight,110)+"px"; });
   $("env").onclick=enviarMensagem;
@@ -1049,6 +1066,19 @@ async function atualizarFio(){
       body:JSON.stringify({p_loja:LOJA.id, p_tipo:CANAL_TIPO})}); pintaFio(); }catch(e){}
 }
 
+/* Um desenhador so para todos os tipos: o servidor entrega sempre o mesmo
+   formato, com titulo e uma lista de linhas. */
+function desenhaCartao(c){
+  if(!c) return "";
+  const rotulo={ruptura:"Ruptura",validade:"Validade",preco:"Preço",
+                geladeira:"Materiais",estoque:"Estoque"}[c.tipo]||c.tipo;
+  const cor=c.tipo==="ruptura"?"rup":c.tipo==="validade"?"val":"";
+  return `<div class="cartao-msg">
+    <div class="cab ${cor}">${rotulo} · ${esc(c.titulo)}</div>
+    <ul>${(c.linhas||[]).map(l=>`<li><b>${esc(l.n)}</b><span>${esc(l.d)}</span></li>`).join("")}</ul>
+    <div class="pe">${esc(c.loja||"")} · ${dataBr(c.data)} · por ${esc(String(c.autor||"").split(" ")[0])}</div>
+  </div>`;
+}
 const horaDe=d=>new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 const diaDe=d=>new Date(d).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
 
@@ -1075,7 +1105,8 @@ function pintaFio(){
         const sep=d!==ult?`<div class="diamsg">${d===diaDe(new Date())?"Hoje":d}</div>`:""; ult=d;
         return sep+`<div class="msg ${m.eu?"minha":""}">
           <div class="quem">${esc(m.eu?"Você":(m.autor||"—"))}</div>
-          <div class="txt">${esc(m.texto||"")}</div>
+          ${m.texto?`<div class="txt">${esc(m.texto)}</div>`:""}
+          ${desenhaCartao(m.cartao)}
           ${m.anexo_url?`<div class="anexo">foto anexada</div>`:""}
           <div class="h">${horaDe(m.criado_em)}</div></div>`; }).join(""); })()
     : `<div class="vazio">${CANAL_TIPO==="interno"
@@ -1084,6 +1115,46 @@ function pintaFio(){
   if($("bwa")) $("bwa").onclick=chamarConsultor;
   if($("bcopia")) $("bcopia").onclick=copiarLink;
   const c=document.querySelector(".corpo"); if(c) c.scrollTop=c.scrollHeight;
+}
+
+/* O que o repositor pode anexar. O numero de cada um vem do que ele
+   registrou hoje, entao ele ve antes de mandar se ha conteudo. */
+const CARTOES=[
+  {k:"ruptura",  t:"Ruptura",   d:"itens faltando na gôndola"},
+  {k:"validade", t:"Validade",  d:"produtos perto de vencer"},
+  {k:"estoque",  t:"Estoque",   d:"o que foi contado hoje"},
+  {k:"preco",    t:"Preço",     d:"preços e concorrência"},
+  {k:"geladeira",t:"Materiais", d:"geladeira e PDV com problema"}
+];
+function quantos(k){
+  const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
+  if(k==="ruptura")  return cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
+  if(k==="validade") return (l.validades||[]).filter(v=>diasAte(v.vence_em)<=lim).length;
+  if(k==="estoque")  return cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null)).length;
+  if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
+  if(k==="geladeira")return (l.materiais||[]).filter(m=>m.situacao&&m.situacao!=="ok").length;
+  return 0;
+}
+function telaAnexar(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Anexar dados", telaConversa, "");
+  $("corpo").innerHTML=`<div class="aviso inf">O cartão leva os números que você registrou hoje nesta loja.</div>`+
+    CARTOES.map((c,i)=>{ const n=quantos(c.k);
+      return `<button class="mod" data-c="${i}" ${n?"":"disabled style=opacity:.45"}>
+        <span class="ic">${n}</span>
+        <span class="txt"><b>${c.t}</b><span>${n?c.d:"nada registrado hoje"}</span></span>
+        <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`; }).join("");
+  $("corpo").querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>mandarCartao(CARTOES[+b.dataset.c].k));
+  rodape(null);
+});}
+
+async function mandarCartao(tipo){
+  if(!navigator.onLine) return alerta("Sem sinal. Cartão não é fila: mande quando voltar.");
+  if(!CANAL) return alerta("Abra a conversa primeiro.");
+  try{
+    await api("/rest/v1/rpc/mandar_cartao",{method:"POST",
+      body:JSON.stringify({p_canal:CANAL.canal_id, p_tipo:tipo})});
+    telaConversa();
+  }catch(e){ alerta(traduz(e.message)); }
 }
 
 async function enviarMensagem(){
