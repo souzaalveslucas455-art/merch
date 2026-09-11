@@ -1036,14 +1036,14 @@ function telaPdv(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LOJA.mat
    Sem fila offline: mensagem so vale se chegou. Guardar para mandar
    depois faria o repositor achar que avisou quando nao avisou. Sem
    sinal, o botao diz isso na cara. */
-let CANAL=null, CANAL_TIPO="interno", RELOGIO=null, CONVITE=null, CONVITE_ERRO=null;
+let CANAL=null, CANAL_TIPO="interno", RELOGIO=null, CONVITE=null, CONVITE_ERRO=null, PAPEL="consultor";
 
 function telaConversa(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Conversa", ()=>{ pararRelogio(); telaLoja(); }, "");
   $("corpo").innerHTML=`
     <div class="abas">
       <button class="${CANAL_TIPO==="interno"?"on":""}" data-t="interno">Meu líder</button>
-      <button class="${CANAL_TIPO==="consultor"?"on":""}" data-t="consultor">Consultor</button>
+      <button class="${CANAL_TIPO==="consultor"?"on":""}" data-t="consultor">Comercial</button>
     </div><div id="fio"><div class="vazio">Abrindo…</div></div>`;
   $("corpo").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{
     CANAL_TIPO=b.dataset.t; telaConversa(); });
@@ -1070,7 +1070,7 @@ async function abrirCanal(){
     /* O link do consultor e preparado AGORA, nao na hora do toque. O
        navegador so deixa abrir o WhatsApp como resposta direta a um toque;
        se houver espera de rede no meio, ele bloqueia em silencio. */
-    if(CANAL_TIPO==="consultor") prepararConvite();
+    if(CANAL_TIPO==="consultor") prepararConvite(PAPEL);
     pararRelogio();
     /* 15 segundos enquanto a tela esta aberta. Conexao aberta seria mais
        elegante e nao aguenta 233 aparelhos ao mesmo tempo; assim escala
@@ -1105,22 +1105,32 @@ function pintaFio(){
   const el=$("fio"); if(!el) return;
   const ms=(CANAL&&CANAL.mensagens)||[];
   const conv=CANAL&&CANAL.convite;
+  const quem=(CANAL&&CANAL.quem)||[];
+  const rot={consultor:"Consultor",supervisor:"Supervisor",gerencia:"Gerência"};
   const cabeca = CANAL_TIPO!=="consultor" ? ""
     : !/^https?:$/.test(location.protocol)
       ? `<div class="aviso err">Este app está aberto como arquivo, não por um endereço da internet.
-         A conversa com o consultor só funciona com o app publicado.</div>`
-    : CONVITE_ERRO ? `<div class="aviso err">${esc(CONVITE_ERRO)}</div>`
-    : !CONVITE ? `<div class="aviso inf">Preparando o link do consultor…</div>`
-    : `<div class="aviso ${semVer(LOJA.id)?"err":conv&&conv.ultimo_uso?"inf":"amb"}">
-         <b>${esc(CONVITE.nome)}</b>${CONVITE.telefone?` · ${esc(CONVITE.telefone)}`:""}<br>
-         ${semVer(LOJA.id)
-           ? `Não viu ${semVer(LOJA.id)} ${semVer(LOJA.id)===1?"mensagem":"mensagens"}. Mande o link de novo.`
-           : conv&&conv.ultimo_uso ? `Já abriu o link em ${diaDe(conv.ultimo_uso)}.`
-           : "Escreva sua mensagem e mande o link para ele abrir."}
-         <div class="pilha">
-           <button id="bwa">Mandar link no WhatsApp</button>
-           <button id="bcopia">Copiar link</button>
-         </div></div>`;
+         A conversa com o comercial só funciona com o app publicado.</div>`
+      : (semVer(LOJA.id)
+          ? `<div class="aviso err"><b>Ninguém do comercial viu ${semVer(LOJA.id)} ${semVer(LOJA.id)===1?"mensagem":"mensagens"}.</b><br>
+             Mande o link de novo para quem precisa ver.</div>` : "")
+        + `<div class="aviso inf" style="padding-bottom:6px">
+             <b>Quem pode entrar nesta conversa</b>
+             ${quem.map(q=>`<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+               <span style="flex:1;min-width:130px;font-size:13px">
+                 <b>${rot[q.papel]}</b><br>${esc(q.nome||"— não cadastrado")}
+                 ${q.ultimo_uso?`<br><span style="color:var(--verde)">abriu em ${diaDe(q.ultimo_uso)}</span>`
+                   :q.convidado?`<br><span style="color:var(--amb)">tem o link, não abriu</span>`:""}
+               </span>
+               ${q.nome?`<button class="pap" data-p="${q.papel}"
+                 style="padding:8px 12px;font-size:12.5px;border:1px solid var(--linha);
+                 border-radius:9px;background:var(--papel);color:var(--ink)">
+                 ${q.convidado?"Reenviar":"Chamar"}</button>`:""}
+             </div>`).join("")}
+             ${CONVITE_ERRO?`<div style="color:var(--verm);margin-top:8px;font-size:13px">${esc(CONVITE_ERRO)}</div>`:""}
+             ${CONVITE?`<div class="pilha"><button id="bwa">Mandar link de ${rot[PAPEL]} no WhatsApp</button>
+               <button id="bcopia">Copiar link</button></div>`:""}
+           </div>`;
   el.innerHTML = cabeca + (ms.length ? (()=>{ let ult="";
       return ms.map(m=>{ const d=diaDe(m.criado_em);
         const sep=d!==ult?`<div class="diamsg">${d===diaDe(new Date())?"Hoje":d}</div>`:""; ult=d;
@@ -1133,6 +1143,7 @@ function pintaFio(){
     : `<div class="vazio">${CANAL_TIPO==="interno"
         ?"Nada falado sobre esta loja ainda."
         :"Nenhuma conversa com o consultor desta loja."}</div>`);
+  $("fio").querySelectorAll(".pap").forEach(b=>b.onclick=()=>prepararConvite(b.dataset.p));
   if($("bwa")) $("bwa").onclick=chamarConsultor;
   if($("bcopia")) $("bcopia").onclick=copiarLink;
   const c=document.querySelector(".corpo"); if(c) c.scrollTop=c.scrollHeight;
@@ -1225,11 +1236,12 @@ async function enviarMensagem(){
   finally{ b.disabled=false; }
 }
 
-async function prepararConvite(){
-  CONVITE=null; CONVITE_ERRO=null;
+async function prepararConvite(papel){
+  PAPEL=papel||"consultor"; CONVITE=null; CONVITE_ERRO=null; pintaFio();
   try{
-    CONVITE=await api("/rest/v1/rpc/convidar_consultor",{method:"POST",
-      body:JSON.stringify({p_loja:LOJA.id, p_base_url:location.href.replace(/[^/]*$/,"")})});
+    CONVITE=await api("/rest/v1/rpc/convidar_comercial",{method:"POST",
+      body:JSON.stringify({p_loja:LOJA.id, p_papel:PAPEL,
+        p_base_url:location.href.replace(/[^/]*$/,"")})});
   }catch(e){ CONVITE_ERRO=traduz(e.message); }
   pintaFio();
 }
