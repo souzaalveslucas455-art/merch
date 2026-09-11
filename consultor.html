@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="robots" content="noindex,nofollow">
+<title>Merchandising · conversa</title>
+<style>
+:root{
+  --verm:#E4002B;--verm-bg:#FDE7EC;--azul:#1E6FD9;--azul-bg:#E9F1FC;
+  --ink:#1A1D21;--ink2:#6B7280;--ink3:#9CA3AF;--linha:#E5E7EB;
+  --papel:#FFF;--fundo:#F2F3F5;--verde:#0F7A52;--verde-bg:#E6F4EE;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --sombra:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --topo:env(safe-area-inset-top,0px);--base:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overscroll-behavior-y:contain}
+body{background:var(--fundo);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+.topo{flex:none;background:var(--papel);border-bottom:1px solid var(--linha);
+  padding:calc(10px + var(--topo)) 16px 10px;min-height:0}
+.topo b{display:block;font-size:16px;font-weight:600}
+.topo span{font-size:12.5px;color:var(--ink2)}
+.corpo{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 20px}
+.barra{flex:none;background:var(--papel);border-top:1px solid var(--linha);
+  padding:10px 12px calc(10px + var(--base));display:flex;gap:9px;align-items:flex-end}
+textarea{flex:1;font:inherit;font-size:15px;border:1px solid var(--linha);border-radius:18px;
+  padding:11px 15px;resize:none;max-height:120px;background:var(--fundo);color:var(--ink);outline:none}
+textarea:focus{border-color:var(--azul);background:var(--papel)}
+.enviar{flex:none;width:44px;height:44px;border-radius:50%;background:var(--verm);color:#fff;
+  border:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.enviar:disabled{opacity:.4}
+.msg{max-width:82%;margin-bottom:10px;padding:10px 13px;border-radius:14px;box-shadow:var(--sombra);
+  background:var(--papel);word-wrap:break-word}
+.msg.minha{margin-left:auto;background:var(--verde-bg)}
+.msg .quem{font-size:12px;font-weight:600;color:var(--azul);margin-bottom:2px}
+.msg.minha .quem{color:var(--verde)}
+.msg .txt{font-size:14.5px;white-space:pre-wrap}
+.msg .h{font-size:11px;color:var(--ink3);text-align:right;margin-top:3px}
+.msg .anexo{font-size:12.5px;color:var(--ink2);background:var(--fundo);border-radius:9px;
+  padding:8px 10px;margin-top:6px}
+.msg img{max-width:100%;border-radius:10px;margin-top:6px;display:block}
+.dia{text-align:center;font-size:12px;color:var(--ink3);margin:14px 0 10px}
+.aviso{padding:13px 15px;border-radius:12px;font-size:14px;margin-bottom:12px;
+  background:var(--azul-bg);color:var(--azul)}
+.aviso.err{background:var(--verm-bg);color:var(--verm)}
+.vazio{text-align:center;color:var(--ink3);padding:44px 18px;font-size:14.5px}
+.centro{max-width:520px;margin:0 auto;width:100%}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topo" id="topo"><b>Carregando…</b></div>
+  <div class="corpo"><div class="centro" id="corpo"></div></div>
+  <div class="barra" id="barra" style="display:none">
+    <textarea id="txt" rows="1" placeholder="Escreva sua resposta"></textarea>
+    <button class="enviar" id="env" aria-label="Enviar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linejoin="round"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
+  </div>
+</div>
+<script>
+"use strict";
+/* ===================== CONFIGURACAO =====================
+   Mesmos valores do app. Esta pagina fica num endereco publico:
+   ela nao le nada sem um token valido na URL.                 */
+const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"eyJhbGciOi...", dominio:"merch.local"" };
+/* ======================================================== */
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const TOKEN=new URLSearchParams(location.search).get("t")||"";
+let DADOS=null, ultimoEnvio=0;
+
+async function rpc(nome, corpo){
+  const r=await fetch(CFG.url.replace(/\/+$/,"")+"/rest/v1/rpc/"+nome,{
+    method:"POST", headers:{"apikey":CFG.chave,"Content-Type":"application/json"},
+    body:JSON.stringify(corpo)});
+  const t=await r.text(); let c=null;
+  try{ c=t?JSON.parse(t):null }catch(e){ c={raw:t} }
+  if(!r.ok) throw new Error(c?.message||c?.raw||("HTTP "+r.status));
+  return c;
+}
+function traduz(m){ const s=String(m).toLowerCase();
+  if(s.includes("invalido")||s.includes("vencido")) return "Este link não vale mais. Peça um novo ao repositor.";
+  if(s.includes("failed to fetch")) return "Sem conexão agora. Tente de novo em instantes.";
+  return m; }
+
+const hora=d=>new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+const diaDe=d=>new Date(d).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+const hoje=()=>new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+
+function pintar(){
+  const ms=DADOS.mensagens||[];
+  if(!ms.length){ $("corpo").innerHTML=`<div class="vazio">A conversa começa aqui.<br>
+    Escreva abaixo e o repositor recebe na hora.</div>`; return; }
+  let ultimo="";
+  $("corpo").innerHTML=ms.map(m=>{
+    const d=diaDe(m.criado_em);
+    const sep=d!==ultimo?`<div class="dia">${d===hoje()?"Hoje":d}</div>`:"";
+    ultimo=d;
+    return sep+`<div class="msg ${m.eu?"minha":""}">
+      <div class="quem">${esc(m.eu?"Você":m.autor||"Merchandising")}</div>
+      <div class="txt">${esc(m.texto||"")}</div>
+      ${m.anexo_url?`<div class="anexo">Há uma foto nesta mensagem. Peça ao repositor,
+        ou abra pelo painel: por enquanto a foto não sai do sistema.</div>`:""}
+      <div class="h">${hora(m.criado_em)}</div></div>`;
+  }).join("");
+  const c=document.querySelector(".corpo"); c.scrollTop=c.scrollHeight;
+}
+
+async function carregar(primeira){
+  try{
+    DADOS=await rpc("conversa_por_token",{p_token:TOKEN});
+    const l=DADOS.loja||{};
+    $("topo").innerHTML=`<b>${esc(l.nome||"Loja")}</b>
+      <span>${esc([l.bairro,l.cidade].filter(Boolean).join(", "))} · você é ${esc(String(DADOS.nome).split(" ").slice(0,2).join(" "))}</span>`;
+    $("barra").style.display="flex";
+    pintar();
+  }catch(e){
+    if(primeira){
+      $("topo").innerHTML=`<b>Conversa</b>`;
+      $("corpo").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`;
+      $("barra").style.display="none";
+    }
+  }
+}
+
+$("txt").addEventListener("input",e=>{ e.target.style.height="auto";
+  e.target.style.height=Math.min(e.target.scrollHeight,120)+"px"; });
+
+$("env").onclick=async()=>{
+  const t=$("txt").value.trim();
+  if(!t) return;
+  if(Date.now()-ultimoEnvio<800) return;      // evita duplo toque mandar duas vezes
+  ultimoEnvio=Date.now();
+  $("env").disabled=true;
+  try{
+    await rpc("responder_por_token",{p_token:TOKEN, p_texto:t});
+    $("txt").value=""; $("txt").style.height="auto";
+    await carregar();
+  }catch(e){
+    const d=document.createElement("div"); d.className="aviso err";
+    d.textContent=traduz(e.message); $("corpo").prepend(d);
+    setTimeout(()=>d.remove(),4000);
+  }finally{ $("env").disabled=false; }
+};
+
+/* Sem token nao existe nada para ver. */
+if(!TOKEN){
+  $("topo").innerHTML=`<b>Conversa</b>`;
+  $("corpo").innerHTML=`<div class="aviso err">Link incompleto. Abra pelo link que você recebeu.</div>`;
+}else if(!CFG.url||!CFG.chave){
+  $("topo").innerHTML=`<b>Conversa</b>`;
+  $("corpo").innerHTML=`<div class="aviso err">Esta página ainda não foi configurada.
+    Quem publicou precisa preencher o endereço e a chave no topo do arquivo.</div>`;
+}else{
+  carregar(true);
+  /* Atualiza sozinho enquanto a aba estiver aberta. 15s e suficiente:
+     ninguem fica olhando a tela esperando, e assim nao castiga a bateria
+     nem o plano de dados de quem so entrou para responder uma coisa. */
+  setInterval(()=>{ if(!document.hidden) carregar(); },15000);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) carregar(); });
+}
+</script>
+</body>
+</html>

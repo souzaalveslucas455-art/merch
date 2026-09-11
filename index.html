@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Merchandising</title>
+<!-- Existe para o endereco curto funcionar.
+     Sem este arquivo, https://seu-endereco/ devolve "Page not found",
+     porque o servidor procura um index.html na raiz e nao acha.
+     Com ele, o repositor guarda so o endereco curto. -->
+<meta http-equiv="refresh" content="0; url=app.html">
+<link rel="canonical" href="app.html">
+<style>
+  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#F2F3F5;color:#1A1D21}
+  a{color:#E4002B;font-weight:600}
+  p{text-align:center;font-size:15px;padding:0 24px}
+</style>
+</head>
+<body>
+<p>Abrindo o aplicativo…<br><br>
+   Se não abrir sozinho, <a href="app.html">toque aqui</a>.</p>
+<script>location.replace("app.html");</script>
+</body>
+</html>

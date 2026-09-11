@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<title>Merchandising</title>
+<style>
+:root{
+  --verm:#E4002B; --verm-bg:#FDE7EC; --verm-esc:#B80022;
+  --azul:#1E6FD9; --azul-bg:#E9F1FC;
+  --ink:#1A1D21; --ink2:#6B7280; --ink3:#9CA3AF;
+  --linha:#E5E7EB; --papel:#FFF; --fundo:#F2F3F5;
+  --verde:#0F7A52; --verde-bg:#E6F4EE;
+  --amb:#96620F; --amb-bg:#FDF2DC;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --sombra:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --topo:env(safe-area-inset-top,0px); --base:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overscroll-behavior-y:contain}
+body{background:var(--fundo);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;
+  -webkit-font-smoothing:antialiased}
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+/* ---- barra de topo ---- */
+.topo{flex:none;background:var(--papel);padding:calc(8px + var(--topo)) 8px 8px;
+  display:flex;align-items:center;gap:4px;min-height:0;border-bottom:1px solid var(--linha)}
+.avatar{flex:none;width:37px;height:37px;border-radius:50%;background:var(--verm-bg);color:var(--verm);
+  border:none;font:inherit;font-weight:700;font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.icone{flex:none;width:40px;height:40px;border:none;background:none;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink)}
+.icone.verm{color:var(--verm)}
+.topo h1{font-size:18px;font-weight:600;margin:0;flex:1;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;padding-left:4px}
+svg{display:block}
+
+/* ---- menu lateral ---- */
+.sombra-menu{position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:40;display:none}
+.sombra-menu.on{display:block}
+.menu{position:fixed;left:0;right:0;bottom:0;background:var(--papel);z-index:41;
+  border-radius:18px 18px 0 0;transform:translateY(102%);transition:transform .2s ease;
+  padding-bottom:calc(14px + var(--base));max-height:88%;overflow-y:auto;
+  box-shadow:0 -8px 30px rgba(16,24,40,.16)}
+.menu.on{transform:none}
+.puxador{width:40px;height:4px;border-radius:4px;background:#D7DBE0;margin:10px auto 4px}
+.menu .perfil{display:flex;gap:14px;align-items:center;padding:14px 20px 16px}
+.menu .bolota{width:48px;height:48px;border-radius:50%;background:var(--verm-bg);color:var(--verm);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex:none}
+.menu .perfil b{display:block;font-size:16.5px;font-weight:600}
+.menu .perfil span{font-size:13px;color:var(--ink2)}
+.menu .sinc{margin:0 20px;width:calc(100% - 40px);background:var(--verm);color:#fff;border:none;
+  border-radius:12px;padding:15px;font-size:16px;font-weight:600;display:flex;align-items:center;
+  justify-content:center;gap:10px;cursor:pointer;font-family:inherit}
+.menu .quando{display:flex;justify-content:space-between;padding:11px 20px 4px;font-size:13.5px;color:var(--ink2)}
+.menu .quando b{color:var(--verm);font-weight:600}
+.menu .numeros{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:12px 20px 4px}
+.menu .numeros div{background:var(--fundo);border-radius:12px;padding:11px;text-align:center}
+.menu .numeros b{display:block;font-size:18px;font-weight:700}
+.menu .numeros span{font-size:11.5px;color:var(--ink2)}
+.menu .diag{padding:10px 20px 0;font-size:13px;color:var(--ink3)}
+.menu .diag .ruim{color:var(--verm)}
+.menu .sair{display:flex;align-items:center;justify-content:center;gap:10px;width:calc(100% - 40px);
+  margin:16px 20px 0;background:none;border:1px solid var(--linha);border-radius:12px;padding:14px;
+  font:inherit;font-size:15px;color:var(--verm);font-weight:600;cursor:pointer}
+
+/* ---- faixa de dias ---- */
+.dias{flex:none;background:var(--papel);border-bottom:1px solid var(--linha);padding:8px 0 10px}
+.dias .tira{display:flex;gap:10px;overflow-x:auto;padding:0 14px;scrollbar-width:none}
+.dias .tira::-webkit-scrollbar{display:none}
+.dia{flex:none;width:52px;text-align:center;background:none;border:none;cursor:pointer;font:inherit;padding:0}
+.dia .rot{font-size:12.5px;color:var(--ink2);margin-bottom:4px}
+.dia .num{width:46px;height:46px;border-radius:50%;background:#EFF1F3;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;margin:0 auto}
+.dia.hoje .rot{font-weight:600;color:var(--ink)}
+.dia.sel .num{background:var(--azul);color:#fff}
+.dia .badge{display:inline-block;margin-top:4px;background:var(--verm);color:#fff;font-size:11px;
+  font-weight:600;border-radius:20px;padding:1px 9px;min-width:24px}
+.dia .badge.zero{background:#D7DBE0;color:#6B7280}
+.resumo-dia{text-align:center;font-size:13px;color:var(--ink2);padding:9px 16px 0}
+.resumo-dia .pt{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--verm);
+  margin-right:7px;vertical-align:1px}
+
+/* ---- busca ---- */
+.barra{flex:none;background:var(--fundo);padding:10px 14px 4px;display:flex;gap:10px}
+.busca{flex:1;display:flex;align-items:center;gap:10px;background:var(--papel);border:1px solid var(--linha);
+  border-radius:12px;padding:0 14px;box-shadow:var(--sombra)}
+.busca input{flex:1;border:none;outline:none;padding:12px 0;font:inherit;font-size:14.5px;background:none;color:var(--ink)}
+.quad{flex:none;width:48px;height:48px;background:var(--papel);border:1px solid var(--linha);border-radius:12px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink2);box-shadow:var(--sombra)}
+.quad.on{color:var(--verm)}
+
+.corpo{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 26px}
+
+/* ---- cartao de loja ---- */
+.loja{background:var(--papel);border-radius:14px;box-shadow:var(--sombra);margin-bottom:12px;
+  border-left:4px solid var(--azul);overflow:hidden}
+.loja.feita{border-left-color:var(--verde)}
+.loja.alta{border-left-color:var(--verm)}
+.loja .dentro{padding:13px 15px}
+.loja .cab{display:flex;gap:10px;align-items:flex-start}
+.loja .titulo{flex:1;min-width:0;font-size:15px;font-weight:700;line-height:1.25}
+.loja .titulo i{font-style:normal;color:var(--ink3);font-weight:600;margin-right:4px}
+.selos{flex:none;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.selo{font-size:12px;font-weight:500;border-radius:8px;padding:3px 10px;white-space:nowrap}
+.selo.alta{background:var(--verm-bg);color:var(--verm)}
+.selo.pend{background:var(--azul-bg);color:var(--azul)}
+.selo.feito{background:var(--verde-bg);color:var(--verde)}
+.loja .hora{font-size:13px;color:var(--ink2);text-align:right;margin-top:6px}
+.loja .end{font-size:13px;color:var(--ink2);margin-top:8px}
+.loja .desc{font-size:13px;color:var(--ink2);margin-top:5px}
+.loja .pe{display:flex;align-items:center;gap:12px;margin-top:12px}
+.bolinha{width:42px;height:42px;border-radius:50%;background:var(--verm-bg);color:var(--verm);
+  border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.bolinha:disabled{opacity:.4}
+.progresso{flex:1;display:flex;align-items:center;gap:10px}
+.trilho{flex:1;height:7px;background:#EBEDF0;border-radius:10px;overflow:hidden}
+.trilho i{display:block;height:100%;background:var(--verde);border-radius:10px}
+.fracao{font-size:13px;color:var(--ink2);font-weight:500;flex:none}
+
+/* ---- geral ---- */
+button{font-family:inherit}
+.bt{width:100%;padding:15px;font-size:16px;font-weight:600;background:var(--verm);color:#fff;
+  border:none;border-radius:12px;cursor:pointer}
+.bt.sec{background:var(--papel);color:var(--ink);border:1px solid var(--linha)}
+.bt:disabled{opacity:.45}
+.rodape{flex:none;background:var(--papel);border-top:1px solid var(--linha);
+  padding:12px 14px calc(12px + var(--base));display:flex;gap:10px}
+input,select{font:inherit;width:100%;padding:12px;border:1px solid var(--linha);border-radius:12px;
+  background:var(--papel);color:var(--ink)}
+input:focus,select:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px var(--azul-bg)}
+label{display:block;font-size:12.5px;color:var(--ink2);margin:0 0 6px}
+.campo{margin-bottom:15px}
+h2.tit{font-size:12px;font-weight:700;color:var(--ink2);margin:18px 0 9px;letter-spacing:.02em}
+h2.tit:first-child{margin-top:2px}
+.cartao{background:var(--papel);border-radius:14px;box-shadow:var(--sombra);padding:13px 15px;margin-bottom:12px}
+.mod{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--papel);
+  border:none;border-radius:14px;box-shadow:var(--sombra);padding:13px 15px;margin-bottom:9px;font:inherit;color:inherit;cursor:pointer}
+.mod .ic{flex:none;width:36px;height:36px;border-radius:10px;background:var(--azul-bg);color:var(--azul);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+.mod.alerta .ic{background:var(--verm-bg);color:var(--verm)}
+.mod.pronto .ic{background:var(--verde);color:#fff}
+.mod .txt{flex:1;min-width:0}
+.mod .txt b{display:block;font-size:14.5px;font-weight:600}
+.mod .txt span{font-size:13px;color:var(--ink2)}
+.item{background:var(--papel);border-radius:14px;box-shadow:var(--sombra);padding:12px 14px;margin-bottom:10px}
+.item.crit{border-left:4px solid var(--verm)}
+.item.aten{border-left:4px solid var(--amb)}
+.item .nome{font-size:14.5px;font-weight:600;line-height:1.3}
+.item .emb{font-size:12.5px;color:var(--ink3);margin-top:2px}
+.nums{display:flex;gap:9px;margin-top:11px;align-items:flex-end}
+.nums>div{flex:1}.nums label{font-size:11.5px;margin-bottom:4px}
+.nums input{padding:11px;text-align:center;font-size:16px;font-weight:600}
+.pilha{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.pilha button{flex:1 1 auto;min-width:86px;padding:10px 8px;font-size:12.5px;background:var(--papel);
+  border:1px solid var(--linha);border-radius:10px;color:var(--ink2);cursor:pointer}
+.pilha button.on{background:var(--verde);border-color:var(--verde);color:#fff;font-weight:500}
+.pilha button.on.mau{background:var(--verm);border-color:var(--verm)}
+.pilha button.on.meio{background:var(--amb);border-color:var(--amb)}
+.aviso{padding:12px 14px;border-radius:12px;font-size:13.5px;margin-bottom:12px}
+.aviso.err{background:var(--verm-bg);color:var(--verm-esc)}
+.aviso.inf{background:var(--azul-bg);color:var(--azul)}
+.aviso.amb{background:var(--amb-bg);color:var(--amb)}
+.vazio{text-align:center;color:var(--ink3);padding:38px 18px;font-size:14px}
+.fila{flex:none;background:var(--amb-bg);color:var(--amb);font-size:13px;padding:8px 16px;text-align:center;display:none}
+.fila.on{display:block}
+.oculto{display:none!important}
+.pin{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;max-width:290px;margin:0 auto}
+.pin button{padding:17px;font-size:21px;background:var(--papel);border:1px solid var(--linha);
+  border-radius:12px;cursor:pointer;box-shadow:var(--sombra)}
+.bolas{display:flex;gap:15px;justify-content:center;margin:24px 0 28px}
+.bola{width:13px;height:13px;border-radius:50%;border:2px solid var(--linha)}
+.bola.on{background:var(--verm);border-color:var(--verm)}
+.msg{max-width:84%;margin-bottom:9px;padding:9px 12px;border-radius:14px;box-shadow:var(--sombra);
+  background:var(--papel);word-wrap:break-word}
+.msg.minha{margin-left:auto;background:var(--verde-bg)}
+.msg .quem{font-size:11.5px;font-weight:600;color:var(--azul);margin-bottom:2px}
+.msg.minha .quem{color:var(--verde)}
+.msg .txt{font-size:14px;white-space:pre-wrap}
+.msg .h{font-size:10.5px;color:var(--ink3);text-align:right;margin-top:3px}
+.msg .anexo{font-size:12px;color:var(--ink2);background:var(--fundo);border-radius:9px;padding:7px 9px;margin-top:5px}
+.diamsg{text-align:center;font-size:11.5px;color:var(--ink3);margin:12px 0 9px}
+.escrever{display:flex;gap:8px;align-items:flex-end;width:100%}
+.escrever textarea{flex:1;font:inherit;font-size:14.5px;border:1px solid var(--linha);border-radius:18px;
+  padding:10px 14px;resize:none;max-height:110px;background:var(--fundo);color:var(--ink);outline:none}
+.escrever textarea:focus{border-color:var(--azul);background:var(--papel)}
+.escrever .env{flex:none;width:42px;height:42px;border-radius:50%;background:var(--verm);color:#fff;
+  border:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.escrever .env:disabled{opacity:.4}
+.abas{display:flex;gap:8px;margin-bottom:12px}
+.abas button{flex:1;padding:10px;font:inherit;font-size:13px;background:var(--papel);
+  border:1px solid var(--linha);border-radius:10px;color:var(--ink2);cursor:pointer}
+.abas button.on{background:var(--azul);border-color:var(--azul);color:#fff;font-weight:500}
+.sino{position:absolute;top:8px;right:10px;background:var(--verm);color:#fff;font-size:10.5px;
+  font-weight:700;border-radius:20px;padding:1px 6px;min-width:18px;text-align:center}
+.mod{position:relative}
+.foto{display:flex;gap:9px;align-items:center;margin-top:10px}
+.foto .bt-foto{flex:none;display:flex;align-items:center;gap:8px;background:var(--papel);
+  border:1px solid var(--linha);border-radius:10px;padding:9px 13px;font:inherit;font-size:12.5px;
+  color:var(--ink2);cursor:pointer}
+.foto .bt-foto.tem{border-color:var(--verde);color:var(--verde);font-weight:500}
+.foto img{width:46px;height:46px;object-fit:cover;border-radius:9px;border:1px solid var(--linha)}
+.foto .est{font-size:12px;color:var(--ink3)}
+.foto .est.env{color:var(--amb)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="sombra-menu" id="sombra"></div>
+<aside class="menu" id="menu"></aside>
+<div id="app">
+  <div class="topo" id="topo"></div>
+  <div class="fila" id="fila"></div>
+  <div id="dias" class="oculto"></div>
+  <div id="barra" class="oculto"></div>
+  <div class="corpo" id="corpo"></div>
+  <div class="rodape oculto" id="rodape"></div>
+</div>
+<script>
+"use strict";
+/* ===================== CONFIGURACAO ===================== */
+const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"eyJhbGciOi...", dominio:"merch.local" };
+/* ======================================================== */
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const guarda=(()=>{ const mem={}; let ok=true;
+  try{ localStorage.setItem("_t","1"); localStorage.removeItem("_t"); }catch(e){ ok=false; }
+  const g={ ler:k=>{try{return ok?localStorage.getItem(k):(mem[k]??null)}catch(e){return mem[k]??null}},
+    por:(k,v)=>{try{ ok?localStorage.setItem(k,v):(mem[k]=v) }catch(e){ mem[k]=v }},
+    tira:k=>{try{ ok?localStorage.removeItem(k):delete mem[k] }catch(e){ delete mem[k] }} };
+  g.lerJ=k=>{ try{ return JSON.parse(g.ler(k)||"null") }catch(e){ return null } };
+  g.porJ=(k,v)=>g.por(k,JSON.stringify(v)); return g; })();
+
+let URLB=guarda.ler("url")||CFG.url, CHAVE=guarda.ler("chave")||CFG.chave;
+let DIA=null, LOJA=null, TELA="carregando", DATA=null, FILTRO="";
+
+const hojeIso=()=>{const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+const agora=()=>new Date().toTimeString().slice(0,8);
+const dataBr=s=>s?String(s).slice(0,10).split("-").reverse().join("/"):"—";
+const uid=()=>crypto.randomUUID();
+const diasAte=d=>Math.round((new Date(String(d).slice(0,10)+"T12:00:00")-new Date(hojeIso()+"T12:00:00"))/864e5);
+const editavel=()=>DATA===hojeIso();
+
+const IC={
+  volta:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  sinc:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 01-9 9 9 9 0 01-7.5-4M3 12a9 9 0 019-9 9 9 0 017.5 4"/><path d="M21 3v5h-5M3 21v-5h5"/></svg>',
+  sair:'<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H5a1 1 0 00-1 1v14a1 1 0 001 1h5"/><path d="M16 15l4-3-4-3M20 12H9"/></svg>',
+  lupa:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  filtro:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  lista:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+  mapa:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>',
+  pessoa:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0113 0"/></svg>',
+  fone:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h3l2 5-2.5 1.5a12 12 0 006 6L16 13l5 2v3a2 2 0 01-2.2 2A17 17 0 014 5.2 2 2 0 016 3z"/></svg>',
+  fala:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 15a2 2 0 01-2 2H8l-4 3V6a2 2 0 012-2h12a2 2 0 012 2z"/></svg>',
+  env:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 12l16-8-6 8 6 8z"/></svg>',
+  cam:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5h3.2L8 6h8l1.8 2.5H21v11H3z"/><circle cx="12" cy="14" r="3.4"/></svg>',
+  seta:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 18-8-5-8 5z"/></svg>'
+};
+
+/* --------------------------- rede --------------------------- */
+async function api(caminho,opc={},retry=true){
+  const tok=guarda.ler("token");
+  const r=await fetch(URLB.replace(/\/+$/,"")+caminho,{...opc,
+    headers:{"apikey":CHAVE,"Content-Type":"application/json",
+      ...(tok?{"Authorization":"Bearer "+tok}:{}),...(opc.headers||{})}});
+  if(r.status===401&&retry&&guarda.ler("refresh")&&await renovar()) return api(caminho,opc,false);
+  const t=await r.text(); let c=null;
+  try{ c=t?JSON.parse(t):null }catch(e){ c={raw:t} }
+  if(!r.ok) throw Object.assign(new Error(c?.message||c?.error_description||c?.msg||c?.raw||("HTTP "+r.status)),{status:r.status});
+  return c;
+}
+async function renovar(){ try{
+    const d=await api("/auth/v1/token?grant_type=refresh_token",
+      {method:"POST",body:JSON.stringify({refresh_token:guarda.ler("refresh")})},false);
+    guarda.por("token",d.access_token); guarda.por("refresh",d.refresh_token); return true;
+  }catch(e){ return false } }
+const emailDaRota=c=>`rota-${String(c).trim().toLowerCase()}@${CFG.dominio}`;
+
+/* ---------------------- fila de envio ------------------------ */
+const fila={ itens:()=>guarda.lerJ("fila")||[],
+  poe(i){ const f=this.itens(); f.push({...i,fid:uid(),tentativas:0}); guarda.porJ("fila",f); pintaFila(); },
+  tira(fid){ guarda.porJ("fila",this.itens().filter(x=>x.fid!==fid)); pintaFila(); } };
+let enviando=false;
+async function escoar(){
+  if(enviando||!navigator.onLine) return;
+  const f=fila.itens(); if(!f.length) return;
+  enviando=true;
+  for(const it of f){
+    if(it.parado) continue;
+    try{ await api(`/rest/v1/${it.tabela}?on_conflict=${it.chave}`,{method:"POST",
+        body:JSON.stringify(it.corpo),headers:{"Prefer":"resolution=merge-duplicates,return=minimal"}});
+      fila.tira(it.fid);
+    }catch(e){ it.tentativas=(it.tentativas||0)+1; it.erro=e.message;
+      /* Depois de 5 tentativas o item sai da frente. NAO e apagado: fica
+         marcado e aparece no painel para voce decidir. Antes disso, um unico
+         registro com defeito segurava tudo o que viesse depois dele. */
+      if(it.tentativas>=5) it.parado=true;
+      guarda.porJ("fila",fila.itens().map(x=>x.fid===it.fid?it:x));
+      if(!it.parado) break; }
+  }
+  enviando=false; pintaFila();
+  if(!fila.itens().length) guarda.por("sinc",new Date().toISOString());
+}
+async function pintaFila(){
+  const f=fila.itens(), el=$("fila");
+  let fotos=0; try{ fotos=((await cofreFoto.todas())||[]).length; }catch(e){}
+  const n=f.length+fotos;
+  if(!n){ el.classList.remove("on"); return; }
+  const parados=f.filter(x=>x.parado).length;
+  const detalhe=fotos?`${f.length} ${f.length===1?"registro":"registros"} e ${fotos} ${fotos===1?"foto":"fotos"}`
+    :`${n} ${n===1?"envio pendente":"envios pendentes"}`;
+  el.textContent=parados
+    ? `${parados} ${parados===1?"envio parado":"envios parados"} · toque no seu nome`
+    : `${detalhe}${navigator.onLine?"":" · sem sinal"}`;
+  el.classList.add("on");
+}
+addEventListener("online",escoar); setInterval(escoar,20000);
+
+/* ======================= FOTOS =============================
+   Foto nao cabe na fila de texto: uma so ja passa do limite do
+   armazenamento do navegador. Por isso a fila de foto e separada,
+   guardada em IndexedDB, que aguenta arquivo.
+
+   A ordem importa: sobe a imagem primeiro, e so depois manda o
+   registro apontando para ela. Se mandasse junto, um envio que
+   falhasse deixaria o registro com endereco de foto que nao existe.
+
+   Comprime SEMPRE antes de enviar. Foto de celular tem 3 a 5 MB;
+   depois de reduzir para 1280px e qualidade 0,65 fica em ~130 KB.
+   Isso e a diferenca entre enviar em 3G de loja e nao enviar.
+============================================================ */
+const LARGURA_MAX=1280, QUALIDADE=0.65, IDADE_MAX_MIN=5;
+
+const cofreFoto=(()=>{ let bd=null;
+  const abrir=()=>new Promise((ok,nok)=>{ if(bd) return ok(bd);
+    const r=indexedDB.open("fotos",1);
+    r.onupgradeneeded=()=>r.result.createObjectStore("f",{keyPath:"id"});
+    r.onsuccess=()=>{ bd=r.result; ok(bd); }; r.onerror=()=>nok(r.error); });
+  const tx=async(modo,fn)=>{ const d=await abrir();
+    return new Promise((ok,nok)=>{ const t=d.transaction("f",modo), st=t.objectStore("f");
+      const req=fn(st); t.oncomplete=()=>ok(req&&req.result); t.onerror=()=>nok(t.error); }); };
+  return {
+    poe:it=>tx("readwrite",st=>st.put(it)),
+    tira:id=>tx("readwrite",st=>st.delete(id)),
+    todas:()=>tx("readonly",st=>st.getAll()),
+    pega:id=>tx("readonly",st=>st.get(id))
+  };
+})();
+
+async function comprimir(arquivo){
+  const bmp=await createImageBitmap(arquivo);
+  const escala=Math.min(1, LARGURA_MAX/Math.max(bmp.width,bmp.height));
+  const c=document.createElement("canvas");
+  c.width=Math.round(bmp.width*escala); c.height=Math.round(bmp.height*escala);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  bmp.close&&bmp.close();
+  return new Promise(ok=>c.toBlob(ok,"image/jpeg",QUALIDADE));
+}
+
+/* Verifica se a foto acabou de ser tirada. Sem isto, o repositor pode
+   escolher da galeria uma foto de semanas atras e ninguem percebe. */
+function recemTirada(arquivo){
+  if(!arquivo.lastModified) return true;
+  return (Date.now()-arquivo.lastModified) < IDADE_MAX_MIN*60000;
+}
+
+async function guardaFoto(arquivo, alvo){
+  if(!recemTirada(arquivo)) throw new Error("Essa foto não foi tirada agora. Use a câmera.");
+  const blob=await comprimir(arquivo);
+  const id=uid();
+  const caminho=`${LOJA.codigo}/${DIA.data}/${alvo.tabela}-${alvo.registro_id}-${id}.jpg`;
+  await cofreFoto.poe({id, caminho, blob, alvo, tentativas:0});
+  escoarFotos();
+  return {id, caminho, url:URL.createObjectURL(blob)};
+}
+
+let enviandoFoto=false;
+async function escoarFotos(){
+  if(enviandoFoto||!navigator.onLine) return;
+  let lista=[]; try{ lista=await cofreFoto.todas()||[]; }catch(e){ return; }
+  if(!lista.length) return;
+  enviandoFoto=true;
+  for(const f of lista){
+    try{
+      const r=await fetch(URLB.replace(/\/+$/,"")+"/storage/v1/object/fotos/"+f.caminho,{
+        method:"POST", headers:{"apikey":CHAVE,"Authorization":"Bearer "+guarda.ler("token"),
+          "Content-Type":"image/jpeg","x-upsert":"true"}, body:f.blob});
+      if(r.status===401){ if(await renovar()) continue; throw new Error("sessão expirada"); }
+      if(!r.ok&&r.status!==409) throw new Error("HTTP "+r.status);
+      // so agora o registro aponta para a foto
+      fila.poe({tabela:f.alvo.tabela, chave:f.alvo.chave,
+        corpo:{...f.alvo.corpo, foto_url:f.caminho}});
+      await cofreFoto.tira(f.id);
+      if(DIA){ // tira o "enviando..." da tela
+        (DIA.lojas||[]).forEach(l=>["validades","exposicoes","materiais","concorrentes"].forEach(k=>
+          (l[k]||[]).forEach(r=>{ if(r.foto_url===f.caminho) r._foto_pendente=false; })));
+        salvarCache();
+      }
+      escoar();
+    }catch(e){
+      f.tentativas=(f.tentativas||0)+1; f.erro=e.message;
+      await cofreFoto.poe(f); break;
+    }
+  }
+  enviandoFoto=false; pintaFila();
+}
+addEventListener("online",escoarFotos); setInterval(escoarFotos,25000);
+
+/* Monta o bloco de foto de um registro qualquer. */
+function blocoFoto(reg){
+  const tem=reg.foto_url||reg._foto_local;
+  return `<div class="foto">
+    <button class="bt-foto ${tem?"tem":""}" data-foto="1">${IC.cam} ${tem?"Trocar foto":"Tirar foto"}</button>
+    ${reg._foto_local?`<img src="${reg._foto_local}" alt="">`:""}
+    ${reg._foto_pendente?`<span class="est env">enviando…</span>`:tem?`<span class="est">foto anexada</span>`:""}
+    <input type="file" accept="image/*" capture="environment" hidden></div>`;
+}
+function ligaFoto(caixa, reg, alvo, depois){
+  const b=caixa.querySelector("[data-foto]"), inp=caixa.querySelector('input[type=file]');
+  if(!b||!inp) return;
+  b.onclick=()=>{ if(!exigeVisita()) return; inp.click(); };
+  inp.onchange=async()=>{
+    const a=inp.files&&inp.files[0]; if(!a) return;
+    b.disabled=true; b.textContent="Preparando…";
+    try{
+      const f=await guardaFoto(a, {...alvo, registro_id:reg.id||reg.produto_id});
+      reg._foto_local=f.url; reg._foto_pendente=true; reg.foto_url=f.caminho;
+      salvarCache(); depois&&depois();
+    }catch(e){ alerta(e.message); b.disabled=false; b.textContent="Tirar foto"; }
+  };
+}
+
+function salvarCache(){ if(DIA) guarda.porJ("dia:"+DIA.data,DIA); }
+function grava(tabela,chave,corpo){ fila.poe({tabela,chave,corpo}); salvarCache(); escoar(); }
+const base=()=>({pessoa_id:DIA.pessoa.id, loja_id:LOJA.id, visita_id:LOJA.visita?LOJA.visita.id:null});
+
+/* --------------------------- chrome -------------------------- */
+function iniciais(){ const p=DIA&&DIA.pessoa?DIA.pessoa.nome:"";
+  return String(p).split(" ").filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase()||"--"; }
+function topo(titulo,voltar,acoes){
+  $("topo").innerHTML=(voltar?`<button class="icone" id="bvolta">${IC.volta}</button>`
+    :`<button class="avatar" id="bperfil">${esc(iniciais())}</button>`)+
+    `<h1>${esc(titulo)}</h1>`+(acoes||`<button class="icone" id="bsinc">${IC.sinc}</button>`);
+  if($("bperfil")) $("bperfil").onclick=abrirPerfil;
+  if($("bvolta")) $("bvolta").onclick=voltar;
+  if($("bsinc")) $("bsinc").onclick=()=>carregarDia(DATA,true);
+}
+function rodape(h){ const r=$("rodape");
+  if(!h){ r.classList.add("oculto"); r.innerHTML=""; return; }
+  r.innerHTML=h; r.classList.remove("oculto"); }
+function montar(fn){ try{ fn(); }catch(e){ console.error(e);
+    $("corpo").innerHTML=`<div class="aviso err"><b>Algo quebrou nesta tela</b><br>${esc(e.message)}
+      <br><br>Mostre isto ao seu líder. Seu trabalho pendente não foi perdido.</div>`;
+    rodape(`<button class="bt sec" onclick="location.reload()">Recarregar</button>`); } }
+function alerta(t){ const d=document.createElement("div"); d.className="aviso amb"; d.textContent=t;
+  $("corpo").prepend(d); $("corpo").scrollTop=0; setTimeout(()=>d.remove(),3500); }
+function exigeVisita(){ if(!editavel()){ alerta("Só dá para registrar no dia de hoje."); return false; }
+  if(LOJA&&LOJA.visita) return true; alerta("Inicie a visita antes de registrar."); return false; }
+
+/* ------------------------- menu lateral ---------------------- */
+/* ---- painel do repositor ----
+   Nao e menu de navegacao. O repositor nao faz nada fora da loja: o app
+   inteiro e lista de lojas, loja, modulos. Aqui fica so o que sobra:
+   quem sou eu, mandar o que esta preso, e sair. Os numeros do dia estao
+   aqui porque olhar nao e trabalhar, e ele gosta de ver o quanto andou. */
+function abrirPerfil(){
+  const p=DIA&&DIA.pessoa?DIA.pessoa.nome:"—", s=guarda.ler("sinc"), f=fila.itens();
+  const ls=(DIA&&DIA.lojas)||[];
+  const feitas=ls.filter(l=>l.visita&&l.visita.hora_fim).length;
+  const cat=ls.flatMap(l=>l.catalogo||[]);
+  const contados=cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null||x.contagem.ruptura)).length;
+  const rup=cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
+  const parados=f.filter(x=>x.parado);
+  $("menu").innerHTML=`<div class="puxador"></div>
+    <div class="perfil"><div class="bolota">${esc(iniciais())}</div>
+      <div><b>${esc(String(p).split(" ").slice(0,2).join(" "))}</b>
+        <span>rota ${esc(DIA&&DIA.rota?DIA.rota.codigo:"?")} · ${ls.length} ${ls.length===1?"loja hoje":"lojas hoje"}</span></div></div>
+    <div class="numeros">
+      <div><b>${feitas}/${ls.length}</b><span>lojas</span></div>
+      <div><b>${contados}/${cat.length}</b><span>itens</span></div>
+      <div><b>${rup}</b><span>rupturas</span></div></div>
+    <div class="quando"><span>${s?"Enviado "+new Date(s).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"Nunca enviado"}</span>
+      <b>${f.length?f.length+" na fila":"Tudo enviado"}</b></div>
+    <button class="sinc" id="msinc" style="margin-top:8px">${IC.sinc} Sincronizar</button>
+    ${parados.length?`<div class="diag"><span class="ruim">${parados.length} ${parados.length===1?"envio não passou":"envios não passaram"}</span><br>
+      ${esc(parados[0].tabela)}: ${esc(parados[0].erro)}<br>Mostre esta tela ao seu líder antes de descartar.</div>
+      <button class="sair" id="mdesc" style="color:var(--ink2)">Descartar ${parados.length} parado(s)</button>`:""}
+    <button class="sair" id="msair">${IC.sair} Sair</button>`;
+  if($("mdesc")) $("mdesc").onclick=()=>{
+    if(!confirm("O que estiver parado será perdido. Descartar?")) return;
+    guarda.porJ("fila", fila.itens().filter(x=>!x.parado)); fecharMenu(); pintaFila(); };
+  $("msinc").onclick=()=>{ fecharMenu(); carregarDia(DATA,true); };
+  $("msair").onclick=()=>{ if(fila.itens().length&&!confirm("Ainda há envios pendentes. Sair mesmo assim?")) return;
+    fecharMenu(); ["token","refresh","pin"].forEach(guarda.tira); telaLogin(); };
+  $("menu").classList.add("on"); $("sombra").classList.add("on");
+}
+function fecharMenu(){ $("menu").classList.remove("on"); $("sombra").classList.remove("on"); }
+$("sombra").onclick=fecharMenu;
+
+/* ------------------------ config e login --------------------- */
+function esconderTudo(){ ["dias","barra"].forEach(i=>$(i).classList.add("oculto")); }
+function telaConfig(){ montar(()=>{ TELA="config"; esconderTudo();
+  $("topo").innerHTML=`<h1 style="padding-left:14px">Configurar</h1>`;
+  $("corpo").innerHTML=`<div class="aviso inf">Peça estes dois valores ao seu líder. É só nesta primeira vez.</div>
+    <div class="campo"><label for="u">Endereço do sistema</label><input id="u" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off"></div>
+    <div class="campo"><label for="k">Chave</label><input id="k" placeholder="eyJ..." autocapitalize="off" autocorrect="off"></div><div id="e"></div>`;
+  rodape(`<button class="bt" id="ok">Continuar</button>`);
+  $("ok").onclick=()=>{ const u=$("u").value.trim(),k=$("k").value.trim();
+    if(!/^https:\/\/.+/.test(u)||k.length<40){ $("e").innerHTML=`<div class="aviso err">Endereço ou chave incompletos.</div>`; return; }
+    URLB=u.replace(/\/+$/,""); CHAVE=k; guarda.por("url",URLB); guarda.por("chave",CHAVE); telaLogin(); };
+});}
+
+function telaLogin(){ montar(()=>{ TELA="login"; esconderTudo();
+  $("topo").innerHTML=`<h1 style="padding-left:14px">Entrar</h1>`;
+  $("corpo").innerHTML=`<div class="campo"><label for="r">Sua rota</label>
+      <input id="r" placeholder="11A" autocapitalize="characters" autocorrect="off" value="${esc(guarda.ler("rota")||"")}"></div>
+    <div class="campo"><label for="s">Senha da equipe</label><input id="s" type="password" autocomplete="current-password"></div><div id="e"></div>`;
+  rodape(`<button class="bt" id="ok">Entrar</button>`);
+  $("s").addEventListener("keydown",ev=>{ if(ev.key==="Enter") $("ok").click(); });
+  $("ok").onclick=async()=>{
+    const rota=$("r").value.trim().toUpperCase(), senha=$("s").value;
+    if(!rota||!senha){ $("e").innerHTML=`<div class="aviso err">Preencha rota e senha.</div>`; return; }
+    $("ok").disabled=true; $("ok").textContent="Entrando…"; $("e").innerHTML="";
+    try{ await entrarComRota(rota,senha); guarda.por("rota",rota);
+      telaPin(guarda.ler("pin")?"conferir":"criar");
+    }catch(err){ $("e").innerHTML=`<div class="aviso err">${esc(traduz(err.message))}</div>`; }
+    finally{ $("ok").disabled=false; $("ok").textContent="Entrar"; } };
+});}
+async function entrarComRota(rota,senha){
+  const email=emailDaRota(rota);
+  const logar=()=>api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password:senha})},false);
+  let d;
+  try{ d=await logar(); }
+  catch(e){ if(!/invalid login|credentials/i.test(e.message)) throw e;
+    await api("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password:senha})},false);
+    d=await logar(); }
+  guarda.por("token",d.access_token); guarda.por("refresh",d.refresh_token);
+  await api("/rest/v1/rpc/vincular_rota",{method:"POST",body:JSON.stringify({p_codigo:rota})});
+}
+function traduz(m){ const s=String(m).toLowerCase();
+  if(s.includes("invalid login")||s.includes("credentials")) return "Rota ou senha não conferem.";
+  if(s.includes("não existe")||s.includes("nao existe")) return "Essa rota não existe. Confira o código com seu líder.";
+  if(s.includes("vinculada")) return "Esta rota já está em outro aparelho. Seu líder precisa liberar.";
+  if(s.includes("vinculado")) return "Sua rota está sem repositor cadastrado. Fale com seu líder.";
+  if(s.includes("failed to fetch")) return "Sem conexão com o sistema agora.";
+  if(s.includes("already registered")) return "Rota já cadastrada. Confira a senha.";
+  return m; }
+
+async function hash(t){ const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function telaPin(modo){ montar(()=>{ TELA="pin"; esconderTudo();
+  let buf="",primeiro=null; const criar=modo==="criar";
+  $("topo").innerHTML=`<h1 style="padding-left:14px">${criar?"Criar seu código":"Seu código"}</h1>`;
+  const desenhar=av=>{
+    $("corpo").innerHTML=`<p style="text-align:center;color:var(--ink2);font-size:15px;margin:10px 0 0">
+      ${criar?(primeiro?"Digite de novo para confirmar":"Escolha 4 números. Só você usa este aparelho."):"Digite seu código de 4 números"}</p>
+      <div class="bolas">${[0,1,2,3].map(i=>`<div class="bola ${i<buf.length?"on":""}"></div>`).join("")}</div>
+      ${av?`<div class="aviso err">${esc(av)}</div>`:""}
+      <div class="pin">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-n="${n}">${n}</button>`).join("")}
+      <button data-a="sair">Sair</button><button data-n="0">0</button><button data-a="apagar">\u2190</button></div>`;
+    $("corpo").querySelectorAll("button").forEach(b=>b.onclick=()=>toque(b.dataset)); };
+  const toque=async d=>{
+    if(d.a==="apagar"){ buf=buf.slice(0,-1); return desenhar(); }
+    if(d.a==="sair"){ ["token","refresh","pin"].forEach(guarda.tira); return telaLogin(); }
+    if(buf.length>=4) return; buf+=d.n; desenhar();
+    if(buf.length<4) return;
+    const h=await hash(buf);
+    if(criar){ if(!primeiro){ primeiro=h; buf=""; return desenhar(); }
+      if(primeiro!==h){ primeiro=null; buf=""; return desenhar("Os códigos não bateram. Comece de novo."); }
+      guarda.por("pin",h); return carregarDia(hojeIso()); }
+    if(h===guarda.ler("pin")) return carregarDia(hojeIso());
+    buf=""; desenhar("Código errado."); };
+  rodape(null); desenhar();
+});}
+
+/* --------------------------- o dia --------------------------- */
+async function carregarDia(data,forcar){
+  DATA=data||hojeIso();
+  const cache=guarda.lerJ("dia:"+DATA);
+  if(cache&&!forcar){ DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); return; }
+  esconderTudo(); $("topo").innerHTML=`<h1 style="padding-left:14px">Carregando…</h1>`;
+  $("corpo").innerHTML=`<div class="vazio">Buscando seu roteiro…</div>`; rodape(null);
+  try{ DIA=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:DATA})});
+    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas();
+  }catch(e){ if(cache){ DIA=cache; telaVisitas(); alerta("Sem sinal. Mostrando o que estava guardado."); return; }
+    if(e.status===401) return telaLogin();
+    $("topo").innerHTML=`<h1 style="padding-left:14px">Erro</h1>`;
+    $("corpo").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`;
+    rodape(`<button class="bt" onclick="carregarDia(DATA,true)">Tentar de novo</button>`); }
+}
+
+/* Nao lidas vem separado do meu_dia de proposito: o roteiro fica em cache o
+   dia todo, e mensagem nova nao pode ficar congelada junto com ele. */
+async function buscarNaoLidas(){
+  try{ NAOLIDAS=await api("/rest/v1/rpc/nao_lidas_do_dia",{method:"POST",body:"{}"})||{};
+    if(TELA==="home") pintaLojas(); else if(TELA==="loja") telaLoja();
+  }catch(e){}
+}
+setInterval(()=>{ if(!document.hidden && navigator.onLine && (TELA==="home"||TELA==="loja")) buscarNaoLidas(); },45000);
+
+/* proximos dias uteis a partir de segunda desta semana */
+function faixaDias(){
+  const hoje=new Date(hojeIso()+"T12:00:00"), lista=[];
+  for(let i=-1;i<=5;i++){ const d=new Date(hoje); d.setDate(d.getDate()+i);
+    if(d.getDay()===0) continue;
+    lista.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }
+  return lista.slice(0,7);
+}
+function pintaDias(){
+  const rot=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  const dias=faixaDias();
+  const feitas=DIA.lojas.filter(l=>l.visita&&l.visita.hora_fim).length;
+  const pend=DIA.lojas.length-feitas;
+  $("dias").className="dias";
+  $("dias").innerHTML=`<div class="tira">${dias.map(d=>{
+    const dt=new Date(d+"T12:00:00"), eh=d===hojeIso(), sel=d===DATA;
+    const c=guarda.lerJ("dia:"+d);
+    const n=c?c.lojas.length:null;
+    return `<button class="dia ${sel?"sel":""} ${eh?"hoje":""}" data-d="${d}">
+      <div class="rot">${rot[dt.getDay()]}</div>
+      <div class="num">${dt.getDate()}</div>
+      ${n===null?"":`<span class="badge ${n?"":"zero"}">${n}</span>`}</button>`; }).join("")}</div>
+    <div class="resumo-dia">${pend?`<span class="pt"></span>${pend} ${pend===1?"pendente":"pendentes"} · `:""}${
+      DATA===hojeIso()?`hoje é ${rot[new Date(DATA+"T12:00:00").getDay()]} ${dataBr(DATA).slice(0,5)}`
+      :`vendo ${dataBr(DATA).slice(0,5)}`}</div>`;
+  $("dias").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>carregarDia(b.dataset.d));
+}
+function pintaBarra(){
+  $("barra").className="barra";
+  $("barra").innerHTML=`<div class="busca">${IC.lupa}<input id="q" placeholder="Buscar visitas" value="${esc(FILTRO)}"></div>
+    <button class="quad" id="bfil">${IC.filtro}</button>
+    <button class="quad on" id="blista">${IC.lista}</button>
+    <button class="quad" id="bmapa">${IC.mapa}</button>`;
+  $("q").oninput=e=>{ FILTRO=e.target.value; pintaLojas(); };
+  $("bfil").onclick=()=>{ FILTRO=FILTRO?"":""; alerta("Use a busca para filtrar por nome ou bairro."); };
+  $("bmapa").onclick=()=>{ const l=lojasFiltradas()[0];
+    if(!l||l.gps_lat==null) return alerta("Sem coordenada para abrir o mapa.");
+    open(`https://www.google.com/maps/search/?api=1&query=${l.gps_lat},${l.gps_lon}`,"_blank"); };
+}
+function lojasFiltradas(){
+  const f=FILTRO.trim().toLowerCase();
+  const ls=(DIA.lojas||[]);
+  if(!f) return ls;
+  return ls.filter(l=>String(l.nome).toLowerCase().includes(f)||String(l.bairro||"").toLowerCase().includes(f));
+}
+function prioridade(l){
+  const atras=(l.notas||[]).some(n=>n.dias>0);
+  const venc=(l.validades||[]).some(v=>diasAte(v.vence_em)<0);
+  return atras||venc?"Alta":"Normal";
+}
+function modulosFeitos(l){
+  const lim=DIA.dias_alerta_validade||30, cat=l.catalogo||[];
+  let n=0;
+  if(cat.length&&cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null||x.contagem.ruptura)).length===cat.length) n++;
+  if((l.validades||[]).length) n++;
+  if((l.notas||[]).length&&(l.notas||[]).every(x=>x.conferido)) n++;
+  if((l.exposicoes||[]).length) n++;
+  if(cat.some(x=>x.contagem&&x.contagem.preco!=null)) n++;
+  if((l.materiais||[]).length) n++;
+  return n;
+}
+function pintaLojas(){
+  const ls=lojasFiltradas();
+  $("corpo").innerHTML=ls.length?ls.map((l,i)=>{
+    const v=l.visita, fim=v&&v.hora_fim, pr=prioridade(l), k=modulosFeitos(l);
+    const idx=(DIA.lojas||[]).indexOf(l);
+    return `<div class="loja ${fim?"feita":pr==="Alta"?"alta":""}" data-i="${idx}">
+      <div class="dentro">
+        <div class="cab"><div class="titulo"><i>${i+1}.</i>${esc(String(l.nome).toUpperCase())}</div>
+          <div class="selos">
+            <span class="selo ${pr==="Alta"?"alta":"pend"}">${pr}</span>
+            <span class="selo ${fim?"feito":"pend"}">${fim?"Concluída":v?"Em andamento":"Pendente"}</span>
+          </div></div>
+        ${fim?`<div class="hora">${esc(String(v.hora_inicio||"").slice(0,5))} – ${esc(String(v.hora_fim).slice(0,5))}</div>`:""}
+        <div class="end">${esc([l.bairro,l.cidade].filter(Boolean).join(", ").toUpperCase())}</div>
+        <div class="desc">${(l.catalogo||[]).length} itens de contagem${(l.notas||[]).length?` · ${(l.notas||[]).length} nota(s) prevista(s)`:""}${
+          NAOLIDAS[l.id]?` · <b style="color:var(--verm)">${NAOLIDAS[l.id]} mensagem(ns)</b>`:""}</div>
+        <div class="pe">
+          <button class="bolinha" data-a="consultor" ${l.consultor_tel?"":"disabled"}>${IC.pessoa}</button>
+          <button class="bolinha" data-a="fone" ${l.telefone?"":"disabled"}>${IC.fone}</button>
+          <button class="bolinha" data-a="mapa" ${l.gps_lat==null?"disabled":""}>${IC.seta}</button>
+          <div class="progresso"><div class="trilho"><i style="width:${Math.round(k/6*100)}%"></i></div>
+            <span class="fracao">${k}/6</span></div>
+        </div></div></div>`; }).join("")
+    : `<div class="vazio">${FILTRO?"Nenhuma loja com esse nome.":"Nenhuma loja no roteiro deste dia."}</div>`;
+  $("corpo").querySelectorAll(".loja").forEach(c=>{
+    const l=DIA.lojas[+c.dataset.i];
+    c.querySelector(".dentro").onclick=e=>{ if(e.target.closest("[data-a]")) return; telaLoja(l); };
+    c.querySelectorAll("[data-a]").forEach(b=>b.onclick=ev=>{ ev.stopPropagation();
+      const a=b.dataset.a;
+      if(a==="mapa") open(`https://www.google.com/maps/search/?api=1&query=${l.gps_lat},${l.gps_lon}`,"_blank");
+      if(a==="fone") open("tel:"+String(l.telefone).replace(/\D/g,""));
+      if(a==="consultor") open("tel:"+String(l.consultor_tel).replace(/\D/g,"")); }); });
+}
+function telaVisitas(){ montar(()=>{ TELA="home"; LOJA=null;
+  topo("Visitas"); pintaDias(); pintaBarra(); pintaLojas(); rodape(null);
+});}
+
+/* ---------------------- entrada da loja ---------------------- */
+const MODULOS=[
+  {k:"contagem", ic:"1", nome:"Contagem e ruptura",      tela:()=>telaContagem()},
+  {k:"validade", ic:"2", nome:"Validade",                tela:()=>telaValidade()},
+  {k:"chegadas", ic:"3", nome:"Chegadas",                tela:()=>telaChegadas()},
+  {k:"exposicao",ic:"4", nome:"Exposição e ponto extra", tela:()=>telaExposicao()},
+  {k:"preco",    ic:"5", nome:"Preço e concorrência",    tela:()=>telaPreco()},
+  {k:"pdv",      ic:"6", nome:"Materiais e geladeira",   tela:()=>telaPdv()},
+  {k:"conversa", ic:"7", nome:"Conversa",                tela:()=>telaConversa()}
+];
+let NAOLIDAS={};   // loja_id -> quantas mensagens novas
+function resumo(k){
+  const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
+  if(k==="contagem"){ const c=cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null||x.contagem.ruptura)).length;
+    const r=cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
+    return {txt:`${c} de ${cat.length} itens${r?` · ${r} em ruptura`:""}`, pronto:cat.length>0&&c===cat.length, alerta:r>0}; }
+  if(k==="validade"){ const v=l.validades||[], crit=v.filter(x=>diasAte(x.vence_em)<=lim).length;
+    return {txt:v.length?`${v.length} ${v.length===1?"registro":"registros"}${crit?` · ${crit} em alerta`:""}`:"nada registrado",
+      pronto:v.length>0&&crit===0, alerta:crit>0}; }
+  if(k==="chegadas"){ const n=l.notas||[], falta=n.filter(x=>!x.conferido).length;
+    return {txt:n.length?`${n.length-falta} de ${n.length} conferidas`:"nenhuma nota prevista",
+      pronto:n.length>0&&falta===0, alerta:n.some(x=>x.dias>0&&!x.conferido)}; }
+  if(k==="exposicao"){ const e=l.exposicoes||[], ruim=e.filter(x=>x.situacao==="ausente").length;
+    return {txt:e.length?`${e.length} ${e.length===1?"ponto":"pontos"}${ruim?` · ${ruim} ausente`:""}`:"nada registrado",
+      pronto:e.length>0&&ruim===0, alerta:ruim>0}; }
+  if(k==="preco"){ const pr=cat.filter(x=>x.contagem&&x.contagem.preco!=null).length, cc=(l.concorrentes||[]).length;
+    return {txt:`${pr} ${pr===1?"preço":"preços"}${cc?` · ${cc} concorrente`:""}`, pronto:pr>0, alerta:false}; }
+  if(k==="pdv"){ const m=l.materiais||[], ruim=m.filter(x=>x.situacao!=="ok").length;
+    return {txt:m.length?`${m.length} ${m.length===1?"item":"itens"}${ruim?` · ${ruim} com problema`:""}`:"nada registrado",
+      pronto:m.length>0&&ruim===0, alerta:ruim>0}; }
+  if(k==="conversa"){ const n=NAOLIDAS[l.id]||0;
+    return {txt:n?`${n} ${n===1?"mensagem nova":"mensagens novas"}`:"falar com o líder ou o consultor",
+      pronto:false, alerta:n>0, badge:n}; }
+  return {txt:"",pronto:false,alerta:false};
+}
+function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
+  const v=LOJA.visita, fim=v&&v.hora_fim;
+  topo(LOJA.nome, telaVisitas, "");
+  $("corpo").innerHTML=`
+    <div class="cartao"><div style="font-size:14.5px;color:var(--ink2)">${esc(LOJA.endereco||"")}</div>
+      ${LOJA.cep?`<div style="font-size:14.5px;color:var(--ink2)">${esc(LOJA.cep)} · ${esc(LOJA.cidade||"")}</div>`:""}
+      ${LOJA.consultor?`<div style="font-size:13.5px;color:var(--ink3);margin-top:6px">Consultor: ${esc(LOJA.consultor)}${LOJA.consultor_tel?` · ${esc(LOJA.consultor_tel)}`:""}</div>`:""}</div>
+    ${!editavel()?`<div class="aviso amb">Você está vendo ${dataBr(DATA)}. Só dá para registrar no dia de hoje.</div>`
+      :!v?`<div class="aviso inf">Toque em iniciar visita quando estiver dentro da loja.</div>`:""}
+    <h2 class="tit">O QUE FAZER AQUI</h2>
+    ${MODULOS.map((m,i)=>{ const r=resumo(m.k);
+      return `<button class="mod ${r.alerta?"alerta":r.pronto?"pronto":""}" data-m="${i}">
+        ${r.badge?`<span class="sino">${r.badge}</span>`:""}
+        <span class="ic">${r.pronto?"\u2713":m.ic}</span>
+        <span class="txt"><b>${m.nome}</b><span>${esc(r.txt)}</span></span>
+        <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`; }).join("")}`;
+  $("corpo").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>MODULOS[+b.dataset.m].tela());
+  rodape(!editavel()?null
+    :fim?`<button class="bt sec" disabled>Concluída às ${esc(String(v.hora_fim).slice(0,5))}</button>`
+    :v?`<button class="bt" id="fim">Encerrar visita</button>`
+      :`<button class="bt" id="ini">Iniciar visita</button>`);
+  if($("ini")) $("ini").onclick=iniciarVisita;
+  if($("fim")) $("fim").onclick=encerrarVisita;
+});}
+
+/* -------------------- 1. contagem e ruptura ------------------ */
+const MOTIVOS=[["sem_pedido","Não pediu"],["pedido_nao_chegou","Pedido não chegou"],
+  ["sem_espaco","Sem espaço"],["concorrente_ocupou","Concorrente ocupou"],
+  ["deposito_cheio","Tem no depósito"],["outro","Outro"]];
+/* contagem NAO leva pessoa_id: quem guarda a pessoa e a visita, e a contagem
+   aponta para ela. Cada tabela tem os campos dela, nao um bloco generico. */
+function enviaContagem(p){ const c=p.contagem||{};
+  grava("contagem","visita_id,produto_id",{
+    visita_id:LOJA.visita?LOJA.visita.id:null, loja_id:LOJA.id,
+    produto_id:p.produto_id, data:DIA.data,
+    estoque_gondola:c.gondola==null?null:c.gondola,
+    estoque_deposito:c.deposito==null?null:c.deposito,
+    ruptura:!!c.ruptura, ruptura_motivo:c.ruptura?(c.motivo||null):null,
+    preco:c.preco==null?null:c.preco, preco_promocional:c.promo==null?null:c.promo}); }
+
+function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
+  topo("Contagem", ()=>telaLoja(), "");
+  $("corpo").innerHTML=`<div class="busca" style="margin-bottom:12px">${IC.lupa}
+    <input id="q" placeholder="Buscar produto" autocapitalize="off"></div><div id="lista"></div>`;
+  const pinta=f=>{
+    const vis=cat.map((p,i)=>({p,i})).filter(o=>!f||o.p.nome.toLowerCase().includes(f.toLowerCase()));
+    $("lista").innerHTML=vis.length?vis.map(o=>{ const p=o.p,c=p.contagem||{};
+      return `<div class="item"><div class="nome">${esc(p.nome)}</div><div class="emb">${esc(p.embalagem||"")}</div>
+        <div class="nums" data-p="${o.i}">
+          <div><label>Gôndola</label><input type="number" inputmode="numeric" min="0" data-c="gondola" value="${c.gondola==null?"":c.gondola}"></div>
+          <div><label>Depósito</label><input type="number" inputmode="numeric" min="0" data-c="deposito" value="${c.deposito==null?"":c.deposito}"></div></div>
+        <div class="pilha" data-r="${o.i}"><button class="${c.ruptura?"on mau":""}" data-t="rup">Ruptura</button></div>
+        <div class="pilha ${c.ruptura?"":"oculto"}" data-mo="${o.i}">
+          ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}
+        </div></div>`; }).join(""):`<div class="vazio">Nenhum produto com esse nome.</div>`;
+    ligar(); };
+  const ligar=()=>{
+    $("lista").querySelectorAll("[data-p]").forEach(g=>{ const p=cat[+g.dataset.p];
+      g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
+        p.contagem=p.contagem||{}; p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
+        enviaContagem(p); }); });
+    $("lista").querySelectorAll("[data-r]").forEach(g=>{ const i=+g.dataset.r, p=cat[i];
+      g.querySelector("[data-t=rup]").onclick=e=>{ if(!exigeVisita()) return;
+        p.contagem=p.contagem||{}; p.contagem.ruptura=!p.contagem.ruptura;
+        e.target.classList.toggle("on",p.contagem.ruptura); e.target.classList.toggle("mau",p.contagem.ruptura);
+        const mo=$("lista").querySelector('[data-mo="'+i+'"]'); if(mo) mo.classList.toggle("oculto",!p.contagem.ruptura);
+        if(!p.contagem.ruptura) p.contagem.motivo=null; enviaContagem(p); }; });
+    $("lista").querySelectorAll("[data-mo]").forEach(g=>{ const p=cat[+g.dataset.mo];
+      g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+        p.contagem=p.contagem||{}; p.contagem.motivo=b.dataset.v;
+        g.querySelectorAll("button").forEach(x=>x.classList.remove("on","meio"));
+        b.classList.add("on","meio"); enviaContagem(p); }); }); };
+  $("q").oninput=e=>pinta(e.target.value); pinta("");
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+});}
+
+/* --------------------------- 2. validade --------------------- */
+const ACOES=[["girar","Mudei de lugar para girar"],["registrar","Só registrei e avisei"],
+  ["remarcar","Remarquei o preço"],["troca","Acionei troca"],["retirar","Retirei da gôndola"]];
+function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
+  const lim=DIA.dias_alerta_validade||30;
+  const regs=(LOJA.validades||[]).slice().sort((a,b)=>String(a.vence_em).localeCompare(String(b.vence_em)));
+  topo("Validade", ()=>telaLoja(), "");
+  $("corpo").innerHTML=`<div class="aviso inf">Alerta a partir de ${lim} dias para vencer.</div>`+
+    (regs.length?regs.map((v,i)=>{ const d=diasAte(v.vence_em), cls=d<0?"crit":d<=lim?"aten":"";
+      const prod=(LOJA.catalogo||[]).find(p=>p.produto_id===v.produto_id);
+      return `<div class="item ${cls}"><div class="nome">${esc(prod?prod.nome:"Produto")}</div>
+        <div class="emb">${v.lote?`Lote ${esc(v.lote)} · `:""}${v.quantidade?`${v.quantidade} un · `:""}vence ${dataBr(v.vence_em)}</div>
+        <div style="margin-top:7px"><span class="selo ${d<0?"alta":d<=lim?"pend":"feito"}">${d<0?`vencido há ${-d} ${-d===1?"dia":"dias"}`:`faltam ${d} ${d===1?"dia":"dias"}`}</span></div>
+        <div class="pilha" data-v="${i}">${ACOES.map(a=>`<button class="${v.acao===a[0]?"on":""}" data-a="${a[0]}">${a[1]}</button>`).join("")}</div>
+        ${blocoFoto(v)}
+        </div>`; }).join(""):`<div class="vazio">Nada registrado nesta loja hoje.</div>`);
+  const corpoVal=v=>({id:v.id, ...base(), produto_id:v.produto_id, vence_em:String(v.vence_em).slice(0,10),
+    lote:v.lote||null, quantidade:v.quantidade==null?null:v.quantidade, acao:v.acao});
+  $("corpo").querySelectorAll("[data-v]").forEach(g=>{ const v=regs[+g.dataset.v];
+    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      v.acao=b.dataset.a; g.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+      grava("validade","id",corpoVal(v)); }); });
+  $("corpo").querySelectorAll(".item").forEach((caixa,i)=>{ const v=regs[i]; if(!v) return;
+    ligaFoto(caixa, v, {tabela:"validade", chave:"id", corpo:corpoVal(v)}, telaValidade); });
+  rodape(editavel()?`<button class="bt" onclick="telaNovaValidade()">Registrar validade</button>`:null);
+});}
+function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
+  topo("Nova validade", telaValidade, "");
+  $("corpo").innerHTML=`
+    <div class="campo"><label for="p">Produto</label><select id="p"><option value="">Escolha…</option>
+      ${cat.map(x=>`<option value="${x.produto_id}">${esc(x.nome)}</option>`).join("")}</select></div>
+    <div class="campo"><label for="d">Vence em</label><input id="d" type="date"></div>
+    <div class="campo"><label for="l">Lote, se tiver</label><input id="l" autocapitalize="characters"></div>
+    <div class="campo"><label for="q">Quantidade</label><input id="q" type="number" inputmode="numeric" min="0"></div><div id="e"></div>`;
+  rodape(`<button class="bt" id="ok">Salvar</button>`);
+  $("ok").onclick=()=>{ if(!exigeVisita()) return;
+    const pid=$("p").value, d=$("d").value;
+    if(!pid||!d){ $("e").innerHTML=`<div class="aviso err">Escolha o produto e a data de vencimento.</div>`; return; }
+    const reg={id:uid(), ...base(), produto_id:pid, vence_em:d,
+      lote:$("l").value.trim()||null, quantidade:$("q").value===""?null:Number($("q").value), acao:null};
+    LOJA.validades=LOJA.validades||[]; LOJA.validades.push(reg);
+    grava("validade","id",reg); telaValidade(); };
+});}
+
+/* --------------------------- 3. chegadas --------------------- */
+function telaChegadas(){ montar(()=>{ TELA="mod"; esconderTudo(); const notas=LOJA.notas||[];
+  topo("Chegadas", ()=>telaLoja(), "");
+  $("corpo").innerHTML=notas.length?notas.map((n,i)=>`
+    <div class="item ${n.dias>0?"aten":""}"><div class="nome">Nota ${esc(n.numero)}</div>
+      <div class="emb">${n.itens} ${n.itens===1?"item":"itens"} · previsto para ${dataBr(n.previsao)}</div>
+      ${n.dias>0?`<div style="margin-top:7px"><span class="selo alta">${n.dias} ${n.dias===1?"dia":"dias"} sem baixa</span></div>`:""}
+      <div class="pilha" data-n="${i}">
+        <button class="${n.conferido==="chegou"?"on":""}" data-s="chegou">Chegou</button>
+        <button class="${n.conferido==="parcial"?"on meio":""}" data-s="parcial">Em parte</button>
+        <button class="${n.conferido==="nao_chegou"?"on mau":""}" data-s="nao_chegou">Não chegou</button>
+      </div></div>`).join(""):`<div class="vazio">Nenhuma nota prevista para esta loja.</div>`;
+  $("corpo").querySelectorAll("[data-n]").forEach(g=>{ const n=notas[+g.dataset.n];
+    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      n.conferido=b.dataset.s;
+      g.querySelectorAll("button").forEach(x=>x.classList.remove("on","mau","meio"));
+      b.classList.add("on"); if(b.dataset.s==="nao_chegou") b.classList.add("mau");
+      if(b.dataset.s==="parcial") b.classList.add("meio");
+      grava("entrega_confirmada","nota_numero,visita_id",{nota_numero:n.numero,
+        visita_id:LOJA.visita.id, pessoa_id:DIA.pessoa.id, situacao:b.dataset.s}); }); });
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+});}
+
+/* -------------------------- 4. exposicao --------------------- */
+const PONTOS=[["gondola","Gôndola"],["ponta_gondola","Ponta de gôndola"],["ponto_extra","Ponto extra"],
+  ["ilha","Ilha"],["checkout","Checkout"],["geladeira","Geladeira"]];
+const SIT_EXP=[["montado","Montado"],["parcial","Parcial"],["ausente","Ausente"]];
+function telaExposicao(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LOJA.exposicoes||[];
+  topo("Exposição", ()=>telaLoja(), "");
+  $("corpo").innerHTML=PONTOS.map(pt=>{ const r=regs.find(x=>x.tipo===pt[0])||{};
+    return `<div class="item" data-t="${pt[0]}"><div class="nome">${pt[1]}</div>
+      <div class="pilha sit">${SIT_EXP.map(s=>`<button class="${r.situacao===s[0]?("on "+(s[0]==="ausente"?"mau":s[0]==="parcial"?"meio":"")):""}" data-s="${s[0]}">${s[1]}</button>`).join("")}</div>
+      <div class="nums">
+        <div><label>Frentes</label><input type="number" inputmode="numeric" min="0" data-c="frentes" value="${r.frentes==null?"":r.frentes}"></div>
+        <div><label>Share %</label><input type="number" inputmode="numeric" min="0" max="100" data-c="share" value="${r.share==null?"":r.share}"></div>
+      </div>${blocoFoto(r)}</div>`; }).join("");
+  $("corpo").querySelectorAll("[data-t]").forEach(g=>{ const tipo=g.dataset.t;
+    const atual=()=>{ LOJA.exposicoes=LOJA.exposicoes||[];
+      let r=LOJA.exposicoes.find(x=>x.tipo===tipo); if(!r){ r={id:uid(),tipo:tipo}; LOJA.exposicoes.push(r); } return r; };
+    const envia=r=>{ if(!r.situacao) r.situacao="montado";
+      grava("exposicao","id",{id:r.id, ...base(), tipo:r.tipo, situacao:r.situacao,
+        frentes:r.frentes==null?null:r.frentes, share:r.share==null?null:r.share}); };
+    g.querySelectorAll(".sit button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      const r=atual(); r.situacao=b.dataset.s;
+      g.querySelectorAll(".sit button").forEach(x=>x.classList.remove("on","mau","meio"));
+      b.classList.add("on"); if(b.dataset.s==="ausente") b.classList.add("mau");
+      if(b.dataset.s==="parcial") b.classList.add("meio"); envia(r); });
+    g.querySelectorAll('input[type=number]').forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
+      const r=atual(); r[inp.dataset.c]=inp.value===""?null:Number(inp.value); envia(r); });
+    const r=atual();
+    ligaFoto(g, r, {tabela:"exposicao", chave:"id", corpo:{id:r.id, ...base(), tipo:r.tipo,
+      situacao:r.situacao||"montado", frentes:r.frentes==null?null:r.frentes,
+      share:r.share==null?null:r.share}}, telaExposicao); });
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+});}
+
+/* --------------------- 5. preco e concorrencia --------------- */
+function telaPreco(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[], cc=LOJA.concorrentes||[];
+  topo("Preço", ()=>telaLoja(), "");
+  $("corpo").innerHTML=`<h2 class="tit">NOSSOS PRODUTOS</h2><div id="meus">${
+    cat.map((p,i)=>{ const c=p.contagem||{};
+      return `<div class="item"><div class="nome">${esc(p.nome)}</div><div class="emb">${esc(p.embalagem||"")}</div>
+        <div class="nums" data-p="${i}">
+          <div><label>Preço R$</label><input type="number" inputmode="decimal" step="0.01" min="0" data-c="preco" value="${c.preco==null?"":c.preco}"></div>
+          <div><label>Promoção R$</label><input type="number" inputmode="decimal" step="0.01" min="0" data-c="promo" value="${c.promo==null?"":c.promo}"></div>
+        </div></div>`; }).join("")}</div>
+    <h2 class="tit">CONCORRÊNCIA · ${cc.length}</h2>
+    ${cc.length?cc.map(x=>`<div class="item"><div class="nome">${esc(x.marca)}</div>
+      <div class="emb">${esc(x.descricao||"")}${x.preco?` · R$ ${Number(x.preco).toFixed(2)}`:""}${x.em_promocao?" · em promoção":""}${x.ponto_extra?" · ponto extra":""}</div></div>`).join("")
+      :`<div class="vazio">Nada registrado.</div>`}`;
+  $("meus").querySelectorAll("[data-p]").forEach(g=>{ const p=cat[+g.dataset.p];
+    g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
+      p.contagem=p.contagem||{}; p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
+      enviaContagem(p); }); });
+  rodape(editavel()?`<button class="bt" onclick="telaNovoConcorrente()">Registrar concorrente</button>`:null);
+});}
+function telaNovoConcorrente(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Concorrente", telaPreco, "");
+  $("corpo").innerHTML=`
+    <div class="campo"><label for="m">Marca</label><input id="m" autocapitalize="characters"></div>
+    <div class="campo"><label for="d">Produto e embalagem</label><input id="d"></div>
+    <div class="campo"><label for="v">Preço R$</label><input id="v" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    <div class="pilha" id="flags"><button data-f="em_promocao">Em promoção</button>
+      <button data-f="ponto_extra">Ponto extra</button></div><div id="e" style="margin-top:14px"></div>`;
+  const flags={};
+  $("flags").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    flags[b.dataset.f]=!flags[b.dataset.f]; b.classList.toggle("on",!!flags[b.dataset.f]); });
+  rodape(`<button class="bt" id="ok">Salvar</button>`);
+  $("ok").onclick=()=>{ if(!exigeVisita()) return;
+    const m=$("m").value.trim();
+    if(!m){ $("e").innerHTML=`<div class="aviso err">Informe ao menos a marca.</div>`; return; }
+    const r={id:uid(), ...base(), marca:m, descricao:$("d").value.trim()||null,
+      preco:$("v").value===""?null:Number($("v").value),
+      em_promocao:!!flags.em_promocao, ponto_extra:!!flags.ponto_extra};
+    LOJA.concorrentes=LOJA.concorrentes||[]; LOJA.concorrentes.push(r);
+    grava("concorrencia","id",r); telaPreco(); };
+});}
+
+/* ------------------------- 6. materiais ---------------------- */
+const MATERIAIS=[["geladeira","Geladeira"],["faixa_gondola","Faixa de gôndola"],["display","Display"],
+  ["cartaz","Cartaz"],["adesivo","Adesivo"],["movel","Móvel"]];
+const SIT_MAT=[["ok","OK"],["danificado","Danificado"],["ausente","Ausente"],
+  ["desligado","Desligado"],["mal_posicionado","Mal posicionado"],["sujo","Sujo"]];
+function telaPdv(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LOJA.materiais||[];
+  topo("Materiais", ()=>telaLoja(), "");
+  $("corpo").innerHTML=MATERIAIS.map(mt=>{ const r=regs.find(x=>x.tipo===mt[0])||{};
+    return `<div class="item" data-t="${mt[0]}"><div class="nome">${mt[1]}</div>
+      <div class="pilha sit">${SIT_MAT.map(s=>`<button class="${r.situacao===s[0]?("on "+(s[0]==="ok"?"":"mau")):""}" data-s="${s[0]}">${s[1]}</button>`).join("")}</div>
+      ${mt[0]==="geladeira"?`<div class="nums">
+        <div><label>Temperatura °C</label><input type="number" inputmode="decimal" step="0.5" data-c="temperatura" value="${r.temperatura==null?"":r.temperatura}"></div>
+        <div><label>Ocupação %</label><input type="number" inputmode="numeric" min="0" max="100" data-c="ocupacao" value="${r.ocupacao==null?"":r.ocupacao}"></div></div>
+        <div class="campo" style="margin:10px 0 0"><label>Patrimônio</label>
+          <input data-c="patrimonio" value="${esc(r.patrimonio==null?"":r.patrimonio)}" autocapitalize="characters"></div>`:""}
+      ${blocoFoto(r)}</div>`; }).join("");
+  $("corpo").querySelectorAll("[data-t]").forEach(g=>{ const tipo=g.dataset.t;
+    const atual=()=>{ LOJA.materiais=LOJA.materiais||[];
+      let r=LOJA.materiais.find(x=>x.tipo===tipo); if(!r){ r={id:uid(),tipo:tipo}; LOJA.materiais.push(r); } return r; };
+    const envia=r=>{ if(!r.situacao) r.situacao="ok";
+      grava("material_pdv","id",{id:r.id, ...base(), tipo:r.tipo, situacao:r.situacao,
+        patrimonio:r.patrimonio||null, temperatura:r.temperatura==null?null:r.temperatura,
+        ocupacao:r.ocupacao==null?null:r.ocupacao}); };
+    g.querySelectorAll(".sit button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      const r=atual(); r.situacao=b.dataset.s;
+      g.querySelectorAll(".sit button").forEach(x=>x.classList.remove("on","mau"));
+      b.classList.add("on"); if(b.dataset.s!=="ok") b.classList.add("mau"); envia(r); });
+    g.querySelectorAll("input[data-c]").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
+      const r=atual(), c=inp.dataset.c;
+      r[c]= c==="patrimonio" ? (inp.value.trim()||null) : (inp.value===""?null:Number(inp.value));
+      envia(r); });
+    const r=atual();
+    ligaFoto(g, r, {tabela:"material_pdv", chave:"id", corpo:{id:r.id, ...base(), tipo:r.tipo,
+      situacao:r.situacao||"ok", patrimonio:r.patrimonio||null,
+      temperatura:r.temperatura==null?null:r.temperatura,
+      ocupacao:r.ocupacao==null?null:r.ocupacao}}, telaPdv); });
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+});}
+
+
+/* --------------------------- 7. conversa ---------------------
+   A conversa e presa a LOJA, nao a pessoa. Daqui a tres meses quem
+   abrir esta loja encontra o que foi combinado aqui.
+
+   Dois canais: interno (repositor e lider) e consultor. Separados de
+   proposito, porque no interno se fala do consultor.
+
+   Sem fila offline: mensagem so vale se chegou. Guardar para mandar
+   depois faria o repositor achar que avisou quando nao avisou. Sem
+   sinal, o botao diz isso na cara. */
+let CANAL=null, CANAL_TIPO="interno", RELOGIO=null;
+
+function telaConversa(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Conversa", ()=>{ pararRelogio(); telaLoja(); }, "");
+  $("corpo").innerHTML=`
+    <div class="abas">
+      <button class="${CANAL_TIPO==="interno"?"on":""}" data-t="interno">Meu líder</button>
+      <button class="${CANAL_TIPO==="consultor"?"on":""}" data-t="consultor">Consultor</button>
+    </div><div id="fio"><div class="vazio">Abrindo…</div></div>`;
+  $("corpo").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{
+    CANAL_TIPO=b.dataset.t; telaConversa(); });
+  rodape(`<div class="escrever">
+    <textarea id="txt" rows="1" placeholder="Escreva para ${CANAL_TIPO==="interno"?"seu líder":"o consultor"}"></textarea>
+    <button class="env" id="env" aria-label="Enviar">${IC.env}</button></div>`);
+  $("txt").addEventListener("input",e=>{ e.target.style.height="auto";
+    e.target.style.height=Math.min(e.target.scrollHeight,110)+"px"; });
+  $("env").onclick=enviarMensagem;
+  abrirCanal();
+});}
+
+function pararRelogio(){ if(RELOGIO){ clearInterval(RELOGIO); RELOGIO=null; } }
+
+async function abrirCanal(){
+  try{
+    CANAL=await api("/rest/v1/rpc/abrir_canal",{method:"POST",
+      body:JSON.stringify({p_loja:LOJA.id, p_tipo:CANAL_TIPO})});
+    pintaFio();
+    await api("/rest/v1/rpc/marcar_lido",{method:"POST",body:JSON.stringify({p_canal:CANAL.canal_id})});
+    NAOLIDAS[LOJA.id]=0;
+    pararRelogio();
+    /* 15 segundos enquanto a tela esta aberta. Conexao aberta seria mais
+       elegante e nao aguenta 233 aparelhos ao mesmo tempo; assim escala
+       sem mudar nada depois. */
+    RELOGIO=setInterval(()=>{ if(!document.hidden && TELA==="mod" && $("fio")) atualizarFio(); },15000);
+  }catch(e){
+    if($("fio")) $("fio").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`;
+  }
+}
+async function atualizarFio(){
+  try{ CANAL=await api("/rest/v1/rpc/abrir_canal",{method:"POST",
+      body:JSON.stringify({p_loja:LOJA.id, p_tipo:CANAL_TIPO})}); pintaFio(); }catch(e){}
+}
+
+const horaDe=d=>new Date(d).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+const diaDe=d=>new Date(d).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+
+function pintaFio(){
+  const el=$("fio"); if(!el) return;
+  const ms=(CANAL&&CANAL.mensagens)||[];
+  const conv=CANAL&&CANAL.convite;
+  const cabeca = CANAL_TIPO==="consultor"
+    ? (!/^https?:$/.test(location.protocol)
+        ? `<div class="aviso err">Este app está aberto como arquivo, não por um endereço da internet.
+           A conversa com o consultor só funciona com o app publicado.</div>`
+        : conv ? `<div class="aviso inf">${esc(conv.nome)} tem o link${conv.ultimo_uso?` e já abriu em ${diaDe(conv.ultimo_uso)}`:", mas ainda não abriu"}.</div>`
+               : `<div class="aviso amb">O consultor ainda não foi chamado. Escreva sua mensagem: o WhatsApp dele abre em seguida.</div>`)
+    : "";
+  el.innerHTML = cabeca + (ms.length ? (()=>{ let ult="";
+      return ms.map(m=>{ const d=diaDe(m.criado_em);
+        const sep=d!==ult?`<div class="diamsg">${d===diaDe(new Date())?"Hoje":d}</div>`:""; ult=d;
+        return sep+`<div class="msg ${m.eu?"minha":""}">
+          <div class="quem">${esc(m.eu?"Você":(m.autor||"—"))}</div>
+          <div class="txt">${esc(m.texto||"")}</div>
+          ${m.anexo_url?`<div class="anexo">foto anexada</div>`:""}
+          <div class="h">${horaDe(m.criado_em)}</div></div>`; }).join(""); })()
+    : `<div class="vazio">${CANAL_TIPO==="interno"
+        ?"Nada falado sobre esta loja ainda."
+        :"Nenhuma conversa com o consultor desta loja."}</div>`);
+  const c=document.querySelector(".corpo"); if(c) c.scrollTop=c.scrollHeight;
+}
+
+async function enviarMensagem(){
+  const t=$("txt").value.trim(); if(!t||!CANAL) return;
+  if(!navigator.onLine) return alerta("Sem sinal. Mensagem não é fila: mande quando voltar.");
+  const b=$("env"); b.disabled=true;
+  try{
+    await api("/rest/v1/mensagem",{method:"POST",
+      headers:{"Prefer":"return=minimal"},
+      body:JSON.stringify({id:uid(), canal_id:CANAL.canal_id, autor_id:DIA.pessoa.id, texto:t})});
+    $("txt").value=""; $("txt").style.height="auto";
+    await atualizarFio();
+    if(CANAL_TIPO==="consultor" && !(CANAL&&CANAL.convite)) chamarConsultor();
+  }catch(e){ alerta(traduz(e.message)); }
+  finally{ b.disabled=false; }
+}
+
+/* Gera o link e abre o WhatsApp do consultor com o texto pronto. Ele nao
+   instala nada e nao cria senha: abre, responde, fecha. */
+async function chamarConsultor(){
+  /* O link do consultor nasce do endereco onde o app esta. Aberto de dentro
+     do WhatsApp ou como arquivo solto, esse endereco nao existe para mais
+     ninguem e o consultor receberia um link quebrado. Melhor avisar aqui. */
+  if(!/^https?:$/.test(location.protocol))
+    return alerta("Para chamar o consultor, o app precisa estar publicado num endereço https. Fale com seu líder.");
+  try{
+    const r=await api("/rest/v1/rpc/convidar_consultor",{method:"POST",
+      body:JSON.stringify({p_loja:LOJA.id, p_base_url:location.href.replace(/[^/]*$/,"")})});
+    const tel=String(r.telefone||"").replace(/\D/g,"");
+    const msg=encodeURIComponent(r.texto+r.link);
+    open(tel?`https://wa.me/55${tel.slice(-11)}?text=${msg}`:`https://wa.me/?text=${msg}`,"_blank");
+    await atualizarFio();
+  }catch(e){ alerta(traduz(e.message)); }
+}
+
+/* --------------------------- visita -------------------------- */
+function posicao(){ return new Promise(res=>{
+  if(!navigator.geolocation) return res(null);
+  navigator.geolocation.getCurrentPosition(
+    p=>res({lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy}),
+    ()=>res(null),{enableHighAccuracy:true,timeout:8000,maximumAge:0}); }); }
+async function iniciarVisita(){
+  const b=$("ini"); if(b){ b.disabled=true; b.textContent="Localizando…"; }
+  const g=await posicao();
+  const v={id:uid(), pessoa_id:DIA.pessoa.id, rota_id:DIA.rota?DIA.rota.id:null, loja_id:LOJA.id,
+    data:DIA.data, hora_inicio:agora(), situacao:"em_andamento",
+    gps_lat:g?g.lat:null, gps_lon:g?g.lon:null, gps_acc:g?g.acc:null};
+  LOJA.visita={id:v.id,situacao:"em_andamento",hora_inicio:v.hora_inicio,hora_fim:null};
+  grava("visita","pessoa_id,loja_id,data",v); telaLoja();
+  if(!g) alerta("Sem GPS agora. A visita foi registrada assim mesmo.");
+}
+function encerrarVisita(){
+  const cat=LOJA.catalogo||[];
+  const c=cat.filter(p=>p.contagem&&(p.contagem.gondola!=null||p.contagem.deposito!=null||p.contagem.ruptura)).length;
+  if(c<cat.length&&!confirm(`Você contou ${c} de ${cat.length} itens. Encerrar assim mesmo?`)) return;
+  LOJA.visita.hora_fim=agora(); LOJA.visita.situacao="concluida";
+  grava("visita","pessoa_id,loja_id,data",{id:LOJA.visita.id, pessoa_id:DIA.pessoa.id,
+    rota_id:DIA.rota?DIA.rota.id:null, loja_id:LOJA.id, data:DIA.data,
+    hora_inicio:LOJA.visita.hora_inicio, hora_fim:LOJA.visita.hora_fim, situacao:"concluida"});
+  telaVisitas();
+}
+
+/* botao fisico de voltar */
+history.pushState({t:"home"},"");
+addEventListener("popstate",()=>{ history.pushState({t:TELA},"");
+  if($("menu").classList.contains("on")) return fecharMenu();
+  if(TELA==="mod"){ pararRelogio(); telaLoja(); } else if(TELA==="loja"||TELA==="outra") telaVisitas(); });
+
+montar(()=>{ pintaFila();
+  if(!URLB||!CHAVE) return telaConfig();
+  if(!guarda.ler("token")) return telaLogin();
+  if(guarda.ler("pin")) return telaPin("conferir");
+  carregarDia(hojeIso()); });
+</script>
+</body>
+</html>
