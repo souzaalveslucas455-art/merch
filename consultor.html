@@ -59,7 +59,7 @@ textarea:focus{border-color:var(--azul);background:var(--papel)}
     <textarea id="txt" rows="1" placeholder="Escreva sua resposta"></textarea>
     <button class="enviar" id="env" aria-label="Enviar">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linejoin="round"><path d="M4 12l16-8-6 8 6 8z"/></svg></button>
+        stroke-width="2" stroke-linejoin="round"><path d="M20 12L4 4l6 8-6 8z"/></svg></button>
   </div>
 </div>
 <script>
@@ -67,7 +67,7 @@ textarea:focus{border-color:var(--azul);background:var(--papel)}
 /* ===================== CONFIGURACAO =====================
    Mesmos valores do app. Esta pagina fica num endereco publico:
    ela nao le nada sem um token valido na URL.                 */
-const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local"" };
+const CFG = { url:"", chave:"" };
 /* ======================================================== */
 
 const $=id=>document.getElementById(id);
