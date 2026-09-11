@@ -232,7 +232,7 @@ h2.tit:first-child{margin-top:2px}
 <script>
 "use strict";
 /* ===================== CONFIGURACAO ===================== */
-const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
+const CFG = { url:"", chave:"", dominio:"merch.local" };
 /* ======================================================== */
 
 const $=id=>document.getElementById(id);
@@ -610,10 +610,13 @@ async function carregarDia(data,forcar){
 /* Nao lidas vem separado do meu_dia de proposito: o roteiro fica em cache o
    dia todo, e mensagem nova nao pode ficar congelada junto com ele. */
 async function buscarNaoLidas(){
-  try{ NAOLIDAS=await api("/rest/v1/rpc/nao_lidas_do_dia",{method:"POST",body:"{}"})||{};
+  try{ NAOLIDAS=await api("/rest/v1/rpc/alertas_conversa",{method:"POST",body:"{}"})||{};
     if(TELA==="home") pintaLojas(); else if(TELA==="loja") telaLoja();
   }catch(e){}
 }
+const alerta_de=id=>NAOLIDAS[id]||{};
+const naoLidas=id=>(alerta_de(id).nao_lidas)||0;
+const semVer  =id=>(alerta_de(id).consultor_nao_viu)||0;
 setInterval(()=>{ if(!document.hidden && navigator.onLine && (TELA==="home"||TELA==="loja")) buscarNaoLidas(); },45000);
 
 /* proximos dias uteis a partir de segunda desta semana */
@@ -692,7 +695,8 @@ function pintaLojas(){
         ${fim?`<div class="hora">${esc(String(v.hora_inicio||"").slice(0,5))} – ${esc(String(v.hora_fim).slice(0,5))}</div>`:""}
         <div class="end">${esc([l.bairro,l.cidade].filter(Boolean).join(", ").toUpperCase())}</div>
         <div class="desc">${(l.catalogo||[]).length} itens de contagem${(l.notas||[]).length?` · ${(l.notas||[]).length} nota(s) prevista(s)`:""}${
-          NAOLIDAS[l.id]?` · <b style="color:var(--verm)">${NAOLIDAS[l.id]} mensagem(ns)</b>`:""}</div>
+          naoLidas(l.id)?` · <b style="color:var(--verm)">${naoLidas(l.id)} mensagem(ns)</b>`:""}${
+          semVer(l.id)?` · <b style="color:var(--amb)">consultor não viu</b>`:""}</div>
         <div class="pe">
           <button class="bolinha" data-a="consultor" ${l.consultor_tel?"":"disabled"}>${IC.pessoa}</button>
           <button class="bolinha" data-a="fone" ${l.telefone?"":"disabled"}>${IC.fone}</button>
@@ -724,7 +728,7 @@ const MODULOS=[
   {k:"pdv",      ic:"6", nome:"Materiais e geladeira",   tela:()=>telaPdv()},
   {k:"conversa", ic:"7", nome:"Conversa",                tela:()=>telaConversa()}
 ];
-let NAOLIDAS={};   // loja_id -> quantas mensagens novas
+let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
 function resumo(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
   if(k==="contagem"){ const c=cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null||x.contagem.ruptura)).length;
@@ -744,9 +748,12 @@ function resumo(k){
   if(k==="pdv"){ const m=l.materiais||[], ruim=m.filter(x=>x.situacao!=="ok").length;
     return {txt:m.length?`${m.length} ${m.length===1?"item":"itens"}${ruim?` · ${ruim} com problema`:""}`:"nada registrado",
       pronto:m.length>0&&ruim===0, alerta:ruim>0}; }
-  if(k==="conversa"){ const n=NAOLIDAS[l.id]||0;
-    return {txt:n?`${n} ${n===1?"mensagem nova":"mensagens novas"}`:"falar com o líder ou o consultor",
-      pronto:false, alerta:n>0, badge:n}; }
+  if(k==="conversa"){ const n=naoLidas(l.id), v=semVer(l.id);
+    const partes=[];
+    if(n) partes.push(`${n} ${n===1?"mensagem nova":"mensagens novas"}`);
+    if(v) partes.push(`${v} sem o consultor ver`);
+    return {txt:partes.join(" · ")||"falar com o líder ou o consultor",
+      pronto:false, alerta:n>0||v>0, badge:n||null}; }
   return {txt:"",pronto:false,alerta:false};
 }
 function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
@@ -822,7 +829,9 @@ function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA
         g.querySelectorAll("button").forEach(x=>x.classList.remove("on","meio"));
         b.classList.add("on","meio"); enviaContagem(p); }); }); };
   $("q").oninput=e=>pinta(e.target.value); pinta("");
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+  const rup=cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`+(rup?botaoAvisar("ruptura"):""));
+  ligaAvisar();
 });}
 
 /* --------------------------- 2. validade --------------------- */
@@ -849,7 +858,11 @@ function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
       grava("validade","id",corpoVal(v)); }); });
   $("corpo").querySelectorAll(".item").forEach((caixa,i)=>{ const v=regs[i]; if(!v) return;
     ligaFoto(caixa, v, {tabela:"validade", chave:"id", corpo:corpoVal(v)}, telaValidade); });
-  rodape(editavel()?`<button class="bt" onclick="telaNovaValidade()">Registrar validade</button>`:null);
+  rodape(editavel()
+    ? `<button class="bt sec" onclick="telaNovaValidade()">Registrar</button>` +
+      (regs.length?botaoAvisar("validade"):"")
+    : null);
+  ligaAvisar();
 });}
 function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
   topo("Nova validade", telaValidade, "");
@@ -943,7 +956,11 @@ function telaPreco(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.ca
     g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
       p.contagem=p.contagem||{}; p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
       enviaContagem(p); }); });
-  rodape(editavel()?`<button class="bt" onclick="telaNovoConcorrente()">Registrar concorrente</button>`:null);
+  rodape(editavel()
+    ? `<button class="bt sec" onclick="telaNovoConcorrente()">Concorrente</button>` +
+      (quantos("preco")?botaoAvisar("preco"):"")
+    : null);
+  ligaAvisar();
 });}
 function telaNovoConcorrente(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Concorrente", telaPreco, "");
@@ -1003,7 +1020,9 @@ function telaPdv(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LOJA.mat
       situacao:r.situacao||"ok", patrimonio:r.patrimonio||null,
       temperatura:r.temperatura==null?null:r.temperatura,
       ocupacao:r.ocupacao==null?null:r.ocupacao}}, telaPdv); });
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`
+    + (quantos("geladeira")?botaoAvisar("geladeira"):""));
+  ligaAvisar();
 });}
 
 
@@ -1047,7 +1066,7 @@ async function abrirCanal(){
       body:JSON.stringify({p_loja:LOJA.id, p_tipo:CANAL_TIPO})});
     pintaFio();
     await api("/rest/v1/rpc/marcar_lido",{method:"POST",body:JSON.stringify({p_canal:CANAL.canal_id})});
-    NAOLIDAS[LOJA.id]=0;
+    if(NAOLIDAS[LOJA.id]) NAOLIDAS[LOJA.id].nao_lidas=0;
     /* O link do consultor e preparado AGORA, nao na hora do toque. O
        navegador so deixa abrir o WhatsApp como resposta direta a um toque;
        se houver espera de rede no meio, ele bloqueia em silencio. */
@@ -1092,10 +1111,12 @@ function pintaFio(){
          A conversa com o consultor só funciona com o app publicado.</div>`
     : CONVITE_ERRO ? `<div class="aviso err">${esc(CONVITE_ERRO)}</div>`
     : !CONVITE ? `<div class="aviso inf">Preparando o link do consultor…</div>`
-    : `<div class="aviso ${conv&&conv.ultimo_uso?"inf":"amb"}">
+    : `<div class="aviso ${semVer(LOJA.id)?"err":conv&&conv.ultimo_uso?"inf":"amb"}">
          <b>${esc(CONVITE.nome)}</b>${CONVITE.telefone?` · ${esc(CONVITE.telefone)}`:""}<br>
-         ${conv&&conv.ultimo_uso?`Já abriu o link em ${diaDe(conv.ultimo_uso)}.`
-           :"Escreva sua mensagem e mande o link para ele abrir."}
+         ${semVer(LOJA.id)
+           ? `Não viu ${semVer(LOJA.id)} ${semVer(LOJA.id)===1?"mensagem":"mensagens"}. Mande o link de novo.`
+           : conv&&conv.ultimo_uso ? `Já abriu o link em ${diaDe(conv.ultimo_uso)}.`
+           : "Escreva sua mensagem e mande o link para ele abrir."}
          <div class="pilha">
            <button id="bwa">Mandar link no WhatsApp</button>
            <button id="bcopia">Copiar link</button>
@@ -1146,6 +1167,39 @@ function telaAnexar(){ montar(()=>{ TELA="mod"; esconderTudo();
   $("corpo").querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>mandarCartao(CARTOES[+b.dataset.c].k));
   rodape(null);
 });}
+
+/* Atalho de avisar dentro do modulo. O momento de avisar e quando ele acabou
+   de registrar, nao depois de navegar ate a conversa. */
+function botaoAvisar(tipo){
+  return `<button class="bt" id="avisar" data-t="${tipo}">Avisar sobre isto</button>`;
+}
+function ligaAvisar(){
+  const b=$("avisar"); if(!b) return;
+  b.onclick=()=>{
+    const tipo=b.dataset.t;
+    if(!quantos(tipo)) return alerta("Registre alguma coisa antes de avisar.");
+    $("corpo").scrollTop=0;
+    const cx=document.createElement("div");
+    cx.className="aviso inf";
+    cx.innerHTML=`Avisar quem?<div class="pilha">
+      <button data-p="interno">Meu líder</button>
+      <button data-p="consultor">Consultor</button>
+      <button data-p="x">Cancelar</button></div>`;
+    $("corpo").prepend(cx);
+    cx.querySelectorAll("button").forEach(x=>x.onclick=async()=>{
+      const p=x.dataset.p; cx.remove();
+      if(p==="x") return;
+      CANAL_TIPO=p;
+      try{
+        const c=await api("/rest/v1/rpc/abrir_canal",{method:"POST",
+          body:JSON.stringify({p_loja:LOJA.id, p_tipo:p})});
+        await api("/rest/v1/rpc/mandar_cartao",{method:"POST",
+          body:JSON.stringify({p_canal:c.canal_id, p_tipo:tipo})});
+        CANAL=c; telaConversa();
+      }catch(e){ alerta(traduz(e.message)); }
+    });
+  };
+}
 
 async function mandarCartao(tipo){
   if(!navigator.onLine) return alerta("Sem sinal. Cartão não é fila: mande quando voltar.");
