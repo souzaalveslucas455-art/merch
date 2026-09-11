@@ -1002,7 +1002,7 @@ function telaPdv(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LOJA.mat
    Sem fila offline: mensagem so vale se chegou. Guardar para mandar
    depois faria o repositor achar que avisou quando nao avisou. Sem
    sinal, o botao diz isso na cara. */
-let CANAL=null, CANAL_TIPO="interno", RELOGIO=null;
+let CANAL=null, CANAL_TIPO="interno", RELOGIO=null, CONVITE=null, CONVITE_ERRO=null;
 
 function telaConversa(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Conversa", ()=>{ pararRelogio(); telaLoja(); }, "");
@@ -1031,6 +1031,10 @@ async function abrirCanal(){
     pintaFio();
     await api("/rest/v1/rpc/marcar_lido",{method:"POST",body:JSON.stringify({p_canal:CANAL.canal_id})});
     NAOLIDAS[LOJA.id]=0;
+    /* O link do consultor e preparado AGORA, nao na hora do toque. O
+       navegador so deixa abrir o WhatsApp como resposta direta a um toque;
+       se houver espera de rede no meio, ele bloqueia em silencio. */
+    if(CANAL_TIPO==="consultor") prepararConvite();
     pararRelogio();
     /* 15 segundos enquanto a tela esta aberta. Conexao aberta seria mais
        elegante e nao aguenta 233 aparelhos ao mesmo tempo; assim escala
@@ -1052,13 +1056,20 @@ function pintaFio(){
   const el=$("fio"); if(!el) return;
   const ms=(CANAL&&CANAL.mensagens)||[];
   const conv=CANAL&&CANAL.convite;
-  const cabeca = CANAL_TIPO==="consultor"
-    ? (!/^https?:$/.test(location.protocol)
-        ? `<div class="aviso err">Este app está aberto como arquivo, não por um endereço da internet.
-           A conversa com o consultor só funciona com o app publicado.</div>`
-        : conv ? `<div class="aviso inf">${esc(conv.nome)} tem o link${conv.ultimo_uso?` e já abriu em ${diaDe(conv.ultimo_uso)}`:", mas ainda não abriu"}.</div>`
-               : `<div class="aviso amb">O consultor ainda não foi chamado. Escreva sua mensagem: o WhatsApp dele abre em seguida.</div>`)
-    : "";
+  const cabeca = CANAL_TIPO!=="consultor" ? ""
+    : !/^https?:$/.test(location.protocol)
+      ? `<div class="aviso err">Este app está aberto como arquivo, não por um endereço da internet.
+         A conversa com o consultor só funciona com o app publicado.</div>`
+    : CONVITE_ERRO ? `<div class="aviso err">${esc(CONVITE_ERRO)}</div>`
+    : !CONVITE ? `<div class="aviso inf">Preparando o link do consultor…</div>`
+    : `<div class="aviso ${conv&&conv.ultimo_uso?"inf":"amb"}">
+         <b>${esc(CONVITE.nome)}</b>${CONVITE.telefone?` · ${esc(CONVITE.telefone)}`:""}<br>
+         ${conv&&conv.ultimo_uso?`Já abriu o link em ${diaDe(conv.ultimo_uso)}.`
+           :"Escreva sua mensagem e mande o link para ele abrir."}
+         <div class="pilha">
+           <button id="bwa">Mandar link no WhatsApp</button>
+           <button id="bcopia">Copiar link</button>
+         </div></div>`;
   el.innerHTML = cabeca + (ms.length ? (()=>{ let ult="";
       return ms.map(m=>{ const d=diaDe(m.criado_em);
         const sep=d!==ult?`<div class="diamsg">${d===diaDe(new Date())?"Hoje":d}</div>`:""; ult=d;
@@ -1070,6 +1081,8 @@ function pintaFio(){
     : `<div class="vazio">${CANAL_TIPO==="interno"
         ?"Nada falado sobre esta loja ainda."
         :"Nenhuma conversa com o consultor desta loja."}</div>`);
+  if($("bwa")) $("bwa").onclick=chamarConsultor;
+  if($("bcopia")) $("bcopia").onclick=copiarLink;
   const c=document.querySelector(".corpo"); if(c) c.scrollTop=c.scrollHeight;
 }
 
@@ -1083,27 +1096,34 @@ async function enviarMensagem(){
       body:JSON.stringify({id:uid(), canal_id:CANAL.canal_id, autor_id:DIA.pessoa.id, texto:t})});
     $("txt").value=""; $("txt").style.height="auto";
     await atualizarFio();
-    if(CANAL_TIPO==="consultor" && !(CANAL&&CANAL.convite)) chamarConsultor();
   }catch(e){ alerta(traduz(e.message)); }
   finally{ b.disabled=false; }
 }
 
-/* Gera o link e abre o WhatsApp do consultor com o texto pronto. Ele nao
-   instala nada e nao cria senha: abre, responde, fecha. */
-async function chamarConsultor(){
-  /* O link do consultor nasce do endereco onde o app esta. Aberto de dentro
-     do WhatsApp ou como arquivo solto, esse endereco nao existe para mais
-     ninguem e o consultor receberia um link quebrado. Melhor avisar aqui. */
-  if(!/^https?:$/.test(location.protocol))
-    return alerta("Para chamar o consultor, o app precisa estar publicado num endereço https. Fale com seu líder.");
+async function prepararConvite(){
+  CONVITE=null; CONVITE_ERRO=null;
   try{
-    const r=await api("/rest/v1/rpc/convidar_consultor",{method:"POST",
+    CONVITE=await api("/rest/v1/rpc/convidar_consultor",{method:"POST",
       body:JSON.stringify({p_loja:LOJA.id, p_base_url:location.href.replace(/[^/]*$/,"")})});
-    const tel=String(r.telefone||"").replace(/\D/g,"");
-    const msg=encodeURIComponent(r.texto+r.link);
-    open(tel?`https://wa.me/55${tel.slice(-11)}?text=${msg}`:`https://wa.me/?text=${msg}`,"_blank");
-    await atualizarFio();
-  }catch(e){ alerta(traduz(e.message)); }
+  }catch(e){ CONVITE_ERRO=traduz(e.message); }
+  pintaFio();
+}
+
+/* Abre o WhatsApp do consultor com o texto e o link prontos. Sem espera de
+   rede aqui dentro: tem que ser resposta direta ao toque, senao o navegador
+   bloqueia a janela em silencio. */
+function chamarConsultor(){
+  if(!CONVITE) return alerta(CONVITE_ERRO||"O link ainda está sendo preparado. Tente em instantes.");
+  const tel=String(CONVITE.telefone||"").replace(/\D/g,"");
+  const msg=encodeURIComponent(CONVITE.texto+CONVITE.link);
+  open(tel?`https://wa.me/55${tel.slice(-11)}?text=${msg}`:`https://wa.me/?text=${msg}`,"_blank");
+}
+function copiarLink(){
+  if(!CONVITE) return alerta(CONVITE_ERRO||"O link ainda está sendo preparado.");
+  const t=CONVITE.texto+CONVITE.link;
+  if(navigator.clipboard) navigator.clipboard.writeText(t)
+    .then(()=>alerta("Link copiado. Cole onde quiser.")).catch(()=>alerta(CONVITE.link));
+  else alerta(CONVITE.link);
 }
 
 /* --------------------------- visita -------------------------- */
