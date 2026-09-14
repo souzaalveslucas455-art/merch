@@ -282,7 +282,16 @@ async function api(caminho,opc={},retry=true){
   if(r.status===401&&retry&&guarda.ler("refresh")&&await renovar()) return api(caminho,opc,false);
   const t=await r.text(); let c=null;
   try{ c=t?JSON.parse(t):null }catch(e){ c={raw:t} }
-  if(!r.ok) throw Object.assign(new Error(c?.message||c?.error_description||c?.msg||c?.raw||("HTTP "+r.status)),{status:r.status});
+  if(!r.ok){
+    /* Resposta em HTML nao veio do banco, veio de um servidor web. Quase
+       sempre significa endereco errado no CFG. Despejar o HTML na tela nao
+       ajuda ninguem: melhor dizer o que fazer. */
+    let m=c?.message||c?.error_description||c?.msg||c?.raw||("HTTP "+r.status);
+    if(/^\s*<(!doctype|html)/i.test(String(m)))
+      m="O endereço do sistema parece errado. Fale com seu líder: o app está "
+       +"tentando falar com o lugar errado (HTTP "+r.status+").";
+    throw Object.assign(new Error(m),{status:r.status});
+  }
   return c;
 }
 async function renovar(){ try{
@@ -1296,8 +1305,22 @@ addEventListener("popstate",()=>{ history.pushState({t:TELA},"");
   if($("menu").classList.contains("on")) return fecharMenu();
   if(TELA==="mod"){ pararRelogio(); telaLoja(); } else if(TELA==="loja"||TELA==="outra") telaVisitas(); });
 
+function enderecoValido(u){ return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(u||"").trim().replace(/\/+$/,"")); }
+
 montar(()=>{ pintaFila();
   if(!URLB||!CHAVE) return telaConfig();
+  /* Endereco torto trava o app com erro que nao explica nada. Melhor barrar
+     aqui, com texto que diz onde esta o problema. */
+  if(!enderecoValido(URLB)){
+    esconderTudo();
+    $("topo").innerHTML=`<h1 style="padding-left:14px">Configuração</h1>`;
+    $("corpo").innerHTML=`<div class="aviso err"><b>O endereço do sistema está incompleto.</b><br><br>
+      Está gravado como:<br><code style="word-break:break-all">${esc(URLB||"(vazio)")}</code><br><br>
+      Deveria ser parecido com <code>https://xxxxxxxx.supabase.co</code>, sem barra no fim.
+      Mostre esta tela ao seu líder.</div>`;
+    return rodape(`<button class="bt sec" id="lim">Digitar de novo</button>`),
+      ($("lim").onclick=()=>{["url","chave"].forEach(guarda.tira);URLB="";CHAVE="";telaConfig();});
+  }
   if(!guarda.ler("token")) return telaLogin();
   if(guarda.ler("pin")) return telaPin("conferir");
   carregarDia(hojeIso()); });
