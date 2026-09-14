@@ -879,24 +879,48 @@ function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
    - abaixo do que a loja costuma comprar vira aviso. Vinte caixas e muito num
      bar e pouco num atacarejo; a referencia vem do historico DAQUELA loja.
 ------------------------------------------------------------ */
-const MOTIVOS=[["sem_pedido","Não pediu"],["pedido_nao_chegou","Pedido não chegou"],
-  ["sem_espaco","Sem espaço"],["concorrente_ocupou","Concorrente ocupou"],
-  ["deposito_cheio","Tem no depósito"],["outro","Outro"]];
 
 const fator=p=>Number(p.fator_cx)>0?Number(p.fator_cx):1;
+
+/* A volumetria e escolhida uma vez, no topo da tela, e vale para todos os
+   produtos. Antes eram quatro campos por produto (gondola cx, gondola un,
+   deposito cx, deposito un) e ninguem conta assim: o repositor conta tudo
+   em caixa OU tudo em unidade, conforme a loja.
+
+   O banco continua guardando as quatro colunas, entao o painel sabe em que
+   volumetria foi contado. O que mudou e so o que a tela pede. */
+const unidAtual=()=>guarda.ler("unid")||"cx";
+function valorDe(p,onde){          // onde: 'g' (gondola) ou 'd' (deposito)
+  const c=p.contagem||{};
+  return unidAtual()==="cx" ? c[onde+"cx"] : c[onde+"un"];
+}
+function poeValor(p,onde,v){
+  p.contagem=p.contagem||{};
+  if(unidAtual()==="cx"){ p.contagem[onde+"cx"]=v; p.contagem[onde+"un"]=null; }
+  else                  { p.contagem[onde+"un"]=v; p.contagem[onde+"cx"]=null; }
+}
+/* Trocar a volumetria converte o que ja foi digitado. Como o fator de caixa
+   e conhecido, a conta e exata nos dois sentidos. */
+function converterTudo(cat,de,para){
+  cat.forEach(p=>{ const c=p.contagem; if(!c) return; const f=fator(p);
+    ["g","d"].forEach(o=>{
+      if(de==="cx"&&c[o+"cx"]!=null){ c[o+"un"]=Math.round(c[o+"cx"]*f); c[o+"cx"]=null; }
+      else if(de==="un"&&c[o+"un"]!=null){ c[o+"cx"]=Math.round((c[o+"un"]/f)*100)/100; c[o+"un"]=null; }
+    });
+  });
+}
+
 function totais(p){
   const c=p.contagem||{}, f=fator(p);
   const gu=(Number(c.gcx)||0)*f+(Number(c.gun)||0);
   const du=(Number(c.dcx)||0)*f+(Number(c.dun)||0);
   const tocou=["gcx","gun","dcx","dun"].some(k=>c[k]!=null&&c[k]!=="");
-  return {gu, du, total:gu+du, cx:(gu+du)/f, tocou,
-          gondolaZerada: tocou && gu===0};
+  return {gu, du, total:gu+du, cx:(gu+du)/f, tocou, gondolaZerada: tocou && gu===0};
 }
 function estaBaixo(p){
   const t=totais(p); if(!t.tocou) return false;
   const m=Number(p.media_cx); if(!m) return false;
-  const pct=(DIA.percentual_estoque_baixo||30)/100;
-  return t.cx < m*pct;
+  return t.cx < m*((DIA.percentual_estoque_baixo||30)/100);
 }
 function enviaContagem(p){
   const c=p.contagem||{}, t=totais(p);
@@ -905,13 +929,11 @@ function enviaContagem(p){
     produto_id:p.produto_id, data:DIA.data,
     gondola_cx:c.gcx??null, gondola_un:c.gun??null,
     deposito_cx:c.dcx??null, deposito_un:c.dun??null,
-    // totais em unidade, para o painel nao precisar refazer a conta
     estoque_gondola: t.tocou? Math.round(t.gu) : null,
     estoque_deposito: t.tocou? Math.round(t.du) : null,
     ruptura:!!c.ruptura, ruptura_motivo:c.ruptura?(c.motivo||null):null,
     preco:c.preco==null?null:c.preco, preco_promocional:c.promo==null?null:c.promo});
 }
-
 function resumoContagem(cat){
   const rup=cat.filter(p=>p.contagem&&p.contagem.ruptura).length;
   const semMotivo=cat.filter(p=>p.contagem&&p.contagem.ruptura&&!p.contagem.motivo).length;
@@ -920,11 +942,31 @@ function resumoContagem(cat){
   return {rup, semMotivo, baixo, feitos, total:cat.length};
 }
 
+const MOTIVOS=[["sem_pedido","Não pediu"],["pedido_nao_chegou","Pedido não chegou"],
+  ["sem_espaco","Sem espaço"],["concorrente_ocupou","Concorrente ocupou"],
+  ["deposito_cheio","Tem no depósito"],["outro","Outro"]];
+
 function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
   topo("Contagem", ()=>telaLoja(), "");
-  $("corpo").innerHTML=`<div id="alertas"></div>
+  $("corpo").innerHTML=`
+    <div class="abas" id="unid">
+      <button data-u="cx" class="${unidAtual()==="cx"?"on":""}">Caixa física</button>
+      <button data-u="un" class="${unidAtual()==="un"?"on":""}">Unidade</button>
+    </div>
+    <div id="alertas"></div>
     <div class="busca" style="margin-bottom:12px">${IC.lupa}
-      <input id="q" placeholder="Buscar produto" autocapitalize="off"></div><div id="lista"></div>`;
+      <input id="q" placeholder="Buscar produto" autocapitalize="off"></div>
+    <div id="lista"></div>`;
+
+  $("unid").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    const novo=b.dataset.u, velho=unidAtual();
+    if(novo===velho) return;
+    if(!exigeVisita()) return;
+    converterTudo(cat, velho, novo);
+    guarda.por("unid", novo);
+    cat.forEach(p=>{ if(p.contagem&&totais(p).tocou) enviaContagem(p); });
+    telaContagem();
+  });
 
   const alertas=()=>{
     const r=resumoContagem(cat), b=[];
@@ -938,15 +980,16 @@ function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA
 
   const cartaoProduto=(p,i)=>{
     const c=p.contagem||{}, t=totais(p), f=fator(p), baixo=estaBaixo(p);
+    const u=unidAtual(), rot=u==="cx"?"cx":"un";
     const ref=p.media_cx?`costuma comprar ${Number(p.media_cx).toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:"";
     return `<div class="item ${c.ruptura&&!c.motivo?"crit":baixo?"aten":""}">
       <div class="nome">${esc(p.nome)}</div>
       <div class="emb">${esc(p.embalagem||"")}${f>1?` · 1 cx = ${f} un`:""}${ref?` · ${ref}`:""}</div>
       <div class="nums" data-p="${i}">
-        <div><label>Gôndola cx</label><input type="number" inputmode="decimal" min="0" step="0.5" data-c="gcx" value="${c.gcx??""}"></div>
-        <div><label>un</label><input type="number" inputmode="numeric" min="0" data-c="gun" value="${c.gun??""}"></div>
-        <div><label>Depósito cx</label><input type="number" inputmode="decimal" min="0" step="0.5" data-c="dcx" value="${c.dcx??""}"></div>
-        <div><label>un</label><input type="number" inputmode="numeric" min="0" data-c="dun" value="${c.dun??""}"></div>
+        <div><label>Gôndola (${rot})</label>
+          <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-o="g" value="${valorDe(p,"g")??""}"></div>
+        <div><label>Depósito (${rot})</label>
+          <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-o="d" value="${valorDe(p,"d")??""}"></div>
       </div>
       ${t.tocou?`<div class="emb" style="margin-top:7px">
         total ${Math.round(t.total)} un${f>1?` · ${t.cx.toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:""}
@@ -966,19 +1009,15 @@ function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA
   const redesenha=i=>{
     const alvo=$("lista").querySelector(`[data-p="${i}"]`);
     if(!alvo) return pinta($("q").value);
-    const caixa=alvo.closest(".item");
     const tmp=document.createElement("div"); tmp.innerHTML=cartaoProduto(cat[i],i);
-    caixa.replaceWith(tmp.firstElementChild); ligar(); alertas(); };
+    alvo.closest(".item").replaceWith(tmp.firstElementChild); ligar(); alertas(); };
 
   const ligar=()=>{
     $("lista").querySelectorAll("[data-p]").forEach(g=>{ const i=+g.dataset.p, p=cat[i];
       g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{
         if(!exigeVisita()){ inp.value=""; return; }
-        p.contagem=p.contagem||{};
-        p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
-        const t=totais(p);
-        /* Gondola zerada obriga motivo: liga a ruptura sozinho e abre a lista. */
-        if(t.gondolaZerada && !p.contagem.ruptura){
+        poeValor(p, inp.dataset.o, inp.value===""?null:Number(inp.value));
+        if(totais(p).gondolaZerada && !p.contagem.ruptura){
           p.contagem.ruptura=true;
           alerta("Gôndola zerada. Informe por que zerou.");
         }
