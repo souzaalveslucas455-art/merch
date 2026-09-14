@@ -215,6 +215,17 @@ h2.tit:first-child{margin-top:2px}
 .foto img{width:46px;height:46px;object-fit:cover;border-radius:9px;border:1px solid var(--linha)}
 .foto .est{font-size:12px;color:var(--ink3)}
 .foto .est.env{color:var(--amb)}
+#mapa{position:absolute;inset:0;z-index:1}
+.mapa-caixa{position:relative;flex:1;min-height:0;height:100%}
+.mapa-pe{position:absolute;left:12px;right:12px;bottom:12px;z-index:400;display:flex;gap:8px}
+.mapa-pe button{flex:1;padding:13px;font-size:14px;font-weight:600;border:none;border-radius:11px;
+  background:var(--verm);color:#fff;box-shadow:0 2px 10px rgba(16,24,40,.25);cursor:pointer}
+.mapa-pe button.sec{background:var(--papel);color:var(--ink);border:1px solid var(--linha)}
+.pino{background:var(--verm);color:#fff;border-radius:50%;width:26px;height:26px;display:flex;
+  align-items:center;justify-content:center;font-size:12px;font-weight:700;
+  box-shadow:0 1px 4px rgba(0,0,0,.4);border:2px solid #fff}
+.pino.feita{background:var(--verde)}
+.leaflet-container{font-family:var(--sans)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -663,9 +674,7 @@ function pintaBarra(){
     <button class="quad" id="bmapa">${IC.mapa}</button>`;
   $("q").oninput=e=>{ FILTRO=e.target.value; pintaLojas(); };
   $("bfil").onclick=()=>{ FILTRO=FILTRO?"":""; alerta("Use a busca para filtrar por nome ou bairro."); };
-  $("bmapa").onclick=()=>{ const l=lojasFiltradas()[0];
-    if(!l||l.gps_lat==null) return alerta("Sem coordenada para abrir o mapa.");
-    open(`https://www.google.com/maps/search/?api=1&query=${l.gps_lat},${l.gps_lon}`,"_blank"); };
+  $("bmapa").onclick=telaMapa;
 }
 function lojasFiltradas(){
   const f=FILTRO.trim().toLowerCase();
@@ -681,7 +690,7 @@ function prioridade(l){
 function modulosFeitos(l){
   const lim=DIA.dias_alerta_validade||30, cat=l.catalogo||[];
   let n=0;
-  if(cat.length&&cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null||x.contagem.ruptura)).length===cat.length) n++;
+  if(cat.length&&resumoContagem(cat).feitos===cat.length) n++;
   if((l.validades||[]).length) n++;
   if((l.notas||[]).length&&(l.notas||[]).every(x=>x.conferido)) n++;
   if((l.exposicoes||[]).length) n++;
@@ -727,6 +736,73 @@ function telaVisitas(){ montar(()=>{ TELA="home"; LOJA=null;
   topo("Visitas"); pintaDias(); pintaBarra(); pintaLojas(); rodape(null);
 });}
 
+/* ------------------------- mapa do dia -----------------------
+   A biblioteca do mapa e carregada so quando alguem abre, para nao pesar a
+   abertura do app todo dia por causa de uma tela nem sempre usada.
+   Sem sinal o mapa nao desenha, porque os ladrilhos vem da internet. Nesse
+   caso a tela diz isso em vez de ficar cinza sem explicacao. */
+let MAPA=null;
+function carregarMapa(){
+  if(window.L) return Promise.resolve();
+  return new Promise((ok,nok)=>{
+    const css=document.createElement("link"); css.rel="stylesheet";
+    css.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+    document.head.appendChild(css);
+    const js=document.createElement("script");
+    js.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
+    js.onload=ok; js.onerror=()=>nok(new Error("sem sinal"));
+    document.head.appendChild(js);
+  });
+}
+function rotaDoDia(){
+  const ls=(DIA.lojas||[]).filter(l=>l.gps_lat!=null);
+  if(!ls.length) return alerta("Nenhuma loja com coordenada hoje.");
+  /* O Google Maps aceita cerca de 10 pontos no link e ignora o resto em
+     silencio. Melhor cortar aqui e avisar do que entregar rota incompleta. */
+  const usa=ls.slice(0,10), destino=usa[usa.length-1];
+  const meio=usa.slice(0,-1).map(l=>l.gps_lat+","+l.gps_lon).join("|");
+  open("https://www.google.com/maps/dir/?api=1&destination="+destino.gps_lat+","+destino.gps_lon
+    +(meio?"&waypoints="+encodeURIComponent(meio):"")+"&travelmode=driving","_blank");
+  if(ls.length>10) alerta("O mapa aceita 10 paradas. Entraram as 10 primeiras de "+ls.length+".");
+}
+function fecharMapa(){ $("corpo").style.padding=""; if(MAPA){ MAPA.remove(); MAPA=null; } telaVisitas(); }
+function telaMapa(){ montar(()=>{ TELA="mapa"; esconderTudo();
+  topo("Mapa do dia", fecharMapa, "");
+  const ls=lojasFiltradas().filter(l=>l.gps_lat!=null);
+  $("corpo").style.padding="0";
+  $("corpo").innerHTML='<div class="mapa-caixa"><div id="mapa"></div>'
+    +'<div class="mapa-pe"><button class="sec" id="mfechar">Lista</button>'
+    +'<button id="mrota">Traçar rota do dia</button></div></div>';
+  rodape(null);
+  $("mfechar").onclick=fecharMapa;
+  $("mrota").onclick=rotaDoDia;
+  if(!ls.length){ $("mapa").innerHTML='<div class="vazio">Nenhuma loja com coordenada para mostrar.</div>'; return; }
+  carregarMapa().then(()=>{
+    if(MAPA){ MAPA.remove(); MAPA=null; }
+    MAPA=L.map("mapa",{zoomControl:false});
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {maxZoom:19, attribution:"&copy; OpenStreetMap"}).addTo(MAPA);
+    const pontos=[];
+    ls.forEach((l,i)=>{
+      const feita=l.visita&&l.visita.hora_fim;
+      const ic=L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
+        html:'<div class="pino '+(feita?"feita":"")+'">'+(i+1)+'</div>'});
+      L.marker([l.gps_lat,l.gps_lon],{icon:ic}).addTo(MAPA)
+        .bindPopup("<b>"+esc(l.nome)+"</b><br>"+esc(l.bairro||"")
+          +'<br><a href="https://www.google.com/maps/search/?api=1&query='
+          +l.gps_lat+","+l.gps_lon+'" target="_blank">Navegar até aqui</a>');
+      pontos.push([l.gps_lat,l.gps_lon]);
+    });
+    MAPA.fitBounds(pontos,{padding:[40,40],maxZoom:15});
+    posicao().then(g=>{ if(g&&MAPA) L.circleMarker([g.lat,g.lon],
+      {radius:7,color:"#1E6FD9",fillColor:"#1E6FD9",fillOpacity:.9,weight:2})
+      .addTo(MAPA).bindPopup("Você está aqui"); });
+  }).catch(()=>{
+    $("mapa").innerHTML='<div class="vazio">O mapa precisa de internet para desenhar.<br>'
+      +'Sem sinal, use o botão de navegar em cada loja.</div>';
+  });
+});}
+
 /* ---------------------- entrada da loja ---------------------- */
 const MODULOS=[
   {k:"contagem", ic:"1", nome:"Contagem e ruptura",      tela:()=>telaContagem()},
@@ -740,9 +816,12 @@ const MODULOS=[
 let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
 function resumo(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
-  if(k==="contagem"){ const c=cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null||x.contagem.ruptura)).length;
-    const r=cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
-    return {txt:`${c} de ${cat.length} itens${r?` · ${r} em ruptura`:""}`, pronto:cat.length>0&&c===cat.length, alerta:r>0}; }
+  if(k==="contagem"){ const r=resumoContagem(cat);
+    const p=[`${r.feitos} de ${r.total} itens`];
+    if(r.rup) p.push(`${r.rup} em ruptura`);
+    if(r.baixo) p.push(`${r.baixo} abaixo do normal`);
+    return {txt:p.join(" · "), pronto:r.total>0&&r.feitos===r.total&&!r.semMotivo,
+      alerta:r.semMotivo>0||r.baixo>0}; }
   if(k==="validade"){ const v=l.validades||[], crit=v.filter(x=>diasAte(x.vence_em)<=lim).length;
     return {txt:v.length?`${v.length} ${v.length===1?"registro":"registros"}${crit?` · ${crit} em alerta`:""}`:"nada registrado",
       pronto:v.length>0&&crit===0, alerta:crit>0}; }
@@ -790,56 +869,139 @@ function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
   if($("fim")) $("fim").onclick=encerrarVisita;
 });}
 
-/* -------------------- 1. contagem e ruptura ------------------ */
+/* -------------------- 1. contagem e ruptura ------------------
+   Conta em caixa E unidade. O total em unidades e calculado com o fator de
+   caixa do produto, entao o repositor nao precisa fazer conta.
+
+   Duas regras que o app cobra:
+   - gondola zerada obriga informar o motivo. Zerado sem motivo e um dado que
+     nao serve para ninguem.
+   - abaixo do que a loja costuma comprar vira aviso. Vinte caixas e muito num
+     bar e pouco num atacarejo; a referencia vem do historico DAQUELA loja.
+------------------------------------------------------------ */
 const MOTIVOS=[["sem_pedido","Não pediu"],["pedido_nao_chegou","Pedido não chegou"],
   ["sem_espaco","Sem espaço"],["concorrente_ocupou","Concorrente ocupou"],
   ["deposito_cheio","Tem no depósito"],["outro","Outro"]];
-/* contagem NAO leva pessoa_id: quem guarda a pessoa e a visita, e a contagem
-   aponta para ela. Cada tabela tem os campos dela, nao um bloco generico. */
-function enviaContagem(p){ const c=p.contagem||{};
+
+const fator=p=>Number(p.fator_cx)>0?Number(p.fator_cx):1;
+function totais(p){
+  const c=p.contagem||{}, f=fator(p);
+  const gu=(Number(c.gcx)||0)*f+(Number(c.gun)||0);
+  const du=(Number(c.dcx)||0)*f+(Number(c.dun)||0);
+  const tocou=["gcx","gun","dcx","dun"].some(k=>c[k]!=null&&c[k]!=="");
+  return {gu, du, total:gu+du, cx:(gu+du)/f, tocou,
+          gondolaZerada: tocou && gu===0};
+}
+function estaBaixo(p){
+  const t=totais(p); if(!t.tocou) return false;
+  const m=Number(p.media_cx); if(!m) return false;
+  const pct=(DIA.percentual_estoque_baixo||30)/100;
+  return t.cx < m*pct;
+}
+function enviaContagem(p){
+  const c=p.contagem||{}, t=totais(p);
   grava("contagem","visita_id,produto_id",{
     visita_id:LOJA.visita?LOJA.visita.id:null, loja_id:LOJA.id,
     produto_id:p.produto_id, data:DIA.data,
-    estoque_gondola:c.gondola==null?null:c.gondola,
-    estoque_deposito:c.deposito==null?null:c.deposito,
+    gondola_cx:c.gcx??null, gondola_un:c.gun??null,
+    deposito_cx:c.dcx??null, deposito_un:c.dun??null,
+    // totais em unidade, para o painel nao precisar refazer a conta
+    estoque_gondola: t.tocou? Math.round(t.gu) : null,
+    estoque_deposito: t.tocou? Math.round(t.du) : null,
     ruptura:!!c.ruptura, ruptura_motivo:c.ruptura?(c.motivo||null):null,
-    preco:c.preco==null?null:c.preco, preco_promocional:c.promo==null?null:c.promo}); }
+    preco:c.preco==null?null:c.preco, preco_promocional:c.promo==null?null:c.promo});
+}
+
+function resumoContagem(cat){
+  const rup=cat.filter(p=>p.contagem&&p.contagem.ruptura).length;
+  const semMotivo=cat.filter(p=>p.contagem&&p.contagem.ruptura&&!p.contagem.motivo).length;
+  const baixo=cat.filter(estaBaixo).length;
+  const feitos=cat.filter(p=>totais(p).tocou||(p.contagem&&p.contagem.ruptura)).length;
+  return {rup, semMotivo, baixo, feitos, total:cat.length};
+}
 
 function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
   topo("Contagem", ()=>telaLoja(), "");
-  $("corpo").innerHTML=`<div class="busca" style="margin-bottom:12px">${IC.lupa}
-    <input id="q" placeholder="Buscar produto" autocapitalize="off"></div><div id="lista"></div>`;
+  $("corpo").innerHTML=`<div id="alertas"></div>
+    <div class="busca" style="margin-bottom:12px">${IC.lupa}
+      <input id="q" placeholder="Buscar produto" autocapitalize="off"></div><div id="lista"></div>`;
+
+  const alertas=()=>{
+    const r=resumoContagem(cat), b=[];
+    if(r.semMotivo) b.push(`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"item zerado sem motivo":"itens zerados sem motivo"}.</b><br>
+      Informe por que zerou antes de encerrar a visita.</div>`);
+    if(r.baixo) b.push(`<div class="aviso amb"><b>${r.baixo} ${r.baixo===1?"item abaixo":"itens abaixo"} do normal desta loja.</b><br>
+      Vale avisar o líder ou o comercial.</div>`);
+    if(r.rup&&!r.semMotivo) b.push(`<div class="aviso inf">${r.rup} ${r.rup===1?"item":"itens"} em ruptura, todos com motivo.</div>`);
+    $("alertas").innerHTML=b.join("");
+  };
+
+  const cartaoProduto=(p,i)=>{
+    const c=p.contagem||{}, t=totais(p), f=fator(p), baixo=estaBaixo(p);
+    const ref=p.media_cx?`costuma comprar ${Number(p.media_cx).toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:"";
+    return `<div class="item ${c.ruptura&&!c.motivo?"crit":baixo?"aten":""}">
+      <div class="nome">${esc(p.nome)}</div>
+      <div class="emb">${esc(p.embalagem||"")}${f>1?` · 1 cx = ${f} un`:""}${ref?` · ${ref}`:""}</div>
+      <div class="nums" data-p="${i}">
+        <div><label>Gôndola cx</label><input type="number" inputmode="decimal" min="0" step="0.5" data-c="gcx" value="${c.gcx??""}"></div>
+        <div><label>un</label><input type="number" inputmode="numeric" min="0" data-c="gun" value="${c.gun??""}"></div>
+        <div><label>Depósito cx</label><input type="number" inputmode="decimal" min="0" step="0.5" data-c="dcx" value="${c.dcx??""}"></div>
+        <div><label>un</label><input type="number" inputmode="numeric" min="0" data-c="dun" value="${c.dun??""}"></div>
+      </div>
+      ${t.tocou?`<div class="emb" style="margin-top:7px">
+        total ${Math.round(t.total)} un${f>1?` · ${t.cx.toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:""}
+        ${baixo?` · <b style="color:var(--amb)">abaixo do normal</b>`:""}</div>`:""}
+      <div class="pilha" data-r="${i}"><button class="${c.ruptura?"on mau":""}" data-t="rup">Ruptura</button></div>
+      <div class="pilha ${c.ruptura?"":"oculto"}" data-mo="${i}">
+        ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}
+      </div></div>`;
+  };
+
   const pinta=f=>{
     const vis=cat.map((p,i)=>({p,i})).filter(o=>!f||o.p.nome.toLowerCase().includes(f.toLowerCase()));
-    $("lista").innerHTML=vis.length?vis.map(o=>{ const p=o.p,c=p.contagem||{};
-      return `<div class="item"><div class="nome">${esc(p.nome)}</div><div class="emb">${esc(p.embalagem||"")}</div>
-        <div class="nums" data-p="${o.i}">
-          <div><label>Gôndola</label><input type="number" inputmode="numeric" min="0" data-c="gondola" value="${c.gondola==null?"":c.gondola}"></div>
-          <div><label>Depósito</label><input type="number" inputmode="numeric" min="0" data-c="deposito" value="${c.deposito==null?"":c.deposito}"></div></div>
-        <div class="pilha" data-r="${o.i}"><button class="${c.ruptura?"on mau":""}" data-t="rup">Ruptura</button></div>
-        <div class="pilha ${c.ruptura?"":"oculto"}" data-mo="${o.i}">
-          ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}
-        </div></div>`; }).join(""):`<div class="vazio">Nenhum produto com esse nome.</div>`;
-    ligar(); };
+    $("lista").innerHTML=vis.length?vis.map(o=>cartaoProduto(o.p,o.i)).join("")
+      :`<div class="vazio">Nenhum produto com esse nome.</div>`;
+    ligar(); alertas(); };
+
+  const redesenha=i=>{
+    const alvo=$("lista").querySelector(`[data-p="${i}"]`);
+    if(!alvo) return pinta($("q").value);
+    const caixa=alvo.closest(".item");
+    const tmp=document.createElement("div"); tmp.innerHTML=cartaoProduto(cat[i],i);
+    caixa.replaceWith(tmp.firstElementChild); ligar(); alertas(); };
+
   const ligar=()=>{
-    $("lista").querySelectorAll("[data-p]").forEach(g=>{ const p=cat[+g.dataset.p];
-      g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
-        p.contagem=p.contagem||{}; p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
-        enviaContagem(p); }); });
+    $("lista").querySelectorAll("[data-p]").forEach(g=>{ const i=+g.dataset.p, p=cat[i];
+      g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{
+        if(!exigeVisita()){ inp.value=""; return; }
+        p.contagem=p.contagem||{};
+        p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
+        const t=totais(p);
+        /* Gondola zerada obriga motivo: liga a ruptura sozinho e abre a lista. */
+        if(t.gondolaZerada && !p.contagem.ruptura){
+          p.contagem.ruptura=true;
+          alerta("Gôndola zerada. Informe por que zerou.");
+        }
+        enviaContagem(p); redesenha(i); }); });
+
     $("lista").querySelectorAll("[data-r]").forEach(g=>{ const i=+g.dataset.r, p=cat[i];
-      g.querySelector("[data-t=rup]").onclick=e=>{ if(!exigeVisita()) return;
-        p.contagem=p.contagem||{}; p.contagem.ruptura=!p.contagem.ruptura;
-        e.target.classList.toggle("on",p.contagem.ruptura); e.target.classList.toggle("mau",p.contagem.ruptura);
-        const mo=$("lista").querySelector('[data-mo="'+i+'"]'); if(mo) mo.classList.toggle("oculto",!p.contagem.ruptura);
-        if(!p.contagem.ruptura) p.contagem.motivo=null; enviaContagem(p); }; });
-    $("lista").querySelectorAll("[data-mo]").forEach(g=>{ const p=cat[+g.dataset.mo];
+      g.querySelector("[data-t=rup]").onclick=()=>{ if(!exigeVisita()) return;
+        p.contagem=p.contagem||{};
+        if(p.contagem.ruptura && totais(p).gondolaZerada)
+          return alerta("A gôndola está zerada. Não dá para tirar a ruptura sem mudar a contagem.");
+        p.contagem.ruptura=!p.contagem.ruptura;
+        if(!p.contagem.ruptura) p.contagem.motivo=null;
+        enviaContagem(p); redesenha(i); }; });
+
+    $("lista").querySelectorAll("[data-mo]").forEach(g=>{ const i=+g.dataset.mo, p=cat[i];
       g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
         p.contagem=p.contagem||{}; p.contagem.motivo=b.dataset.v;
-        g.querySelectorAll("button").forEach(x=>x.classList.remove("on","meio"));
-        b.classList.add("on","meio"); enviaContagem(p); }); }); };
+        enviaContagem(p); redesenha(i); }); }); };
+
   $("q").oninput=e=>pinta(e.target.value); pinta("");
-  const rup=cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`+(rup?botaoAvisar("ruptura"):""));
+  const r=resumoContagem(cat);
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`
+    + (r.rup||r.baixo?botaoAvisar("ruptura"):""));
   ligaAvisar();
 });}
 
@@ -1169,7 +1331,8 @@ const CARTOES=[
 ];
 function quantos(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
-  if(k==="ruptura")  return cat.filter(x=>x.contagem&&x.contagem.ruptura).length;
+  if(k==="ruptura")  return cat.filter(x=>x.contagem&&x.contagem.ruptura).length
+                          + cat.filter(estaBaixo).length;
   if(k==="validade") return (l.validades||[]).filter(v=>diasAte(v.vence_em)<=lim).length;
   if(k==="estoque")  return cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null)).length;
   if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
@@ -1290,8 +1453,14 @@ async function iniciarVisita(){
 }
 function encerrarVisita(){
   const cat=LOJA.catalogo||[];
-  const c=cat.filter(p=>p.contagem&&(p.contagem.gondola!=null||p.contagem.deposito!=null||p.contagem.ruptura)).length;
-  if(c<cat.length&&!confirm(`Você contou ${c} de ${cat.length} itens. Encerrar assim mesmo?`)) return;
+  const r=resumoContagem(cat);
+  /* Zerado sem motivo nao passa. O resto e aviso, este e barreira: o dado
+     sem motivo nao serve para o lider nem para o comercial. */
+  if(r.semMotivo){
+    alerta(`${r.semMotivo} ${r.semMotivo===1?"item zerado está":"itens zerados estão"} sem motivo. Abra a contagem e informe.`);
+    return telaContagem();
+  }
+  if(r.feitos<r.total&&!confirm(`Você registrou ${r.feitos} de ${r.total} itens. Encerrar assim mesmo?`)) return;
   LOJA.visita.hora_fim=agora(); LOJA.visita.situacao="concluida";
   grava("visita","pessoa_id,loja_id,data",{id:LOJA.visita.id, pessoa_id:DIA.pessoa.id,
     rota_id:DIA.rota?DIA.rota.id:null, loja_id:LOJA.id, data:DIA.data,
@@ -1303,7 +1472,9 @@ function encerrarVisita(){
 history.pushState({t:"home"},"");
 addEventListener("popstate",()=>{ history.pushState({t:TELA},"");
   if($("menu").classList.contains("on")) return fecharMenu();
-  if(TELA==="mod"){ pararRelogio(); telaLoja(); } else if(TELA==="loja"||TELA==="outra") telaVisitas(); });
+  if(TELA==="mod"){ pararRelogio(); telaLoja(); }
+  else if(TELA==="mapa") fecharMapa();
+  else if(TELA==="loja"||TELA==="outra") telaVisitas(); });
 
 function enderecoValido(u){ return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(u||"").trim().replace(/\/+$/,"")); }
 
