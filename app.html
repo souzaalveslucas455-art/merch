@@ -260,6 +260,11 @@ h2.tit:first-child{margin-top:2px}
 </div>
 <script>
 "use strict";
+/* Versao do app. Quando muda, os dias guardados no aparelho sao descartados
+   e baixados de novo. Sem isto, uma correcao feita no banco (como as
+   coordenadas) so chegava ao celular depois que alguem lembrasse de
+   sincronizar CADA dia, um por um. */
+const VERSAO_APP = "2026-09-24b";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -633,7 +638,11 @@ function telaPin(modo){ montar(()=>{ TELA="pin"; esconderTudo();
 async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
-  if(cache&&!forcar){ DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana(); return; }
+  if(cache&&!forcar){
+    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana();
+    revalidarDia(DATA);
+    return;
+  }
   esconderTudo(); $("topo").innerHTML=`<h1 style="padding-left:14px">Carregando…</h1>`;
   $("corpo").innerHTML=`<div class="vazio">Buscando seu roteiro…</div>`; rodape(null);
   try{ DIA=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:DATA})});
@@ -656,6 +665,21 @@ const alerta_de=id=>NAOLIDAS[id]||{};
 const naoLidas=id=>(alerta_de(id).nao_lidas)||0;
 const semVer  =id=>(alerta_de(id).consultor_nao_viu)||0;
 setInterval(()=>{ if(!document.hidden && navigator.onLine && (TELA==="home"||TELA==="loja")) buscarNaoLidas(); },45000);
+
+/* Mostra o dia guardado na hora, e por tras busca a versao do servidor.
+   So troca se nao houver envio pendente: com fila cheia, o que esta na tela
+   tem coisa que o servidor ainda nao sabe, e trocar faria a contagem que o
+   repositor acabou de digitar sumir da tela. */
+async function revalidarDia(data){
+  if(!navigator.onLine || fila.itens().length) return;
+  try{
+    const novo=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:data})});
+    if(fila.itens().length || data!==DATA) return;
+    guarda.porJ("dia:"+data,novo);
+    DIA=novo;
+    if(TELA==="home"){ pintaDias(); pintaLojas(); }
+  }catch(e){}
+}
 
 /* A semana vem numa chamada so e leve. E ela que faz os numeros embaixo de
    cada dia aparecerem ao logar, em vez de so depois de tocar em cada dia. */
@@ -747,7 +771,6 @@ function pintaLojas(){
           semVer(l.id)?` · <b style="color:var(--amb)">consultor não viu</b>`:""}</div>
         <div class="pe">
           <button class="bolinha" data-a="ficha" aria-label="Dados do cliente">${IC.pessoa}</button>
-          ${telLink(l.telefone, IC.fone, "Ligar para a loja")}
           ${temGps(l)
             ? `<a class="bolinha" href="${mapaDe(l)}" target="_blank" rel="noopener" aria-label="Navegar até a loja">${IC.seta}</a>`
             : `<a class="bolinha sem" aria-label="Sem localização">${IC.seta}</a>`}
@@ -1608,6 +1631,18 @@ addEventListener("popstate",()=>{ history.pushState({t:TELA},"");
   else if(TELA==="loja"||TELA==="outra") telaVisitas(); });
 
 function enderecoValido(u){ return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(u||"").trim().replace(/\/+$/,"")); }
+
+function limparDiasGuardados(){
+  /* So limpa se nao houver nada esperando para ser enviado. O que esta na
+     fila aponta para a visita guardada; apagar antes de enviar poderia
+     separar a contagem da visita dela. Se tiver fila, espera a proxima. */
+  if(fila.itens().length) return false;
+  const ks=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    if(k&&(k.startsWith("dia:")||k==="semana")) ks.push(k); } }catch(e){}
+  ks.forEach(guarda.tira); SEMANA=[];
+  return true;
+}
+if(guarda.ler("versao")!==VERSAO_APP && limparDiasGuardados()) guarda.por("versao",VERSAO_APP);
 
 montar(()=>{ pintaFila();
   if(!URLB||!CHAVE) return telaConfig();
