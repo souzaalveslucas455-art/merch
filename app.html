@@ -281,6 +281,7 @@ const guarda=(()=>{ const mem={}; let ok=true;
 
 let URLB=guarda.ler("url")||CFG.url, CHAVE=guarda.ler("chave")||CFG.chave;
 let DIA=null, LOJA=null, TELA="carregando", DATA=null, FILTRO="", SEMANA=guarda.lerJ("semana")||[];
+let SEMANA_ERRO=null, PULOU_DE_HOJE=false, JA_TENTOU_PULAR=false;
 
 const hojeIso=()=>{const d=new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
@@ -639,7 +640,8 @@ async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
   if(cache&&!forcar){
-    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana();
+    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas();
+    if(!pularSeHojeVazio()) buscarSemana();
     revalidarDia(DATA);
     return;
   }
@@ -687,9 +689,34 @@ async function buscarSemana(){
   try{
     SEMANA=await api("/rest/v1/rpc/minha_semana",{method:"POST",
       body:JSON.stringify({p_inicio:hojeIso()})})||[];
+    SEMANA_ERRO=null;
     guarda.porJ("semana",SEMANA);
-    if(TELA==="home"){ pintaDias(); pintaLojas(); }
-  }catch(e){}
+  }catch(e){
+    /* Antes este erro era engolido em silencio, e foi assim que a falta do
+       20-semana.sql passou despercebida: o app so parecia "nao mostrar". */
+    SEMANA_ERRO=/could not find|nao existe|does not exist/i.test(e.message)
+      ? "O sistema ainda não sabe montar sua semana. Avise seu líder."
+      : null;
+  }
+  if(pularSeHojeVazio()) return;
+  if(TELA==="home"){ pintaDias(); pintaLojas(); }
+}
+
+/* Hoje sem loja: abre direto a proxima visita, uma vez so por abertura do
+   app. Se pulasse sempre, o repositor nunca conseguiria olhar o dia de hoje.
+   Nao ha risco de registro no dia errado: dia que nao e hoje abre so leitura. */
+function pularSeHojeVazio(){
+  if(JA_TENTOU_PULAR || TELA!=="home" || DATA!==hojeIso() || !DIA) return false;
+  if((DIA.lojas||[]).length){ JA_TENTOU_PULAR=true; return false; }
+  /* A semana ainda nao chegou do servidor: nao decide agora. Se marcasse
+     "ja tentei", quando ela chegasse um instante depois o app nao pularia. */
+  if(!(SEMANA||[]).length) return false;
+  JA_TENTOU_PULAR=true;
+  const prox=(SEMANA||[]).find(x=>String(x.data).slice(0,10)>DATA && (x.lojas||[]).length);
+  if(!prox) return false;
+  PULOU_DE_HOJE=true;
+  carregarDia(String(prox.data).slice(0,10));
+  return true;
 }
 const lojasNoDia=d=>{ const x=(SEMANA||[]).find(s=>String(s.data).slice(0,10)===d); return x?x.lojas:null; };
 
@@ -715,10 +742,12 @@ function pintaDias(){
       <div class="rot">${rot[dt.getDay()]}</div>
       <div class="num">${dt.getDate()}</div>
       ${n===null?"":`<span class="badge ${n?"":"zero"}">${n}</span>`}</button>`; }).join("")}</div>
+    ${PULOU_DE_HOJE&&DATA!==hojeIso()?`<div class="resumo-dia" style="color:var(--azul);font-weight:600">
+      Hoje não tem loja no seu roteiro · mostrando sua próxima visita</div>`:""}
     <div class="resumo-dia">${pend?`<span class="pt"></span>${pend} ${pend===1?"pendente":"pendentes"} · `:""}${
       DATA===hojeIso()?`hoje é ${rot[new Date(DATA+"T12:00:00").getDay()]} ${dataBr(DATA).slice(0,5)}`
       :`vendo ${dataBr(DATA).slice(0,5)}`}</div>`;
-  $("dias").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>carregarDia(b.dataset.d));
+  $("dias").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ PULOU_DE_HOJE=false; carregarDia(b.dataset.d); });
 }
 function pintaBarra(){
   $("barra").className="barra";
@@ -794,6 +823,7 @@ function diaVazio(){
   const eh=DATA===hojeIso();
   const prox=(SEMANA||[]).filter(x=>String(x.data).slice(0,10)>DATA && (x.lojas||[]).length).slice(0,4);
   return `<div class="vazio" style="padding:26px 18px 14px">${eh?"Hoje não tem loja no seu roteiro.":"Nenhuma loja no roteiro deste dia."}</div>`
+    + (SEMANA_ERRO?`<div class="aviso amb">${esc(SEMANA_ERRO)}</div>`:"")
     + (prox.length
       ? `<h2 class="tit">PRÓXIMAS VISITAS</h2>` + prox.map(x=>{ const d=String(x.data).slice(0,10), dt=new Date(d+"T12:00:00");
           const ls=x.lojas||[];
