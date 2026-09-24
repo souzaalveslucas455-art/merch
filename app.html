@@ -114,6 +114,24 @@ svg{display:block}
 .bolinha{width:42px;height:42px;border-radius:50%;background:var(--verm-bg);color:var(--verm);
   border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .bolinha:disabled{opacity:.4}
+a.bolinha{text-decoration:none}
+a.bolinha.sem{opacity:.35;pointer-events:none}
+.ficha{padding:4px 20px 6px}
+.ficha h3{margin:4px 0 2px;font-size:17px;font-weight:700}
+.ficha .sub{font-size:13px;color:var(--ink2)}
+.ficha .bloco{margin-top:14px;padding-top:12px;border-top:1px solid var(--linha)}
+.ficha .rot{font-size:11.5px;font-weight:700;color:var(--ink3);letter-spacing:.03em;margin-bottom:4px}
+.ficha .lin{display:flex;align-items:center;gap:10px;padding:5px 0}
+.ficha .lin span{flex:1;font-size:14px}
+.ficha .lin a{flex:none;font-size:13px;font-weight:600;color:var(--verm);text-decoration:none;
+  padding:7px 12px;border:1px solid var(--linha);border-radius:9px}
+.prox{background:var(--papel);border-radius:14px;box-shadow:var(--sombra);padding:13px 15px;margin-bottom:10px;
+  display:flex;align-items:center;gap:12px;width:100%;border:none;font:inherit;text-align:left;cursor:pointer;color:inherit}
+.prox .quando{flex:none;width:52px;text-align:center}
+.prox .quando b{display:block;font-size:20px;font-weight:700}
+.prox .quando span{font-size:11.5px;color:var(--ink2)}
+.prox .quais{flex:1;min-width:0;font-size:13.5px;color:var(--ink2)}
+.prox .quais b{color:var(--ink);font-size:14.5px}
 .progresso{flex:1;display:flex;align-items:center;gap:10px}
 .trilho{flex:1;height:7px;background:#EBEDF0;border-radius:10px;overflow:hidden}
 .trilho i{display:block;height:100%;background:var(--verde);border-radius:10px}
@@ -243,7 +261,7 @@ h2.tit:first-child{margin-top:2px}
 <script>
 "use strict";
 /* ===================== CONFIGURACAO ===================== */
-const CFG = { url:"", chave:"", dominio:"merch.local" };
+const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
 
 const $=id=>document.getElementById(id);
@@ -257,7 +275,7 @@ const guarda=(()=>{ const mem={}; let ok=true;
   g.porJ=(k,v)=>g.por(k,JSON.stringify(v)); return g; })();
 
 let URLB=guarda.ler("url")||CFG.url, CHAVE=guarda.ler("chave")||CFG.chave;
-let DIA=null, LOJA=null, TELA="carregando", DATA=null, FILTRO="";
+let DIA=null, LOJA=null, TELA="carregando", DATA=null, FILTRO="", SEMANA=guarda.lerJ("semana")||[];
 
 const hojeIso=()=>{const d=new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
@@ -615,11 +633,11 @@ function telaPin(modo){ montar(()=>{ TELA="pin"; esconderTudo();
 async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
-  if(cache&&!forcar){ DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); return; }
+  if(cache&&!forcar){ DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana(); return; }
   esconderTudo(); $("topo").innerHTML=`<h1 style="padding-left:14px">Carregando…</h1>`;
   $("corpo").innerHTML=`<div class="vazio">Buscando seu roteiro…</div>`; rodape(null);
   try{ DIA=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:DATA})});
-    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas();
+    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana();
   }catch(e){ if(cache){ DIA=cache; telaVisitas(); alerta("Sem sinal. Mostrando o que estava guardado."); return; }
     if(e.status===401) return telaLogin();
     $("topo").innerHTML=`<h1 style="padding-left:14px">Erro</h1>`;
@@ -639,6 +657,18 @@ const naoLidas=id=>(alerta_de(id).nao_lidas)||0;
 const semVer  =id=>(alerta_de(id).consultor_nao_viu)||0;
 setInterval(()=>{ if(!document.hidden && navigator.onLine && (TELA==="home"||TELA==="loja")) buscarNaoLidas(); },45000);
 
+/* A semana vem numa chamada so e leve. E ela que faz os numeros embaixo de
+   cada dia aparecerem ao logar, em vez de so depois de tocar em cada dia. */
+async function buscarSemana(){
+  try{
+    SEMANA=await api("/rest/v1/rpc/minha_semana",{method:"POST",
+      body:JSON.stringify({p_inicio:hojeIso()})})||[];
+    guarda.porJ("semana",SEMANA);
+    if(TELA==="home"){ pintaDias(); pintaLojas(); }
+  }catch(e){}
+}
+const lojasNoDia=d=>{ const x=(SEMANA||[]).find(s=>String(s.data).slice(0,10)===d); return x?x.lojas:null; };
+
 /* proximos dias uteis a partir de segunda desta semana */
 function faixaDias(){
   const hoje=new Date(hojeIso()+"T12:00:00"), lista=[];
@@ -655,8 +685,8 @@ function pintaDias(){
   $("dias").className="dias";
   $("dias").innerHTML=`<div class="tira">${dias.map(d=>{
     const dt=new Date(d+"T12:00:00"), eh=d===hojeIso(), sel=d===DATA;
-    const c=guarda.lerJ("dia:"+d);
-    const n=c?c.lojas.length:null;
+    const daSemana=lojasNoDia(d), c=guarda.lerJ("dia:"+d);
+    const n=daSemana?daSemana.length:(c?c.lojas.length:null);
     return `<button class="dia ${sel?"sel":""} ${eh?"hoje":""}" data-d="${d}">
       <div class="rot">${rot[dt.getDay()]}</div>
       <div class="num">${dt.getDate()}</div>
@@ -716,22 +746,84 @@ function pintaLojas(){
           naoLidas(l.id)?` · <b style="color:var(--verm)">${naoLidas(l.id)} mensagem(ns)</b>`:""}${
           semVer(l.id)?` · <b style="color:var(--amb)">consultor não viu</b>`:""}</div>
         <div class="pe">
-          <button class="bolinha" data-a="consultor" ${l.consultor_tel?"":"disabled"}>${IC.pessoa}</button>
-          <button class="bolinha" data-a="fone" ${l.telefone?"":"disabled"}>${IC.fone}</button>
-          <button class="bolinha" data-a="mapa" ${l.gps_lat==null?"disabled":""}>${IC.seta}</button>
+          <button class="bolinha" data-a="ficha" aria-label="Dados do cliente">${IC.pessoa}</button>
+          ${telLink(l.telefone, IC.fone, "Ligar para a loja")}
+          ${temGps(l)
+            ? `<a class="bolinha" href="${mapaDe(l)}" target="_blank" rel="noopener" aria-label="Navegar até a loja">${IC.seta}</a>`
+            : `<a class="bolinha sem" aria-label="Sem localização">${IC.seta}</a>`}
           <div class="progresso"><div class="trilho"><i style="width:${Math.round(k/6*100)}%"></i></div>
             <span class="fracao">${k}/6</span></div>
         </div></div></div>`; }).join("")
-    : `<div class="vazio">${FILTRO?"Nenhuma loja com esse nome.":"Nenhuma loja no roteiro deste dia."}</div>`;
+    : FILTRO ? `<div class="vazio">Nenhuma loja com esse nome.</div>` : diaVazio();
   $("corpo").querySelectorAll(".loja").forEach(c=>{
     const l=DIA.lojas[+c.dataset.i];
-    c.querySelector(".dentro").onclick=e=>{ if(e.target.closest("[data-a]")) return; telaLoja(l); };
-    c.querySelectorAll("[data-a]").forEach(b=>b.onclick=ev=>{ ev.stopPropagation();
-      const a=b.dataset.a;
-      if(a==="mapa") open(`https://www.google.com/maps/search/?api=1&query=${l.gps_lat},${l.gps_lon}`,"_blank");
-      if(a==="fone") open("tel:"+String(l.telefone).replace(/\D/g,""));
-      if(a==="consultor") open("tel:"+String(l.consultor_tel).replace(/\D/g,"")); }); });
+    /* Toque no cartao abre a loja; toque num botao faz so a acao dele. */
+    c.querySelector(".dentro").onclick=e=>{ if(e.target.closest("[data-a],a")) return; telaLoja(l); };
+    c.querySelectorAll("a.bolinha").forEach(a=>a.addEventListener("click",ev=>ev.stopPropagation()));
+    const bf=c.querySelector('[data-a="ficha"]');
+    if(bf) bf.onclick=ev=>{ ev.stopPropagation(); abrirFicha(l); }; });
+  $("corpo").querySelectorAll("[data-ir]").forEach(b=>b.onclick=()=>carregarDia(b.dataset.ir));
 }
+/* Dia sem loja nao pode ser tela em branco. Mostra as proximas visitas da
+   semana, cada uma tocavel, para o repositor ver na hora onde vai trabalhar. */
+function diaVazio(){
+  const rot=["","seg","ter","qua","qui","sex","sáb","dom"];
+  const eh=DATA===hojeIso();
+  const prox=(SEMANA||[]).filter(x=>String(x.data).slice(0,10)>DATA && (x.lojas||[]).length).slice(0,4);
+  return `<div class="vazio" style="padding:26px 18px 14px">${eh?"Hoje não tem loja no seu roteiro.":"Nenhuma loja no roteiro deste dia."}</div>`
+    + (prox.length
+      ? `<h2 class="tit">PRÓXIMAS VISITAS</h2>` + prox.map(x=>{ const d=String(x.data).slice(0,10), dt=new Date(d+"T12:00:00");
+          const ls=x.lojas||[];
+          return `<button class="prox" data-ir="${d}">
+            <span class="quando"><b>${dt.getDate()}</b><span>${rot[x.dia_semana]}</span></span>
+            <span class="quais"><b>${ls.length} ${ls.length===1?"loja":"lojas"}</b><br>
+              ${esc(ls.slice(0,3).map(l=>l.nome).join(" · "))}${ls.length>3?" …":""}</span>
+            <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`; }).join("")
+      : (SEMANA&&SEMANA.length?`<div class="vazio" style="padding-top:0">Nenhuma visita nos próximos dias.</div>`:""));
+}
+
+/* Telefone e mapa como LINK de verdade, nao como janela aberta por codigo.
+   O celular reconhece tel: e o endereco do mapa na hora; abrir por codigo
+   e bloqueado por varios navegadores e nao faz nada. */
+const soDigitos=t=>String(t||"").replace(/\D/g,"");
+function telLink(tel, icone, rotulo){
+  const d=soDigitos(tel);
+  return d.length>=10
+    ? `<a class="bolinha" href="tel:${d}" aria-label="${rotulo}">${icone}</a>`
+    : `<a class="bolinha sem" aria-label="Sem telefone">${icone}</a>`;
+}
+const mapaDe=l=>`https://www.google.com/maps/search/?api=1&query=${l.gps_lat},${l.gps_lon}`;
+/* Coordenada so vale se cair dentro do Brasil. Ja aconteceu de chegar numero
+   torto do importador e o mapa mandar para -90,-80, na Antartida. Coordenada
+   errada e pior que nenhuma: manda o repositor para o lugar errado com toda
+   a confianca. Fora da faixa, o app trata como sem localizacao. */
+const temGps=l=>{ const a=Number(l&&l.gps_lat), o=Number(l&&l.gps_lon);
+  return l&&l.gps_lat!=null&&l.gps_lon!=null&&isFinite(a)&&isFinite(o)
+    && a>=-34 && a<=6 && o>=-74 && o<=-34; };
+const zapDe=t=>{ const d=soDigitos(t); return d?`https://wa.me/55${d.slice(-11)}`:""; };
+
+function abrirFicha(l){
+  const linha=(rot,nome,tel)=>!nome?"":`<div class="lin"><span>${esc(nome)}${tel?`<br><span style="font-size:12.5px;color:var(--ink2)">${esc(tel)}</span>`:""}</span>
+    ${soDigitos(tel).length>=10?`<a href="tel:${soDigitos(tel)}">Ligar</a><a href="${zapDe(tel)}" target="_blank" rel="noopener">WhatsApp</a>`:""}</div>`;
+  $("menu").innerHTML=`<div class="puxador"></div><div class="ficha">
+    <h3>${esc(l.nome)}</h3>
+    <div class="sub">${esc([l.endereco,l.bairro].filter(Boolean).join(" · "))}</div>
+    <div class="sub">${esc([l.cep,l.cidade].filter(Boolean).join(" · "))}</div>
+    ${temGps(l)?`<div class="lin" style="margin-top:8px"><span style="font-size:13px;color:var(--ink2)">
+      ${Number(l.gps_lat).toFixed(5)}, ${Number(l.gps_lon).toFixed(5)}</span>
+      <a href="${mapaDe(l)}" target="_blank" rel="noopener">Navegar</a></div>`:""}
+    <div class="bloco"><div class="rot">LOJA</div>${linha("Loja","Telefone da loja",l.telefone)||`<div class="sub">sem telefone cadastrado</div>`}</div>
+    <div class="bloco"><div class="rot">COMERCIAL</div>
+      ${linha("Consultor",l.consultor&&l.consultor!=="ROTA SEM VENDEDOR"?`Consultor · ${l.consultor}`:"",l.consultor_tel)}
+      ${l.supervisor?`<div class="lin"><span>Supervisor · ${esc(l.supervisor)}</span></div>`:""}
+      ${l.gerencia?`<div class="lin"><span>Gerência · ${esc(l.gerencia)}</span></div>`:""}
+      ${!l.consultor||l.consultor==="ROTA SEM VENDEDOR"?`<div class="sub">loja sem consultor cadastrado</div>`:""}
+    </div></div>
+    <button class="sair" id="fabrir" style="color:var(--ink)">Abrir a loja</button>`;
+  $("fabrir").onclick=()=>{ fecharMenu(); telaLoja(l); };
+  $("menu").classList.add("on"); $("sombra").classList.add("on");
+}
+
 function telaVisitas(){ montar(()=>{ TELA="home"; LOJA=null;
   topo("Visitas"); pintaDias(); pintaBarra(); pintaLojas(); rodape(null);
 });}
@@ -755,7 +847,7 @@ function carregarMapa(){
   });
 }
 function rotaDoDia(){
-  const ls=(DIA.lojas||[]).filter(l=>l.gps_lat!=null);
+  const ls=(DIA.lojas||[]).filter(temGps);
   if(!ls.length) return alerta("Nenhuma loja com coordenada hoje.");
   /* O Google Maps aceita cerca de 10 pontos no link e ignora o resto em
      silencio. Melhor cortar aqui e avisar do que entregar rota incompleta. */
@@ -768,7 +860,7 @@ function rotaDoDia(){
 function fecharMapa(){ $("corpo").style.padding=""; if(MAPA){ MAPA.remove(); MAPA=null; } telaVisitas(); }
 function telaMapa(){ montar(()=>{ TELA="mapa"; esconderTudo();
   topo("Mapa do dia", fecharMapa, "");
-  const ls=lojasFiltradas().filter(l=>l.gps_lat!=null);
+  const ls=lojasFiltradas().filter(temGps);
   $("corpo").style.padding="0";
   $("corpo").innerHTML='<div class="mapa-caixa"><div id="mapa"></div>'
     +'<div class="mapa-pe"><button class="sec" id="mfechar">Lista</button>'
