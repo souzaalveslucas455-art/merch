@@ -264,7 +264,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-24b";
+const VERSAO_APP = "2026-09-24c";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -282,6 +282,7 @@ const guarda=(()=>{ const mem={}; let ok=true;
 let URLB=guarda.ler("url")||CFG.url, CHAVE=guarda.ler("chave")||CFG.chave;
 let DIA=null, LOJA=null, TELA="carregando", DATA=null, FILTRO="", SEMANA=guarda.lerJ("semana")||[];
 let SEMANA_ERRO=null, PULOU_DE_HOJE=false, JA_TENTOU_PULAR=false;
+let OPORT=null;   // loja_id -> {total, itens, limite} do dia aberto
 
 const hojeIso=()=>{const d=new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
@@ -640,7 +641,7 @@ async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
   if(cache&&!forcar){
-    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas();
+    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA);
     if(!pularSeHojeVazio()) buscarSemana();
     revalidarDia(DATA);
     return;
@@ -648,7 +649,7 @@ async function carregarDia(data,forcar){
   esconderTudo(); $("topo").innerHTML=`<h1 style="padding-left:14px">Carregando…</h1>`;
   $("corpo").innerHTML=`<div class="vazio">Buscando seu roteiro…</div>`; rodape(null);
   try{ DIA=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:DATA})});
-    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana();
+    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana(); buscarOportunidades(DATA);
   }catch(e){ if(cache){ DIA=cache; telaVisitas(); alerta("Sem sinal. Mostrando o que estava guardado."); return; }
     if(e.status===401) return telaLogin();
     $("topo").innerHTML=`<h1 style="padding-left:14px">Erro</h1>`;
@@ -672,6 +673,23 @@ setInterval(()=>{ if(!document.hidden && navigator.onLine && (TELA==="home"||TEL
    So troca se nao houver envio pendente: com fila cheia, o que esta na tela
    tem coisa que o servidor ainda nao sabe, e trocar faria a contagem que o
    repositor acabou de digitar sumir da tela. */
+/* As oportunidades vem numa chamada propria e ficam guardadas por dia, para
+   o repositor trabalhar sem sinal dentro da loja. */
+async function buscarOportunidades(data){
+  const guardado=guarda.lerJ("oport:"+data);
+  if(guardado) OPORT=guardado;
+  if(!navigator.onLine) return;
+  try{
+    const o=await api("/rest/v1/rpc/minhas_oportunidades",{method:"POST",body:JSON.stringify({p_data:data})});
+    if(data!==DATA) return;
+    /* Com envio pendente, o que esta no aparelho e mais novo que o servidor. */
+    if(fila.itens().length && guardado) return;
+    OPORT=o||{}; guarda.porJ("oport:"+data,OPORT);
+    if(TELA==="home") pintaLojas(); else if(TELA==="loja") telaLoja();
+  }catch(e){}
+}
+const oportDe=l=>(OPORT&&OPORT[l.id])||{total:0,itens:[],limite:15};
+
 async function revalidarDia(data){
   if(!navigator.onLine || fila.itens().length) return;
   try{
@@ -773,7 +791,7 @@ function prioridade(l){
 function modulosFeitos(l){
   const lim=DIA.dias_alerta_validade||30, cat=l.catalogo||[];
   let n=0;
-  if(cat.length&&resumoContagem(cat).feitos===cat.length) n++;
+  { const r=resumoOport(l); if(r.total&&r.feitos>=Math.min(r.total,oportDe(l).limite||15)) n++; }
   if((l.validades||[]).length) n++;
   if((l.notas||[]).length&&(l.notas||[]).every(x=>x.conferido)) n++;
   if((l.exposicoes||[]).length) n++;
@@ -950,7 +968,7 @@ function telaMapa(){ montar(()=>{ TELA="mapa"; esconderTudo();
 
 /* ---------------------- entrada da loja ---------------------- */
 const MODULOS=[
-  {k:"contagem", ic:"1", nome:"Contagem e ruptura",      tela:()=>telaContagem()},
+  {k:"contagem", ic:"1", nome:"Oportunidade do Estoque", tela:()=>telaOportunidade()},
   {k:"validade", ic:"2", nome:"Validade",                tela:()=>telaValidade()},
   {k:"chegadas", ic:"3", nome:"Chegadas",                tela:()=>telaChegadas()},
   {k:"exposicao",ic:"4", nome:"Exposição e ponto extra", tela:()=>telaExposicao()},
@@ -961,12 +979,14 @@ const MODULOS=[
 let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
 function resumo(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
-  if(k==="contagem"){ const r=resumoContagem(cat);
-    const p=[`${r.feitos} de ${r.total} itens`];
-    if(r.rup) p.push(`${r.rup} em ruptura`);
-    if(r.baixo) p.push(`${r.baixo} abaixo do normal`);
-    return {txt:p.join(" · "), pronto:r.total>0&&r.feitos===r.total&&!r.semMotivo,
-      alerta:r.semMotivo>0||r.baixo>0}; }
+  if(k==="contagem"){ const r=resumoOport(l);
+    if(!r.total) return {txt:"nenhuma oportunidade hoje", pronto:false, alerta:false};
+    const p=[`${r.feitos} de ${Math.min(r.total,oportDe(l).limite||15)} registrados`];
+    if(r.ruptura) p.push(`${r.ruptura} ruptura`);
+    if(r.abaixo) p.push(`${r.abaixo} abaixo`);
+    if(r.excesso) p.push(`${r.excesso} excesso`);
+    return {txt:p.join(" · "), pronto:r.feitos>=Math.min(r.total,oportDe(l).limite||15)&&!r.semMotivo,
+      alerta:r.semMotivo>0||r.ruptura>0}; }
   if(k==="validade"){ const v=l.validades||[], crit=v.filter(x=>diasAte(x.vence_em)<=lim).length;
     return {txt:v.length?`${v.length} ${v.length===1?"registro":"registros"}${crit?` · ${crit} em alerta`:""}`:"nada registrado",
       pronto:v.length>0&&crit===0, alerta:crit>0}; }
@@ -1091,103 +1111,160 @@ const MOTIVOS=[["sem_pedido","Não pediu"],["pedido_nao_chegou","Pedido não che
   ["sem_espaco","Sem espaço"],["concorrente_ocupou","Concorrente ocupou"],
   ["deposito_cheio","Tem no depósito"],["outro","Outro"]];
 
-function telaContagem(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
-  topo("Contagem", ()=>telaLoja(), "");
+/* ----------------- 1. oportunidade do estoque ----------------
+   So aparecem os produtos que o sistema classificou, comparando o que a loja
+   PEDIU no mes com o que ela COMPRA NORMALMENTE:
+     ruptura -> compra todo mes e nao pediu nada: nao estamos vendendo
+     abaixo  -> pedindo bem menos que o normal para esta altura do mes
+     excesso -> pediu mais que um mes normal inteiro
+   A classificacao vem pronta do banco. O repositor anota ONDE o produto esta
+   (gondola, deposito, ilha, checkout) e quanto tem em cada lugar.
+------------------------------------------------------------- */
+const LOCAIS=[["g","Gôndola"],["d","Depósito"],["i","Ilha"],["k","Checkout"]];
+const CLASSE={ruptura:{t:"Ruptura",   cor:"var(--verm)", bg:"var(--verm-bg)", ordem:1,
+                       d:"compra todo mês e não pediu"},
+              abaixo: {t:"Abaixo do normal", cor:"var(--amb)", bg:"var(--amb-bg)", ordem:2,
+                       d:"pedindo menos que o normal"},
+              excesso:{t:"Excesso",   cor:"var(--azul)", bg:"var(--azul-bg)", ordem:3,
+                       d:"pediu acima do normal"}};
+
+function totalOport(it){
+  const c=it.contagem||{}, f=fator(it); let u=0, tocou=false;
+  for(const [k] of LOCAIS){
+    const cx=c[k+"cx"], un=c[k+"un"];
+    if(cx!=null||un!=null) tocou=true;
+    u+=(Number(cx)||0)*f+(Number(un)||0);
+  }
+  return {un:u, cx:u/f, tocou:tocou||!!c.naoTem};
+}
+const zeradoOport=it=>{ const t=totalOport(it); return t.tocou && t.un===0; };
+const semMotivoOport=it=>zeradoOport(it) && !(it.contagem||{}).motivo;
+
+function enviaOportunidade(it){
+  const c=it.contagem||{}, t=totalOport(it);
+  const val=k=>c[k]==null?null:c[k];
+  grava("contagem","visita_id,produto_id",{
+    visita_id:LOJA.visita?LOJA.visita.id:null, loja_id:LOJA.id,
+    produto_id:it.produto_id, data:DIA.data,
+    gondola_cx:val("gcx"), gondola_un:val("gun"),
+    deposito_cx:val("dcx"), deposito_un:val("dun"),
+    ilha_cx:val("icx"), ilha_un:val("iun"),
+    checkout_cx:val("kcx"), checkout_un:val("kun"),
+    estoque_gondola: t.tocou? Math.round((Number(c.gcx)||0)*fator(it)+(Number(c.gun)||0)) : null,
+    estoque_deposito: t.tocou? Math.round((Number(c.dcx)||0)*fator(it)+(Number(c.dun)||0)) : null,
+    ruptura: zeradoOport(it), ruptura_motivo: zeradoOport(it)?(c.motivo||null):null,
+    oportunidade: it.classe});
+}
+
+function resumoOport(l){
+  const o=oportDe(l), its=o.itens||[];
+  return {total:its.length, feitos:its.filter(x=>totalOport(x).tocou).length,
+          semMotivo:its.filter(semMotivoOport).length,
+          ruptura:its.filter(x=>x.classe==="ruptura").length,
+          abaixo:its.filter(x=>x.classe==="abaixo").length,
+          excesso:its.filter(x=>x.classe==="excesso").length};
+}
+
+let VER_TODAS=false;
+function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
+  const o=oportDe(LOJA), todas=o.itens||[], lim=o.limite||15;
+  const lista=VER_TODAS?todas:todas.slice(0,lim);
+  topo("Oportunidade do Estoque", ()=>{ VER_TODAS=false; telaLoja(); }, "");
+
+  if(o.sem_base || !todas.length){
+    $("corpo").innerHTML=`<div class="vazio">${o.sem_base
+      ?"A base de vendas ainda não foi carregada. Sem ela o app não sabe o que esta loja compra normalmente."
+      :"Nenhuma oportunidade nesta loja: tudo o que ela compra com regularidade está pedindo dentro do normal."}</div>`;
+    return rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
+  }
+
+  const u=unidAtual(), rot=u==="cx"?"cx":"un";
+  const r=resumoOport(LOJA);
+  const fmt=n=>Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1});
+  const cartao=(it,i)=>{
+    const cl=CLASSE[it.classe]||{}, c=it.contagem||{}, t=totalOport(it);
+    const ativos=c.locais||LOCAIS.map(x=>x[0]).filter(k=>c[k+"cx"]!=null||c[k+"un"]!=null);
+    const valor=k=>u==="cx"?c[k+"cx"]:c[k+"un"];
+    return `<div class="item" data-o="${i}" style="border-left:4px solid ${cl.cor}">
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <div style="flex:1;min-width:0"><div class="nome">${esc(it.nome)}</div>
+          <div class="emb">${esc(it.embalagem||"")}${fator(it)>1?` · 1 cx = ${fator(it)} un`:""}</div></div>
+        <span class="selo" style="background:${cl.bg};color:${cl.cor};flex:none">${cl.t}</span></div>
+      <div class="emb" style="margin-top:6px;color:var(--ink2)">
+        Compra normal <b>${fmt(it.normal_cx)} cx/mês</b> · pediu <b>${fmt(it.pedido_cx)} cx</b> este mês</div>
+      <div class="pilha" data-loc="${i}">
+        ${LOCAIS.map(([k,n])=>`<button data-k="${k}" class="${ativos.includes(k)?"on":""}">${n}</button>`).join("")}
+        <button data-k="x" class="${c.naoTem?"on mau":""}">Não tem</button>
+      </div>
+      ${ativos.length?`<div class="nums" style="flex-wrap:wrap">${ativos.map(k=>`
+        <div style="min-width:44%"><label>${LOCAIS.find(x=>x[0]===k)[1]} (${rot})</label>
+          <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-q="${k}" value="${valor(k)??""}"></div>`).join("")}
+      </div>`:""}
+      ${t.tocou?`<div class="emb" style="margin-top:7px">total ${Math.round(t.un)} un${fator(it)>1?` · ${fmt(t.cx)} cx`:""}</div>`:""}
+      ${zeradoOport(it)?`<div class="pilha" data-mo="${i}">
+        ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}</div>`:""}
+    </div>`;
+  };
+
+  const grupos=["ruptura","abaixo","excesso"].map(g=>{
+    const its=lista.map((it,i)=>({it,i:todas.indexOf(it)})).filter(x=>x.it.classe===g);
+    return its.length?`<h2 class="tit" style="color:${CLASSE[g].cor}">${CLASSE[g].t.toUpperCase()} · ${its.length}</h2>
+      <div class="emb" style="margin:-4px 0 9px">${CLASSE[g].d}</div>`+its.map(x=>cartao(x.it,x.i)).join(""):"";
+  }).join("");
+
   $("corpo").innerHTML=`
     <div class="abas" id="unid">
-      <button data-u="cx" class="${unidAtual()==="cx"?"on":""}">Caixa física</button>
-      <button data-u="un" class="${unidAtual()==="un"?"on":""}">Unidade</button>
-    </div>
-    <div id="alertas"></div>
-    <div class="busca" style="margin-bottom:12px">${IC.lupa}
-      <input id="q" placeholder="Buscar produto" autocapitalize="off"></div>
-    <div id="lista"></div>`;
+      <button data-u="cx" class="${u==="cx"?"on":""}">Caixa física</button>
+      <button data-u="un" class="${u==="un"?"on":""}">Unidade</button></div>
+    ${r.semMotivo?`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"produto zerado sem motivo":"produtos zerados sem motivo"}.</b><br>Informe por que zerou antes de encerrar.</div>`:""}
+    <div class="aviso inf">${r.feitos} de ${lista.length} registrados · as ${lista.length} de maior volume em jogo${todas.length>lista.length?` de ${todas.length}`:""}.<br>
+      Toque onde o produto está e anote a quantidade.</div>
+    ${grupos}
+    ${todas.length>lim?`<button class="bt sec" id="vertodas" style="margin-top:6px">${VER_TODAS?"Ver só as principais":`Ver todas as ${todas.length}`}</button>`:""}`;
 
   $("unid").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    const novo=b.dataset.u, velho=unidAtual();
-    if(novo===velho) return;
+    const novo=b.dataset.u, velho=unidAtual(); if(novo===velho) return;
     if(!exigeVisita()) return;
-    converterTudo(cat, velho, novo);
-    guarda.por("unid", novo);
-    cat.forEach(p=>{ if(p.contagem&&totais(p).tocou) enviaContagem(p); });
-    telaContagem();
+    todas.forEach(it=>{ const c=it.contagem; if(!c) return; const f=fator(it);
+      LOCAIS.forEach(([k])=>{
+        if(velho==="cx"&&c[k+"cx"]!=null){ c[k+"un"]=Math.round(c[k+"cx"]*f); c[k+"cx"]=null; }
+        else if(velho==="un"&&c[k+"un"]!=null){ c[k+"cx"]=Math.round((c[k+"un"]/f)*100)/100; c[k+"un"]=null; }
+      }); if(totalOport(it).tocou) enviaOportunidade(it); });
+    guarda.por("unid",novo); salvarCache(); telaOportunidade();
   });
+  if($("vertodas")) $("vertodas").onclick=()=>{ VER_TODAS=!VER_TODAS; telaOportunidade(); };
 
-  const alertas=()=>{
-    const r=resumoContagem(cat), b=[];
-    if(r.semMotivo) b.push(`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"item zerado sem motivo":"itens zerados sem motivo"}.</b><br>
-      Informe por que zerou antes de encerrar a visita.</div>`);
-    if(r.baixo) b.push(`<div class="aviso amb"><b>${r.baixo} ${r.baixo===1?"item abaixo":"itens abaixo"} do normal desta loja.</b><br>
-      Vale avisar o líder ou o comercial.</div>`);
-    if(r.rup&&!r.semMotivo) b.push(`<div class="aviso inf">${r.rup} ${r.rup===1?"item":"itens"} em ruptura, todos com motivo.</div>`);
-    $("alertas").innerHTML=b.join("");
-  };
+  const salva=it=>{ guarda.porJ("oport:"+DATA,OPORT); enviaOportunidade(it); };
+  $("corpo").querySelectorAll("[data-loc]").forEach(g=>{ const it=todas[+g.dataset.loc];
+    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      it.contagem=it.contagem||{}; const c=it.contagem, k=b.dataset.k;
+      if(k==="x"){ /* nao tem em lugar nenhum: zera tudo e pede o motivo */
+        c.naoTem=!c.naoTem;
+        if(c.naoTem){ LOCAIS.forEach(([q])=>{ c[q+"cx"]=null; c[q+"un"]=null; }); c.locais=[]; }
+      } else {
+        c.naoTem=false;
+        const at=c.locais||LOCAIS.map(x=>x[0]).filter(q=>c[q+"cx"]!=null||c[q+"un"]!=null);
+        c.locais=at.includes(k)?at.filter(q=>q!==k):[...at,k];
+        if(!c.locais.includes(k)){ c[k+"cx"]=null; c[k+"un"]=null; }
+      }
+      salva(it); telaOportunidade(); }); });
+  $("corpo").querySelectorAll("input[data-q]").forEach(inp=>inp.onchange=()=>{
+    if(!exigeVisita()){ inp.value=""; return; }
+    const it=todas[+inp.closest("[data-o]").dataset.o]; it.contagem=it.contagem||{};
+    const k=inp.dataset.q, v=inp.value===""?null:Number(inp.value);
+    if(unidAtual()==="cx"){ it.contagem[k+"cx"]=v; it.contagem[k+"un"]=null; }
+    else { it.contagem[k+"un"]=v; it.contagem[k+"cx"]=null; }
+    if(zeradoOport(it)&&!it.contagem.motivo) alerta("Zerado. Informe por que não tem.");
+    salva(it); telaOportunidade(); });
+  $("corpo").querySelectorAll("[data-mo]").forEach(g=>{ const it=todas[+g.dataset.mo];
+    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      it.contagem.motivo=b.dataset.v; salva(it); telaOportunidade(); }); });
 
-  const cartaoProduto=(p,i)=>{
-    const c=p.contagem||{}, t=totais(p), f=fator(p), baixo=estaBaixo(p);
-    const u=unidAtual(), rot=u==="cx"?"cx":"un";
-    const ref=p.media_cx?`costuma comprar ${Number(p.media_cx).toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:"";
-    return `<div class="item ${c.ruptura&&!c.motivo?"crit":baixo?"aten":""}">
-      <div class="nome">${esc(p.nome)}</div>
-      <div class="emb">${esc(p.embalagem||"")}${f>1?` · 1 cx = ${f} un`:""}${ref?` · ${ref}`:""}</div>
-      <div class="nums" data-p="${i}">
-        <div><label>Gôndola (${rot})</label>
-          <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-o="g" value="${valorDe(p,"g")??""}"></div>
-        <div><label>Depósito (${rot})</label>
-          <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-o="d" value="${valorDe(p,"d")??""}"></div>
-      </div>
-      ${t.tocou?`<div class="emb" style="margin-top:7px">
-        total ${Math.round(t.total)} un${f>1?` · ${t.cx.toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:""}
-        ${baixo?` · <b style="color:var(--amb)">abaixo do normal</b>`:""}</div>`:""}
-      <div class="pilha" data-r="${i}"><button class="${c.ruptura?"on mau":""}" data-t="rup">Ruptura</button></div>
-      <div class="pilha ${c.ruptura?"":"oculto"}" data-mo="${i}">
-        ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}
-      </div></div>`;
-  };
-
-  const pinta=f=>{
-    const vis=cat.map((p,i)=>({p,i})).filter(o=>!f||o.p.nome.toLowerCase().includes(f.toLowerCase()));
-    $("lista").innerHTML=vis.length?vis.map(o=>cartaoProduto(o.p,o.i)).join("")
-      :`<div class="vazio">Nenhum produto com esse nome.</div>`;
-    ligar(); alertas(); };
-
-  const redesenha=i=>{
-    const alvo=$("lista").querySelector(`[data-p="${i}"]`);
-    if(!alvo) return pinta($("q").value);
-    const tmp=document.createElement("div"); tmp.innerHTML=cartaoProduto(cat[i],i);
-    alvo.closest(".item").replaceWith(tmp.firstElementChild); ligar(); alertas(); };
-
-  const ligar=()=>{
-    $("lista").querySelectorAll("[data-p]").forEach(g=>{ const i=+g.dataset.p, p=cat[i];
-      g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{
-        if(!exigeVisita()){ inp.value=""; return; }
-        poeValor(p, inp.dataset.o, inp.value===""?null:Number(inp.value));
-        if(totais(p).gondolaZerada && !p.contagem.ruptura){
-          p.contagem.ruptura=true;
-          alerta("Gôndola zerada. Informe por que zerou.");
-        }
-        enviaContagem(p); redesenha(i); }); });
-
-    $("lista").querySelectorAll("[data-r]").forEach(g=>{ const i=+g.dataset.r, p=cat[i];
-      g.querySelector("[data-t=rup]").onclick=()=>{ if(!exigeVisita()) return;
-        p.contagem=p.contagem||{};
-        if(p.contagem.ruptura && totais(p).gondolaZerada)
-          return alerta("A gôndola está zerada. Não dá para tirar a ruptura sem mudar a contagem.");
-        p.contagem.ruptura=!p.contagem.ruptura;
-        if(!p.contagem.ruptura) p.contagem.motivo=null;
-        enviaContagem(p); redesenha(i); }; });
-
-    $("lista").querySelectorAll("[data-mo]").forEach(g=>{ const i=+g.dataset.mo, p=cat[i];
-      g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
-        p.contagem=p.contagem||{}; p.contagem.motivo=b.dataset.v;
-        enviaContagem(p); redesenha(i); }); }); };
-
-  $("q").oninput=e=>pinta(e.target.value); pinta("");
-  const r=resumoContagem(cat);
   rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`
-    + (r.rup||r.baixo?botaoAvisar("ruptura"):""));
+    + (r.ruptura||r.abaixo||r.excesso?botaoAvisar("ruptura"):""));
   ligaAvisar();
 });}
+const telaContagem=telaOportunidade;   // nome antigo, caso algo ainda chame
 
 /* --------------------------- 2. validade --------------------- */
 const ACOES=[["girar","Mudei de lugar para girar"],["registrar","Só registrei e avisei"],
@@ -1293,7 +1370,15 @@ function telaExposicao(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LO
   rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
 });}
 
-/* --------------------- 5. preco e concorrencia --------------- */
+/* --------------------- 5. preco e concorrencia ---------------
+   Grava SO o preco. Se mandasse gondola e deposito junto, passaria por cima
+   do que o repositor acabou de anotar na Oportunidade do Estoque, porque as
+   duas telas escrevem na mesma linha de contagem. */
+function enviaPreco(p){ const c=p.contagem||{};
+  grava("contagem","visita_id,produto_id",{
+    visita_id:LOJA.visita?LOJA.visita.id:null, loja_id:LOJA.id,
+    produto_id:p.produto_id, data:DIA.data,
+    preco:c.preco==null?null:c.preco, preco_promocional:c.promo==null?null:c.promo}); }
 function telaPreco(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[], cc=LOJA.concorrentes||[];
   topo("Preço", ()=>telaLoja(), "");
   $("corpo").innerHTML=`<h2 class="tit">NOSSOS PRODUTOS</h2><div id="meus">${
@@ -1310,7 +1395,7 @@ function telaPreco(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.ca
   $("meus").querySelectorAll("[data-p]").forEach(g=>{ const p=cat[+g.dataset.p];
     g.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
       p.contagem=p.contagem||{}; p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
-      enviaContagem(p); }); });
+      enviaPreco(p); }); });
   rodape(editavel()
     ? `<button class="bt sec" onclick="telaNovoConcorrente()">Concorrente</button>` +
       (quantos("preco")?botaoAvisar("preco"):"")
@@ -1515,8 +1600,7 @@ const CARTOES=[
 ];
 function quantos(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
-  if(k==="ruptura")  return cat.filter(x=>x.contagem&&x.contagem.ruptura).length
-                          + cat.filter(estaBaixo).length;
+  if(k==="ruptura")  return (oportDe(l).itens||[]).filter(zeradoOport).length;
   if(k==="validade") return (l.validades||[]).filter(v=>diasAte(v.vence_em)<=lim).length;
   if(k==="estoque")  return cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null)).length;
   if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
@@ -1636,15 +1720,15 @@ async function iniciarVisita(){
   if(!g) alerta("Sem GPS agora. A visita foi registrada assim mesmo.");
 }
 function encerrarVisita(){
-  const cat=LOJA.catalogo||[];
-  const r=resumoContagem(cat);
-  /* Zerado sem motivo nao passa. O resto e aviso, este e barreira: o dado
-     sem motivo nao serve para o lider nem para o comercial. */
+  const r=resumoOport(LOJA);
+  /* Zerado sem motivo nao passa: o dado sem motivo nao serve para o lider
+     nem para o comercial. O resto e aviso; este e barreira. */
   if(r.semMotivo){
-    alerta(`${r.semMotivo} ${r.semMotivo===1?"item zerado está":"itens zerados estão"} sem motivo. Abra a contagem e informe.`);
-    return telaContagem();
+    alerta(`${r.semMotivo} ${r.semMotivo===1?"produto zerado está":"produtos zerados estão"} sem motivo. Abra a Oportunidade do Estoque e informe.`);
+    return telaOportunidade();
   }
-  if(r.feitos<r.total&&!confirm(`Você registrou ${r.feitos} de ${r.total} itens. Encerrar assim mesmo?`)) return;
+  const alvo=Math.min(r.total, oportDe(LOJA).limite||15);
+  if(alvo&&r.feitos<alvo&&!confirm(`Você registrou ${r.feitos} de ${alvo} oportunidades. Encerrar assim mesmo?`)) return;
   LOJA.visita.hora_fim=agora(); LOJA.visita.situacao="concluida";
   grava("visita","pessoa_id,loja_id,data",{id:LOJA.visita.id, pessoa_id:DIA.pessoa.id,
     rota_id:DIA.rota?DIA.rota.id:null, loja_id:LOJA.id, data:DIA.data,
@@ -1668,7 +1752,7 @@ function limparDiasGuardados(){
      separar a contagem da visita dela. Se tiver fila, espera a proxima. */
   if(fila.itens().length) return false;
   const ks=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
-    if(k&&(k.startsWith("dia:")||k==="semana")) ks.push(k); } }catch(e){}
+    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k==="semana")) ks.push(k); } }catch(e){}
   ks.forEach(guarda.tira); SEMANA=[];
   return true;
 }
