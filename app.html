@@ -320,7 +320,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-25d";
+const VERSAO_APP = "2026-09-25e";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -705,7 +705,7 @@ async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
   if(cache&&!forcar){
-    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA); buscarPedidos(DATA); buscarCenso(DATA); buscarObrigacoes(DATA); buscarObrigacoes(DATA); buscarCenso(DATA);
+    DIA=cache; telaVisitas(); escoar(); buscarTudoDoDia(DATA);
     if(!pularSeHojeVazio()) buscarSemana();
     revalidarDia(DATA);
     return;
@@ -713,7 +713,7 @@ async function carregarDia(data,forcar){
   esconderTudo(); $("topo").innerHTML=`<h1 style="padding-left:14px">Carregando…</h1>`;
   $("corpo").innerHTML=`<div class="vazio">Buscando seu roteiro…</div>`; rodape(null);
   try{ DIA=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:DATA})});
-    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana(); buscarOportunidades(DATA); buscarPedidos(DATA);
+    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarSemana(); buscarTudoDoDia(DATA);
   }catch(e){ if(cache){ DIA=cache; telaVisitas(); alerta("Sem sinal. Mostrando o que estava guardado."); return; }
     if(e.status===401) return telaLogin();
     $("topo").innerHTML=`<h1 style="padding-left:14px">Erro</h1>`;
@@ -830,6 +830,38 @@ function concluirModulo(k, resultado){
   salvaObrig();
 }
 
+/* Lotes perto de vencer em acompanhamento: vivem entre visitas, ate zerar. */
+let VENC=null;   // loja_id -> [lotes]
+async function buscarVencimentos(data){
+  const guardado=guarda.lerJ("venc:"+data);
+  if(guardado) VENC=guardado;
+  if(!navigator.onLine) return;
+  try{
+    const r=await api("/rest/v1/rpc/meus_vencimentos",{method:"POST",body:JSON.stringify({p_data:data})});
+    if(data!==DATA) return;
+    /* O que foi contado aqui e ainda esta na fila vale mais que o servidor. */
+    const loc=guardado||{}; VENC=r||{};
+    for(const [id,lotes] of Object.entries(loc)){ const srv=VENC[id]||(VENC[id]=[]);
+      lotes.forEach(lt=>{ const n=srv.find(x=>x.id===lt.id);
+        if(!n&&lt.registrado_hoje) srv.push(lt);
+        else if(n&&lt.hoje&&!n.hoje) Object.assign(n,{hoje:lt.hoje,quantidade_atual:lt.quantidade_atual,status:lt.status}); }); }
+    guarda.porJ("venc:"+data,VENC);
+    if(TELA==="loja") telaLoja(); else if(TELA==="home") pintaLojas();
+  }catch(e){}
+}
+const lotesDe=l=>(VENC&&VENC[l.id])||[];
+const lotesAtivos=l=>lotesDe(l).filter(x=>x.status!=="encerrado");
+const salvaVenc=()=>{ if(VENC) guarda.porJ("venc:"+DATA,VENC); };
+function nivelLote(x){
+  const d=diasAte(x.vence_em), crit=DIA.dias_critico_validade||7, lim=DIA.dias_alerta_validade||30;
+  if(d<0) return {k:"vencido", t:`vencido há ${-d} ${-d===1?"dia":"dias"}`, cor:"var(--verm)", bg:"var(--verm-bg)"};
+  if(d<=crit) return {k:"critico", t:`vence em ${d} ${d===1?"dia":"dias"}`, cor:"var(--verm)", bg:"var(--verm-bg)"};
+  if(d<=lim) return {k:"atencao", t:`vence em ${d} dias`, cor:"var(--amb)", bg:"var(--amb-bg)"};
+  return {k:"ok", t:`vence em ${d} dias`, cor:"var(--ink2)", bg:"var(--fundo)"};
+}
+/* Precisa ser contado nesta visita: ativo, e nao registrado agora mesmo. */
+const pedeContagem=x=>x.status!=="encerrado" && !x.registrado_hoje && !x.hoje;
+
 let CENSO=null;   // loja_id -> {feito_na_semana, feito_em, obrigatorio_hoje, anteriores}
 async function buscarCenso(data){
   const guardado=guarda.lerJ("censo:"+data);
@@ -848,6 +880,15 @@ async function buscarCenso(data){
   }catch(e){}
 }
 const censoDe=l=>(CENSO&&CENSO[l.id])||{};
+
+/* TUDO o que o dia busca por tras fica aqui, e os dois caminhos de abrir o
+   dia chamam esta funcao. Antes cada caminho tinha a sua lista, e as edicoes
+   cairam so num deles: baixando o dia do zero, o app nao buscava as
+   solicitacoes nem a regra da semana. Uma lista so nao deixa isso voltar. */
+function buscarTudoDoDia(data){
+  buscarNaoLidas(); buscarOportunidades(data); buscarPedidos(data);
+  buscarCenso(data); buscarObrigacoes(data); buscarVencimentos(data);
+}
 
 async function revalidarDia(data){
   if(!navigator.onLine || fila.itens().length) return;
@@ -944,7 +985,7 @@ function lojasFiltradas(){
 }
 function prioridade(l){
   const atras=(l.notas||[]).some(n=>n.dias>0);
-  const venc=(l.validades||[]).some(v=>diasAte(v.vence_em)<0);
+  const venc=lotesAtivos(l).some(x=>{ const k=nivelLote(x).k; return k==="vencido"||k==="critico"; });
   return atras||venc?"Alta":"Normal";
 }
 function modulosFeitos(l){
@@ -1140,9 +1181,13 @@ function resumo(k){
     if(r.excesso) p.push(`${r.excesso} excesso`);
     return {txt:p.join(" · "), pronto:r.feitos>=Math.min(r.total,oportDe(l).limite||15)&&!r.semMotivo,
       alerta:r.semMotivo>0||r.ruptura>0}; }
-  if(k==="validade"){ const v=l.validades||[], crit=v.filter(x=>diasAte(x.vence_em)<=lim).length;
-    return {txt:v.length?`${v.length} ${v.length===1?"registro":"registros"}${crit?` · ${crit} em alerta`:""}`:"nada registrado",
-      pronto:v.length>0&&crit===0, alerta:crit>0}; }
+  if(k==="validade"){ const at=lotesAtivos(l);
+    if(!at.length) return {txt:"nenhum lote em acompanhamento", pronto:false, alerta:false};
+    const venc=at.filter(x=>nivelLote(x).k==="vencido").length, crit=at.filter(x=>nivelLote(x).k==="critico").length;
+    const falta=at.filter(pedeContagem).length;
+    const p=[`${at.length} em acompanhamento`];
+    if(venc) p.push(`${venc} vencido`); if(crit) p.push(`${crit} crítico`); if(falta) p.push(`falta contar ${falta}`);
+    return {txt:p.join(" · "), pronto:false, alerta:venc>0||crit>0, badge:venc+crit||null}; }
   if(k==="chegadas"){ const ps=pedidosDe(l);
     if(!ps.length){ const n=l.notas||[];
       return {txt:n.length?`${n.length} ${n.length===1?"nota prevista":"notas previstas"}`:"pedidos e entregas da loja",
@@ -1411,7 +1456,10 @@ function totalOport(it){
   return {un:u, cx:u/f, tocou:tocou||!!c.naoTem};
 }
 const zeradoOport=it=>{ const t=totalOport(it); return t.tocou && t.un===0; };
-const semMotivoOport=it=>zeradoOport(it) && !(it.contagem||{}).motivo;
+/* Zerado precisa de motivo; e "Outro" precisa dizer qual. "Outro" sozinho
+   nao explica nada para o lider nem para o comercial. */
+const semMotivoOport=it=>{ const c=it.contagem||{};
+  return zeradoOport(it) && (!c.motivo || (c.motivo==="outro" && !String(c.obs||"").trim())); };
 
 function enviaOportunidade(it){
   const c=it.contagem||{}, t=totalOport(it);
@@ -1426,6 +1474,7 @@ function enviaOportunidade(it){
     estoque_gondola: t.tocou? Math.round((Number(c.gcx)||0)*fator(it)+(Number(c.gun)||0)) : null,
     estoque_deposito: t.tocou? Math.round((Number(c.dcx)||0)*fator(it)+(Number(c.dun)||0)) : null,
     ruptura: zeradoOport(it), ruptura_motivo: zeradoOport(it)?(c.motivo||null):null,
+    ruptura_obs: zeradoOport(it)&&c.motivo==="outro"?(String(c.obs||"").trim()||null):null,
     oportunidade: it.classe});
 }
 
@@ -1483,7 +1532,9 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
       </div>`:""}
       ${t.tocou?`<div class="emb" style="margin-top:7px">total contado <b>${u==="cx"?fmt(t.cx)+" cx":Math.round(t.un).toLocaleString("pt-BR")+" un"}</b>${fator(it)>1?` · ${u==="cx"?Math.round(t.un).toLocaleString("pt-BR")+" un":fmt(t.cx)+" cx"}`:""}</div>`:""}
       ${zeradoOport(it)?`<div class="pilha" data-mo="${i}">
-        ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}</div>`:""}
+        ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}</div>
+        ${c.motivo==="outro"?`<textarea data-obs="${i}" rows="2" placeholder="Qual o motivo?"
+          style="width:100%;margin-top:8px;font:inherit;padding:10px;border:1px solid ${String(c.obs||"").trim()?"var(--linha)":"var(--verm)"};border-radius:12px">${esc(c.obs||"")}</textarea>`:""}`:""}
     </div>`;
   };
 
@@ -1539,7 +1590,12 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     salva(it); telaOportunidade(); });
   $("corpo").querySelectorAll("[data-mo]").forEach(g=>{ const it=todas[+g.dataset.mo];
     g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
-      it.contagem.motivo=b.dataset.v; salva(it); telaOportunidade(); }); });
+      it.contagem.motivo=b.dataset.v; salva(it); telaOportunidade();
+      if(b.dataset.v==="outro"){ const tx=$("corpo").querySelector(`[data-obs="${g.dataset.mo}"]`); if(tx) tx.focus(); } }); });
+  /* salva ao sair do campo, e nao a cada letra, para nao encher a fila */
+  $("corpo").querySelectorAll("textarea[data-obs]").forEach(tx=>{ const it=todas[+tx.dataset.obs];
+    tx.oninput=()=>{ it.contagem.obs=tx.value; guarda.porJ("oport:"+DATA,OPORT); };
+    tx.onchange=()=>{ it.contagem.obs=tx.value.trim(); salva(it); telaOportunidade(); }; });
 
   rodape((r.ruptura||r.abaixo||r.excesso?botaoAvisar("ruptura").replace('class="bt"','class="bt sec"'):"")
     + botaoConcluir("contagem"));
@@ -1553,59 +1609,118 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
 });}
 const telaContagem=telaOportunidade;   // nome antigo, caso algo ainda chame
 
-/* --------------------------- 2. validade --------------------- */
+/* ------------------ 2. controle de vencimentos -----------------
+   O lote perto de vencer vira ACOMPANHAMENTO: fica ativo entre visitas, e a
+   cada visita o repositor diz quanto sobrou, ate zerar. Qualquer repositor da
+   loja ve e atualiza. Zerou ou retirou tudo, o acompanhamento fecha sozinho.
+
+   Concluir o modulo exige contar TODOS os lotes ativos nesta visita. E isso
+   que garante que o produto e acompanhado ate acabar, e nao esquecido.
+   Quantidade em unidades: produto perto de vencer se conta na gondola.
+------------------------------------------------------------- */
 const ACOES=[["girar","Mudei de lugar para girar"],["registrar","Só registrei e avisei"],
   ["remarcar","Remarquei o preço"],["troca","Acionei troca"],["retirar","Retirei da gôndola"]];
+
+function cardLote(x,i){
+  const nv=nivelLote(x), ativo=x.status!=="encerrado", h=x.hoje||{};
+  const ultimo=x.ultimo||(x.registrado_em?{quantidade:x.quantidade_inicial,em:x.registrado_em,por:x.registrado_por}:null);
+  const ini=Number(x.quantidade_inicial)||0, atual=Number(x.quantidade_atual)||0;
+  const giro=ini>0?Math.round((1-atual/ini)*100):null;
+  return `<div class="item ${nv.k==="vencido"||nv.k==="critico"?"crit":nv.k==="atencao"?"aten":""}" data-l="${i}"
+      style="${ativo?"":"opacity:.7"}">
+    <div style="display:flex;gap:8px;align-items:flex-start">
+      <div style="flex:1;min-width:0"><div class="nome">${esc(x.nome||"Produto")}</div>
+        <div class="emb">${x.lote?`Lote ${esc(x.lote)} · `:""}vence ${dataBr(x.vence_em)}</div></div>
+      <span class="selo" style="background:${ativo?nv.bg:"var(--verde-bg)"};color:${ativo?nv.cor:"var(--verde)"};flex:none">
+        ${ativo?nv.t:x.encerramento==="retirado"?"retirado":"acabou"}</span></div>
+    <div class="emb" style="margin-top:7px;color:var(--ink2)">
+      ${ini?`Registrado: <b>${ini} un</b>`:""}${ultimo&&!x.registrado_hoje?` · última contagem <b>${Number(ultimo.quantidade)} un</b> em ${dataBr(String(ultimo.em).slice(0,10)).slice(0,5)}${ultimo.por?" por "+esc(String(ultimo.por).split(" ")[0]):""}`:""}
+      ${giro!=null&&giro>0?` · <b style="color:var(--verde)">${giro}% já saiu</b>`:""}</div>
+    ${x.registrado_hoje?`<div class="emb" style="margin-top:6px">Registrado agora. Na próxima visita o app pede a contagem.</div>`
+    :ativo||h.quantidade!=null?`
+      <div class="nums" style="margin-top:9px"><div style="flex:1"><label>Quanto sobrou hoje (un)</label>
+        <input type="number" inputmode="numeric" min="0" data-q="${i}" value="${h.quantidade??""}" ${ativo||h.quantidade!=null?"":"disabled"}></div>
+        <button class="bt sec" data-zero="${i}" style="flex:none;width:auto;align-self:flex-end;padding:12px 14px">Acabou</button></div>
+      <div class="pilha" data-a="${i}">${ACOES.map(a=>`<button class="${h.acao===a[0]?"on":""}" data-v="${a[0]}">${a[1]}</button>`).join("")}</div>`:""}
+  </div>`;
+}
+
 function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
-  const lim=DIA.dias_alerta_validade||30;
-  const regs=(LOJA.validades||[]).slice().sort((a,b)=>String(a.vence_em).localeCompare(String(b.vence_em)));
   topo("Controle de Vencimentos", ()=>telaLoja(), "");
-  $("corpo").innerHTML=`<div class="aviso inf">Alerta a partir de ${lim} dias para vencer.</div>`+
-    (regs.length?regs.map((v,i)=>{ const d=diasAte(v.vence_em), cls=d<0?"crit":d<=lim?"aten":"";
-      const prod=(LOJA.catalogo||[]).find(p=>p.produto_id===v.produto_id);
-      return `<div class="item ${cls}"><div class="nome">${esc(prod?prod.nome:"Produto")}</div>
-        <div class="emb">${v.lote?`Lote ${esc(v.lote)} · `:""}${v.quantidade?`${v.quantidade} un · `:""}vence ${dataBr(v.vence_em)}</div>
-        <div style="margin-top:7px"><span class="selo ${d<0?"alta":d<=lim?"pend":"feito"}">${d<0?`vencido há ${-d} ${-d===1?"dia":"dias"}`:`faltam ${d} ${d===1?"dia":"dias"}`}</span></div>
-        <div class="pilha" data-v="${i}">${ACOES.map(a=>`<button class="${v.acao===a[0]?"on":""}" data-a="${a[0]}">${a[1]}</button>`).join("")}</div>
-        ${blocoFoto(v)}
-        </div>`; }).join(""):`<div class="vazio">Nada registrado nesta loja hoje.</div>`);
-  const corpoVal=v=>({id:v.id, ...base(), produto_id:v.produto_id, vence_em:String(v.vence_em).slice(0,10),
-    lote:v.lote||null, quantidade:v.quantidade==null?null:v.quantidade, acao:v.acao});
-  $("corpo").querySelectorAll("[data-v]").forEach(g=>{ const v=regs[+g.dataset.v];
-    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
-      v.acao=b.dataset.a; g.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-      grava("validade","id",corpoVal(v)); }); });
-  $("corpo").querySelectorAll(".item").forEach((caixa,i)=>{ const v=regs[i]; if(!v) return;
-    ligaFoto(caixa, v, {tabela:"validade", chave:"id", corpo:corpoVal(v)}, telaValidade); });
+  const lotes=lotesDe(LOJA).slice().sort((a,b)=>String(a.vence_em).localeCompare(String(b.vence_em)));
+  const ativos=lotes.filter(x=>x.status!=="encerrado"), fechados=lotes.filter(x=>x.status==="encerrado");
+  const falta=ativos.filter(pedeContagem).length;
+  const venc=ativos.filter(x=>diasAte(x.vence_em)<0).length, crit=ativos.filter(x=>nivelLote(x).k==="critico").length;
+  $("corpo").innerHTML=`
+    ${ativos.length?`<div class="aviso ${venc||crit?"err":"amb"}"><b>${ativos.length} ${ativos.length===1?"lote em acompanhamento":"lotes em acompanhamento"}</b>
+      ${venc?` · ${venc} vencido`:""}${crit?` · ${crit} crítico`:""}<br>
+      ${falta?`Falta contar ${falta}. Diga quanto sobrou de cada um até acabar.`:"Todos contados nesta visita."}</div>`
+      :`<div class="aviso inf">Nenhum lote perto de vencer em acompanhamento nesta loja.</div>`}
+    ${ativos.length?`<h2 class="tit">EM ACOMPANHAMENTO</h2>`+ativos.map(x=>cardLote(x,lotes.indexOf(x))).join(""):""}
+    ${fechados.length?`<h2 class="tit">ENCERRADOS HOJE</h2>`+fechados.map(x=>cardLote(x,lotes.indexOf(x))).join(""):""}`;
+
+  const mover=(x,qtd,acao)=>{ if(!exigeVisita()) return;
+    x.hoje=Object.assign({},x.hoje||{}); if(qtd!==undefined) x.hoje.quantidade=qtd; if(acao!==undefined) x.hoje.acao=acao;
+    if(x.hoje.quantidade==null) { salvaVenc(); return telaValidade(); }      /* acao sem quantidade: espera */
+    grava("validade_movimento","validade_id,visita_id",{id:uid(), validade_id:x.id, visita_id:LOJA.visita.id,
+      loja_id:LOJA.id, pessoa_id:DIA.pessoa.id, quantidade:x.hoje.quantidade, acao:x.hoje.acao||null});
+    x.quantidade_atual=x.hoje.quantidade;
+    const fecha=Number(x.hoje.quantidade)<=0||x.hoje.acao==="retirar";
+    x.status=fecha?"encerrado":"ativo"; x.encerramento=fecha?(x.hoje.acao==="retirar"?"retirado":"esgotado"):null;
+    salvaVenc(); telaValidade(); };
+  $("corpo").querySelectorAll("input[data-q]").forEach(inp=>inp.onchange=()=>{
+    const x=lotes[+inp.dataset.q], v=inp.value===""?null:Math.max(0,Math.round(Number(inp.value)));
+    if(v!=null&&Number(x.quantidade_atual)&&v>Number(x.quantidade_atual)
+       &&!confirm(`Tinha ${x.quantidade_atual} un e agora tem ${v}. Chegou mais do mesmo lote?`)) return telaValidade();
+    mover(x,v); });
+  $("corpo").querySelectorAll("[data-zero]").forEach(b=>b.onclick=()=>mover(lotes[+b.dataset.zero],0));
+  $("corpo").querySelectorAll("[data-a]").forEach(g=>{ const x=lotes[+g.dataset.a];
+    g.querySelectorAll("button").forEach(b=>b.onclick=()=>mover(x,undefined,b.dataset.v)); });
+
   rodape(editavel()
-    ? `<button class="bt sec" onclick="telaNovaValidade()">Registrar</button>` + botaoConcluir("validade")
+    ? `<button class="bt sec" onclick="telaNovaValidade()">Registrar lote</button>` + botaoConcluir("validade")
     : null);
-  if(regs.length&&editavel()){ /* avisar fica acima, para o rodape nao ter tres botoes */
+  if(ativos.length&&editavel()){
     const d=document.createElement("div"); d.innerHTML=botaoAvisar("validade").replace('class="bt"','class="bt sec" style="margin-top:6px"');
     $("corpo").appendChild(d.firstElementChild); }
   ligaAvisar();
-  ligaConcluir(()=>{ const venc=regs.filter(v=>diasAte(v.vence_em)<0&&!v.acao).length;
-    if(venc) return {ok:false, msg:`${venc} ${venc===1?"produto vencido está":"produtos vencidos estão"} sem ação. Diga o que foi feito antes de concluir.`};
-    if(!regs.length) return {ok:true, resultado:"nada_a_registrar", confirmar:"Nenhum produto vencendo nesta loja. Concluir assim?"};
+  ligaConcluir(()=>{
+    const semContar=lotesAtivos(LOJA).filter(pedeContagem);
+    if(semContar.length) return {ok:false, msg:`Falta contar ${semContar.length} ${semContar.length===1?"lote":"lotes"}: ${semContar.slice(0,2).map(x=>x.nome).join(", ")}. Diga quanto sobrou.`};
+    const vencSem=lotesAtivos(LOJA).filter(x=>diasAte(x.vence_em)<0&&Number(x.quantidade_atual)>0&&!(x.hoje&&x.hoje.acao)&&!x.registrado_hoje);
+    if(vencSem.length) return {ok:false, msg:`${vencSem.length} ${vencSem.length===1?"lote vencido continua":"lotes vencidos continuam"} na loja sem ação. Diga o que foi feito.`};
+    if(!lotesDe(LOJA).length) return {ok:true, resultado:"nada_a_registrar", confirmar:"Nenhum produto perto de vencer nesta loja. Concluir assim?"};
     return {ok:true}; });
   poeSolicitacoes("validade");
 });}
-function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
-  topo("Nova validade", telaValidade, "");
+
+function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
+  /* A lista junta o catalogo da loja com o que aparece na Oportunidade de
+     Estoque, para achar o produto mesmo que ele tenha vendido pouco. */
+  const vistos=new Set(), cat=[];
+  [...(LOJA.catalogo||[]), ...(oportDe(LOJA).itens||[])].forEach(x=>{ if(!vistos.has(x.produto_id)){ vistos.add(x.produto_id); cat.push(x); } });
+  cat.sort((a,b)=>String(a.nome).localeCompare(String(b.nome)));
+  topo("Registrar lote", telaValidade, "");
   $("corpo").innerHTML=`
+    <div class="aviso inf">O lote fica em acompanhamento: em cada visita o app pede quanto sobrou, até acabar.</div>
     <div class="campo"><label for="p">Produto</label><select id="p"><option value="">Escolha…</option>
       ${cat.map(x=>`<option value="${x.produto_id}">${esc(x.nome)}</option>`).join("")}</select></div>
     <div class="campo"><label for="d">Vence em</label><input id="d" type="date"></div>
     <div class="campo"><label for="l">Lote, se tiver</label><input id="l" autocapitalize="characters"></div>
-    <div class="campo"><label for="q">Quantidade</label><input id="q" type="number" inputmode="numeric" min="0"></div><div id="e"></div>`;
+    <div class="campo"><label for="q">Quantidade na loja agora (un)</label><input id="q" type="number" inputmode="numeric" min="1"></div><div id="e"></div>`;
   rodape(`<button class="bt" id="ok">Salvar</button>`);
   $("ok").onclick=()=>{ if(!exigeVisita()) return;
-    const pid=$("p").value, d=$("d").value;
-    if(!pid||!d){ $("e").innerHTML=`<div class="aviso err">Escolha o produto e a data de vencimento.</div>`; return; }
-    const reg={id:uid(), ...base(), produto_id:pid, vence_em:d,
-      lote:$("l").value.trim()||null, quantidade:$("q").value===""?null:Number($("q").value), acao:null};
-    LOJA.validades=LOJA.validades||[]; LOJA.validades.push(reg);
-    grava("validade","id",reg); telaValidade(); };
+    const pid=$("p").value, d=$("d").value, q=$("q").value===""?null:Math.round(Number($("q").value));
+    /* sem quantidade nao ha o que acompanhar */
+    if(!pid||!d||!q||q<1){ $("e").innerHTML=`<div class="aviso err">Escolha o produto, a data de vencimento e a quantidade.</div>`; return; }
+    const prod=cat.find(x=>x.produto_id===pid)||{};
+    const reg={id:uid(), ...base(), produto_id:pid, vence_em:d, lote:$("l").value.trim()||null,
+      quantidade:q, quantidade_inicial:q, quantidade_atual:q, status:"ativo", acao:null};
+    grava("validade","id",reg);
+    VENC=VENC||{}; (VENC[LOJA.id]=VENC[LOJA.id]||[]).push({id:reg.id, produto_id:pid, nome:prod.nome, embalagem:prod.embalagem,
+      lote:reg.lote, vence_em:d, quantidade_inicial:q, quantidade_atual:q, status:"ativo",
+      registrado_em:new Date().toISOString(), registrado_por:DIA.pessoa.nome, registrado_hoje:true});
+    salvaVenc(); telaValidade(); };
 });}
 
 /* ------------------- 3. informacoes de vendas -----------------
@@ -2236,7 +2351,7 @@ const CARTOES=[
 function quantos(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
   if(k==="ruptura")  return (oportDe(l).itens||[]).filter(zeradoOport).length;
-  if(k==="validade") return (l.validades||[]).filter(v=>diasAte(v.vence_em)<=lim).length;
+  if(k==="validade") return lotesAtivos(l).filter(x=>diasAte(x.vence_em)<=lim).length;
   if(k==="estoque")  return (oportDe(l).itens||[]).filter(x=>totalOport(x).tocou).length;
   if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
   if(k==="geladeira"){ const c=censoDe(l), ds=c.desta_semana;   /* do censo enviado hoje */
@@ -2399,7 +2514,7 @@ function limparDiasGuardados(){
      separar a contagem da visita dela. Se tiver fila, espera a proxima. */
   if(fila.itens().length) return false;
   const ks=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
-    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k.startsWith("censo:")||k.startsWith("obrig:")||k==="semana")) ks.push(k); } }catch(e){}
+    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k.startsWith("censo:")||k.startsWith("obrig:")||k.startsWith("venc:")||k==="semana")) ks.push(k); } }catch(e){}
   ks.forEach(guarda.tira); SEMANA=[];
   return true;
 }
