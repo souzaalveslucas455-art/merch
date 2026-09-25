@@ -244,6 +244,31 @@ h2.tit:first-child{margin-top:2px}
   box-shadow:0 1px 4px rgba(0,0,0,.4);border:2px solid #fff}
 .pino.feita{background:var(--verde)}
 .leaflet-container{font-family:var(--sans)}
+.ped{background:var(--papel);border:1px solid #D9DDE2;border-radius:16px;box-shadow:var(--sombra);
+  padding:14px 15px;margin-bottom:12px;cursor:pointer}
+.ped .topo-ped{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px}
+.ped .lin{display:flex;align-items:center;gap:9px;font-size:14.5px;margin:5px 0;color:var(--ink)}
+.ped .lin.forte{font-weight:700}
+.ped .lin svg{flex:none;color:var(--ink3)}
+.ped .prods{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0 4px}
+.ped .prods span{font-size:11.5px;background:var(--fundo);border:1px solid var(--linha);border-radius:8px;
+  padding:4px 8px;color:var(--ink2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ped .num3{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:6px;margin-top:10px;align-items:end}
+.ped .num3 small{display:flex;gap:5px;align-items:center;font-size:12.5px;color:var(--ink3)}
+.ped .num3 b{display:block;font-size:15.5px;margin-top:2px}
+.ped .compart{width:44px;height:44px;border-radius:50%;background:var(--verm-bg);color:var(--verm);
+  border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.tl{background:var(--papel);border-radius:14px;box-shadow:var(--sombra);padding:13px 15px;margin-bottom:12px}
+.tl .p{display:flex;gap:11px;padding:7px 0;position:relative}
+.tl .p .b{flex:none;width:11px;height:11px;border-radius:50%;background:var(--linha);margin-top:4px}
+.tl .p.ok .b{background:var(--verde)} .tl .p.al .b{background:var(--amb)} .tl .p.mau .b{background:var(--verm)}
+.tl .p div{font-size:13.5px} .tl .p small{display:block;color:var(--ink3);font-size:12px}
+.pi{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--linha)}
+.pi:last-child{border:none}
+.pi .n{font-size:14px;font-weight:700;line-height:1.3}
+.pi .g{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:6px;margin-top:7px}
+.pi .g small{display:block;font-size:12px;color:var(--ink3)} .pi .g b{font-size:14px}
+.pi .un{font-size:12px;color:var(--ink2);margin-top:5px} .pi .un b{color:var(--verde)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -264,7 +289,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-24c";
+const VERSAO_APP = "2026-09-25a";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -304,6 +329,13 @@ const IC={
   fone:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h3l2 5-2.5 1.5a12 12 0 006 6L16 13l5 2v3a2 2 0 01-2.2 2A17 17 0 014 5.2 2 2 0 016 3z"/></svg>',
   fala:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 15a2 2 0 01-2 2H8l-4 3V6a2 2 0 012-2h12a2 2 0 012 2z"/></svg>',
   mais:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  nf:'<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.6-.9 2.9.9 2.9-2.5 1.6-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.6.9-2.9-.9-2.9 2.5-1.6.9-2.9 3 .2z" opacity=".35"/><path d="M8.5 12.3l2.3 2.3 4.7-4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  lojaic:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9h18v2a3 3 0 01-6 0 3 3 0 01-6 0 3 3 0 01-6 0zM5 13v7h14v-7"/></svg>',
+  cal:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
+  cx:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>',
+  din:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/></svg>',
+  cam2:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/></svg>',
+  comp:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7-7 7M21 12H10a7 7 0 00-7 7"/></svg>',
   env:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 12L4 4l6 8-6 8z"/></svg>',
   cam:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5h3.2L8 6h8l1.8 2.5H21v11H3z"/><circle cx="12" cy="14" r="3.4"/></svg>',
   seta:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 18-8-5-8 5z"/></svg>'
@@ -641,7 +673,7 @@ async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
   if(cache&&!forcar){
-    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA);
+    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA); buscarPedidos(DATA);
     if(!pularSeHojeVazio()) buscarSemana();
     revalidarDia(DATA);
     return;
@@ -649,7 +681,7 @@ async function carregarDia(data,forcar){
   esconderTudo(); $("topo").innerHTML=`<h1 style="padding-left:14px">Carregando…</h1>`;
   $("corpo").innerHTML=`<div class="vazio">Buscando seu roteiro…</div>`; rodape(null);
   try{ DIA=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:DATA})});
-    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana(); buscarOportunidades(DATA);
+    guarda.porJ("dia:"+DATA,DIA); guarda.por("sinc",new Date().toISOString()); telaVisitas(); escoar(); buscarNaoLidas(); buscarSemana(); buscarOportunidades(DATA); buscarPedidos(DATA);
   }catch(e){ if(cache){ DIA=cache; telaVisitas(); alerta("Sem sinal. Mostrando o que estava guardado."); return; }
     if(e.status===401) return telaLogin();
     $("topo").innerHTML=`<h1 style="padding-left:14px">Erro</h1>`;
@@ -689,6 +721,20 @@ async function buscarOportunidades(data){
   }catch(e){}
 }
 const oportDe=l=>(OPORT&&OPORT[l.id])||{total:0,itens:[],limite:15};
+
+let PEDIDOS=null;   // loja_id -> lista de notas com produtos
+async function buscarPedidos(data){
+  const guardado=guarda.lerJ("pedidos:"+data);
+  if(guardado) PEDIDOS=guardado;
+  if(!navigator.onLine) return;
+  try{
+    const r=await api("/rest/v1/rpc/meus_pedidos",{method:"POST",body:JSON.stringify({p_data:data})});
+    if(data!==DATA) return;
+    PEDIDOS=r||{}; guarda.porJ("pedidos:"+data,PEDIDOS);
+    if(TELA==="loja") telaLoja();
+  }catch(e){}
+}
+const pedidosDe=l=>(PEDIDOS&&PEDIDOS[l.id])||[];
 
 async function revalidarDia(data){
   if(!navigator.onLine || fila.itens().length) return;
@@ -968,9 +1014,9 @@ function telaMapa(){ montar(()=>{ TELA="mapa"; esconderTudo();
 
 /* ---------------------- entrada da loja ---------------------- */
 const MODULOS=[
-  {k:"contagem", ic:"1", nome:"Oportunidade do Estoque", tela:()=>telaOportunidade()},
-  {k:"validade", ic:"2", nome:"Validade",                tela:()=>telaValidade()},
-  {k:"chegadas", ic:"3", nome:"Chegadas",                tela:()=>telaChegadas()},
+  {k:"contagem", ic:"1", nome:"Oportunidade de Estoque", tela:()=>telaOportunidade()},
+  {k:"validade", ic:"2", nome:"Controle de Vencimentos", tela:()=>telaValidade()},
+  {k:"chegadas", ic:"3", nome:"Informações de Vendas",   tela:()=>telaPedidos()},
   {k:"exposicao",ic:"4", nome:"Exposição e ponto extra", tela:()=>telaExposicao()},
   {k:"preco",    ic:"5", nome:"Preço e concorrência",    tela:()=>telaPreco()},
   {k:"pdv",      ic:"6", nome:"Materiais e geladeira",   tela:()=>telaPdv()},
@@ -990,9 +1036,16 @@ function resumo(k){
   if(k==="validade"){ const v=l.validades||[], crit=v.filter(x=>diasAte(x.vence_em)<=lim).length;
     return {txt:v.length?`${v.length} ${v.length===1?"registro":"registros"}${crit?` · ${crit} em alerta`:""}`:"nada registrado",
       pronto:v.length>0&&crit===0, alerta:crit>0}; }
-  if(k==="chegadas"){ const n=l.notas||[], falta=n.filter(x=>!x.conferido).length;
-    return {txt:n.length?`${n.length-falta} de ${n.length} conferidas`:"nenhuma nota prevista",
-      pronto:n.length>0&&falta===0, alerta:n.some(x=>x.dias>0&&!x.conferido)}; }
+  if(k==="chegadas"){ const ps=pedidosDe(l);
+    if(!ps.length){ const n=l.notas||[];
+      return {txt:n.length?`${n.length} ${n.length===1?"nota prevista":"notas previstas"}`:"pedidos e entregas da loja",
+              pronto:false, alerta:n.some(x=>x.dias>0&&!x.conferido)}; }
+    const ab=ps.filter(x=>situacaoPedido(x).k==="aberto").length;
+    const cam=ps.filter(x=>situacaoPedido(x).k==="caminho").length;
+    const p=[`${ps.length} ${ps.length===1?"pedido":"pedidos"}`];
+    if(cam) p.push(`${cam} a caminho`);
+    if(ab) p.push(`${ab} em aberto`);
+    return {txt:p.join(" · "), pronto:ab===0, alerta:ab>0}; }
   if(k==="exposicao"){ const e=l.exposicoes||[], ruim=e.filter(x=>x.situacao==="ausente").length;
     return {txt:e.length?`${e.length} ${e.length===1?"ponto":"pontos"}${ruim?` · ${ruim} ausente`:""}`:"nada registrado",
       pronto:e.length>0&&ruim===0, alerta:ruim>0}; }
@@ -1169,7 +1222,7 @@ let VER_TODAS=false;
 function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   const o=oportDe(LOJA), todas=o.itens||[], lim=o.limite||15;
   const lista=VER_TODAS?todas:todas.slice(0,lim);
-  topo("Oportunidade do Estoque", ()=>{ VER_TODAS=false; telaLoja(); }, "");
+  topo("Oportunidade de Estoque", ()=>{ VER_TODAS=false; telaLoja(); }, "");
 
   if(o.sem_base || !todas.length){
     $("corpo").innerHTML=`<div class="vazio">${o.sem_base
@@ -1181,6 +1234,12 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   const u=unidAtual(), rot=u==="cx"?"cx":"un";
   const r=resumoOport(LOJA);
   const fmt=n=>Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1});
+  /* Tudo no card segue o seletor do topo: a compra normal, o pedido e o
+     total. Antes so os campos de digitar mudavam, e a linha de compra ficava
+     presa em caixa, com o repositor contando em unidade. */
+  const volumeTxt=(cx,it)=> u==="cx"
+    ? `${fmt(cx)} cx`
+    : `${Math.round(Number(cx)*fator(it)).toLocaleString("pt-BR")} un`;
   const cartao=(it,i)=>{
     const cl=CLASSE[it.classe]||{}, c=it.contagem||{}, t=totalOport(it);
     const ativos=c.locais||LOCAIS.map(x=>x[0]).filter(k=>c[k+"cx"]!=null||c[k+"un"]!=null);
@@ -1191,7 +1250,7 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
           <div class="emb">${esc(it.embalagem||"")}${fator(it)>1?` · 1 cx = ${fator(it)} un`:""}</div></div>
         <span class="selo" style="background:${cl.bg};color:${cl.cor};flex:none">${cl.t}</span></div>
       <div class="emb" style="margin-top:6px;color:var(--ink2)">
-        Compra normal <b>${fmt(it.normal_cx)} cx/mês</b> · pediu <b>${fmt(it.pedido_cx)} cx</b> este mês</div>
+        Compra normal <b>${volumeTxt(it.normal_cx,it)}/mês</b> · pediu <b>${volumeTxt(it.pedido_cx,it)}</b> este mês</div>
       <div class="pilha" data-loc="${i}">
         ${LOCAIS.map(([k,n])=>`<button data-k="${k}" class="${ativos.includes(k)?"on":""}">${n}</button>`).join("")}
         <button data-k="x" class="${c.naoTem?"on mau":""}">Não tem</button>
@@ -1200,7 +1259,7 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
         <div style="min-width:44%"><label>${LOCAIS.find(x=>x[0]===k)[1]} (${rot})</label>
           <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-q="${k}" value="${valor(k)??""}"></div>`).join("")}
       </div>`:""}
-      ${t.tocou?`<div class="emb" style="margin-top:7px">total ${Math.round(t.un)} un${fator(it)>1?` · ${fmt(t.cx)} cx`:""}</div>`:""}
+      ${t.tocou?`<div class="emb" style="margin-top:7px">total contado <b>${u==="cx"?fmt(t.cx)+" cx":Math.round(t.un).toLocaleString("pt-BR")+" un"}</b>${fator(it)>1?` · ${u==="cx"?Math.round(t.un).toLocaleString("pt-BR")+" un":fmt(t.cx)+" cx"}`:""}</div>`:""}
       ${zeradoOport(it)?`<div class="pilha" data-mo="${i}">
         ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}</div>`:""}
     </div>`;
@@ -1272,7 +1331,7 @@ const ACOES=[["girar","Mudei de lugar para girar"],["registrar","Só registrei e
 function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   const lim=DIA.dias_alerta_validade||30;
   const regs=(LOJA.validades||[]).slice().sort((a,b)=>String(a.vence_em).localeCompare(String(b.vence_em)));
-  topo("Validade", ()=>telaLoja(), "");
+  topo("Controle de Vencimentos", ()=>telaLoja(), "");
   $("corpo").innerHTML=`<div class="aviso inf">Alerta a partir de ${lim} dias para vencer.</div>`+
     (regs.length?regs.map((v,i)=>{ const d=diasAte(v.vence_em), cls=d<0?"crit":d<=lim?"aten":"";
       const prod=(LOJA.catalogo||[]).find(p=>p.produto_id===v.produto_id);
@@ -1314,28 +1373,151 @@ function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=
     grava("validade","id",reg); telaValidade(); };
 });}
 
-/* --------------------------- 3. chegadas --------------------- */
-function telaChegadas(){ montar(()=>{ TELA="mod"; esconderTudo(); const notas=LOJA.notas||[];
-  topo("Chegadas", ()=>telaLoja(), "");
-  $("corpo").innerHTML=notas.length?notas.map((n,i)=>`
-    <div class="item ${n.dias>0?"aten":""}"><div class="nome">Nota ${esc(n.numero)}</div>
-      <div class="emb">${n.itens} ${n.itens===1?"item":"itens"} · previsto para ${dataBr(n.previsao)}</div>
-      ${n.dias>0?`<div style="margin-top:7px"><span class="selo alta">${n.dias} ${n.dias===1?"dia":"dias"} sem baixa</span></div>`:""}
-      <div class="pilha" data-n="${i}">
-        <button class="${n.conferido==="chegou"?"on":""}" data-s="chegou">Chegou</button>
-        <button class="${n.conferido==="parcial"?"on meio":""}" data-s="parcial">Em parte</button>
-        <button class="${n.conferido==="nao_chegou"?"on mau":""}" data-s="nao_chegou">Não chegou</button>
-      </div></div>`).join(""):`<div class="vazio">Nenhuma nota prevista para esta loja.</div>`;
-  $("corpo").querySelectorAll("[data-n]").forEach(g=>{ const n=notas[+g.dataset.n];
-    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
-      n.conferido=b.dataset.s;
-      g.querySelectorAll("button").forEach(x=>x.classList.remove("on","mau","meio"));
-      b.classList.add("on"); if(b.dataset.s==="nao_chegou") b.classList.add("mau");
-      if(b.dataset.s==="parcial") b.classList.add("meio");
-      grava("entrega_confirmada","nota_numero,visita_id",{nota_numero:n.numero,
-        visita_id:LOJA.visita.id, pessoa_id:DIA.pessoa.id, situacao:b.dataset.s}); }); });
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+/* ------------------- 3. informacoes de vendas -----------------
+   Os pedidos da loja no desenho do RTM, que o comercial ja conhece: card com
+   nota, loja, data, produtos, caixas, total e entrega; e o detalhe com o valor
+   da caixa e o da unidade dentro dela.
+
+   A situacao junta duas fontes: o status do ERP (aberta ou acertada) e o que
+   o repositor viu na loja. Aberta nao quer dizer que nao chegou: pode ter
+   chegado e nao ter acertado no caixa. Quem separa as duas coisas e o
+   repositor, confirmando no detalhe.
+------------------------------------------------------------- */
+const MESES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto",
+             "setembro","outubro","novembro","dezembro"];
+const dataLonga=d=>{ const [a,m,dd]=String(d).slice(0,10).split("-").map(Number);
+  return `${dd} de ${MESES[m-1]} de ${a}`; };
+const reais=v=>"R$ "+Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const cxTxt=n=>{ const v=Number(n||0); return `${v.toLocaleString("pt-BR",{maximumFractionDigits:1})} ${v===1?"Caixa":"Caixas"}`; };
+
+/* A situacao que o repositor enxerga, em ordem de importancia. */
+function situacaoPedido(n){
+  const conf=n.conferido&&n.conferido.situacao;
+  if(n.status==="ACERTADA") return {k:"entregue", t:"Entregue", cor:"var(--verde)", bg:"var(--verde-bg)"};
+  if(conf==="chegou")       return {k:"entregue", t:"Chegou · sem acerto", cor:"var(--verde)", bg:"var(--verde-bg)"};
+  if(conf==="nao_chegou")   return {k:"aberto",   t:"Não chegou", cor:"var(--verm)", bg:"var(--verm-bg)"};
+  if(conf==="parcial")      return {k:"aberto",   t:"Chegou em parte", cor:"var(--amb)", bg:"var(--amb-bg)"};
+  if(n.dias>0)              return {k:"aberto",   t:`Em aberto há ${n.dias} ${n.dias===1?"dia":"dias"}`, cor:"var(--amb)", bg:"var(--amb-bg)"};
+  return                           {k:"caminho",  t:"A caminho", cor:"var(--azul)", bg:"var(--azul-bg)"};
+}
+const FILTROS=[["todos","Todos"],["caminho","A caminho"],["aberto","Em aberto"],["entregue","Entregues"]];
+let FILTRO_PED="todos";
+
+function textoPedido(n){
+  const its=(n.itens||[]).map(i=>`• ${i.nome}: ${cxTxt(i.caixas)}`).join("\n");
+  return `Pedido NF ${n.numero}\n${LOJA.codigo} · ${LOJA.nome}\nEmitido em ${dataBr(n.emissao)} · entrega ${dataBr(n.previsao)}\n`
+    +`${cxTxt(n.caixas)} · ${reais(n.valor)}\nSituação: ${situacaoPedido(n).t}\n\n${its}`;
+}
+function compartilharPedido(n){
+  const t=textoPedido(n);
+  if(navigator.share) navigator.share({title:"Pedido NF "+n.numero, text:t}).catch(()=>{});
+  else open("https://wa.me/?text="+encodeURIComponent(t),"_blank");
+}
+
+function cardPedido(n,i){
+  const st=situacaoPedido(n), its=n.itens||[];
+  return `<div class="ped" data-p="${i}">
+    <div class="topo-ped">
+      <span class="selo" style="background:${st.bg};color:${st.cor};font-weight:600">${st.t}</span>
+      ${n.consultor?`<span style="font-size:12px;color:var(--ink3);text-align:right">${esc(String(n.consultor).split(" ").slice(0,2).join(" "))}</span>`:""}
+    </div>
+    <div class="lin forte">${IC.nf}NF ${esc(n.numero)}</div>
+    <div class="lin forte">${IC.lojaic}${esc(LOJA.codigo)} • ${esc(LOJA.nome)}</div>
+    <div class="lin">${IC.cal}${dataLonga(n.emissao)}</div>
+    <div style="display:flex;align-items:flex-end;gap:10px">
+      <div class="prods" style="flex:1;min-width:0">
+        ${its.slice(0,3).map(x=>`<span>${esc(x.nome)}</span>`).join("")}
+        ${its.length>3?`<span>+${its.length-3}</span>`:""}
+      </div>
+      <button class="compart" data-c="${i}" aria-label="Compartilhar">${IC.comp}</button>
+    </div>
+    <div class="num3">
+      <div><small>${IC.cx}Caixas</small><b>${cxTxt(n.caixas)}</b></div>
+      <div><small>${IC.din}Total</small><b>${reais(n.valor)}</b></div>
+      <div><small>${IC.cam2}Entrega</small><b>${dataBr(n.previsao).slice(0,5)}</b></div>
+    </div></div>`;
+}
+
+function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Informações de Vendas", ()=>{ FILTRO_PED="todos"; telaLoja(); }, "");
+  const todos=pedidosDe(LOJA);
+  if(!todos.length){
+    $("corpo").innerHTML=`<div class="vazio">${PEDIDOS?"Nenhum pedido desta loja nos últimos 30 dias."
+      :"Ainda buscando os pedidos. Se estiver sem sinal, eles aparecem quando voltar."}</div>`;
+    return rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
+  }
+  const conta=k=>todos.filter(n=>k==="todos"||situacaoPedido(n).k===k).length;
+  const vis=todos.map((n,i)=>({n,i})).filter(x=>FILTRO_PED==="todos"||situacaoPedido(x.n).k===FILTRO_PED);
+  const abertos=todos.filter(n=>situacaoPedido(n).k==="aberto").length;
+  $("corpo").innerHTML=`
+    ${abertos?`<div class="aviso amb"><b>${abertos} ${abertos===1?"pedido em aberto":"pedidos em aberto"}.</b><br>
+      Toque no pedido e confirme se chegou.</div>`:""}
+    <div class="pilha" id="fped" style="margin:0 0 12px">
+      ${FILTROS.map(([k,t])=>`<button data-f="${k}" class="${FILTRO_PED===k?"on":""}">${t} · ${conta(k)}</button>`).join("")}
+    </div>
+    ${vis.length?vis.map(x=>cardPedido(x.n,x.i)).join(""):`<div class="vazio">Nenhum pedido neste filtro.</div>`}`;
+  $("fped").querySelectorAll("button").forEach(b=>b.onclick=()=>{ FILTRO_PED=b.dataset.f; telaPedidos(); });
+  $("corpo").querySelectorAll(".ped").forEach(c=>c.onclick=e=>{
+    if(e.target.closest(".compart")) return; telaPedido(todos[+c.dataset.p]); });
+  $("corpo").querySelectorAll(".compart").forEach(b=>b.onclick=e=>{
+    e.stopPropagation(); compartilharPedido(todos[+b.dataset.c]); });
+  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
 });}
+
+function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Detalhes do pedido", telaPedidos, "");
+  const st=situacaoPedido(n), conf=n.conferido;
+  const passos=[
+    {ok:true, t:"Pedido faturado", d:dataLonga(n.emissao)},
+    {ok:true, al:n.dias>0&&n.status!=="ACERTADA"&&!(conf&&conf.situacao==="chegou"),
+     t:`Previsão de entrega: ${dataBr(n.previsao)}`, d:"2 dias úteis após o faturamento"},
+    conf?{ok:conf.situacao==="chegou", al:conf.situacao==="parcial", mau:conf.situacao==="nao_chegou",
+          t:{chegou:"Repositor confirmou: chegou",parcial:"Repositor confirmou: chegou em parte",
+             nao_chegou:"Repositor confirmou: não chegou"}[conf.situacao]||"Conferido",
+          d:`${conf.por?String(conf.por).split(" ")[0]+" · ":""}${new Date(conf.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`}
+        :(n.status==="ACERTADA"?null
+          :{t:"Aguardando conferência do repositor", d:"confirme abaixo quando estiver na loja"}),
+    n.status==="ACERTADA"?{ok:true,t:"Acertado no caixa",d:"baixado no sistema"}
+                         :{t:"Ainda não acertado no caixa",d:"aberto no sistema"}
+  ];
+  $("corpo").innerHTML=`
+    ${cardPedido(n,0).replace('class="ped"','class="ped" style="cursor:default"')}
+    <h2 class="tit">HISTÓRICO DE STATUS</h2>
+    <div class="tl">${passos.filter(Boolean).map(x=>`<div class="p ${x.mau?"mau":x.al?"al":x.ok?"ok":""}"><span class="b"></span>
+      <div>${esc(x.t)}<small>${esc(x.d)}</small></div></div>`).join("")}</div>
+    ${n.status!=="ACERTADA"?`<h2 class="tit">O PEDIDO CHEGOU?</h2>
+      <div class="pilha" id="confped" style="margin-top:0">
+        <button data-s="chegou" class="${conf&&conf.situacao==="chegou"?"on":""}">Chegou</button>
+        <button data-s="parcial" class="${conf&&conf.situacao==="parcial"?"on meio":""}">Em parte</button>
+        <button data-s="nao_chegou" class="${conf&&conf.situacao==="nao_chegou"?"on mau":""}">Não chegou</button>
+      </div>`:""}
+    <h2 class="tit">PRODUTOS · ${(n.itens||[]).length}</h2>
+    <div class="tl">${(n.itens||[]).map(x=>{
+      const vc=Number(x.caixas)>0?Number(x.valor)/Number(x.caixas):null;
+      const vu=vc!=null&&Number(x.fator_cx)>0?vc/Number(x.fator_cx):null;
+      return `<div class="pi"><div style="flex:1;min-width:0">
+        <div class="n">${esc(x.sku)} • ${esc(x.nome)}</div>
+        <div class="g">
+          <div><small>Caixas</small><b>${cxTxt(x.caixas)}</b></div>
+          <div><small>Valor caixa</small><b>${vc!=null?reais(vc)+"/CX":"—"}</b></div>
+          <div><small>Total</small><b>${reais(x.valor)}</b></div></div>
+        ${vu!=null&&Number(x.fator_cx)>1?`<div class="un">A unidade dentro da caixa custou <b>${reais(vu)}/UN</b></div>`:""}
+      </div></div>`; }).join("")}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 4px 4px;
+      border-top:1px solid var(--linha);margin-top:4px;font-size:17px;font-weight:700">
+      <span>Total</span><span>${reais(n.valor)}</span></div>`;
+  $("corpo").querySelectorAll(".compart").forEach(b=>b.onclick=e=>{ e.stopPropagation(); compartilharPedido(n); });
+  if($("confped")) $("confped").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    if(!exigeVisita()) return;
+    n.conferido={situacao:b.dataset.s, em:new Date().toISOString(), por:DIA.pessoa&&DIA.pessoa.nome};
+    guarda.porJ("pedidos:"+DATA,PEDIDOS);
+    const notaDia=(LOJA.notas||[]).find(x=>x.numero===n.numero); if(notaDia) notaDia.conferido=b.dataset.s;
+    grava("entrega_confirmada","nota_numero,visita_id",{nota_numero:n.numero,
+      visita_id:LOJA.visita.id, pessoa_id:DIA.pessoa.id, situacao:b.dataset.s});
+    telaPedido(n); });
+  rodape(`<button class="bt sec" onclick="telaPedidos()">Voltar aos pedidos</button>`);
+});}
+const telaChegadas=telaPedidos;   // nome antigo, caso algo ainda chame
 
 /* -------------------------- 4. exposicao --------------------- */
 const PONTOS=[["gondola","Gôndola"],["ponta_gondola","Ponta de gôndola"],["ponto_extra","Ponto extra"],
@@ -1724,7 +1906,7 @@ function encerrarVisita(){
   /* Zerado sem motivo nao passa: o dado sem motivo nao serve para o lider
      nem para o comercial. O resto e aviso; este e barreira. */
   if(r.semMotivo){
-    alerta(`${r.semMotivo} ${r.semMotivo===1?"produto zerado está":"produtos zerados estão"} sem motivo. Abra a Oportunidade do Estoque e informe.`);
+    alerta(`${r.semMotivo} ${r.semMotivo===1?"produto zerado está":"produtos zerados estão"} sem motivo. Abra a Oportunidade de Estoque e informe.`);
     return telaOportunidade();
   }
   const alvo=Math.min(r.total, oportDe(LOJA).limite||15);
@@ -1752,7 +1934,7 @@ function limparDiasGuardados(){
      separar a contagem da visita dela. Se tiver fila, espera a proxima. */
   if(fila.itens().length) return false;
   const ks=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
-    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k==="semana")) ks.push(k); } }catch(e){}
+    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k==="semana")) ks.push(k); } }catch(e){}
   ks.forEach(guarda.tira); SEMANA=[];
   return true;
 }
