@@ -269,6 +269,37 @@ h2.tit:first-child{margin-top:2px}
 .pi .g{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:6px;margin-top:7px}
 .pi .g small{display:block;font-size:12px;color:var(--ink3)} .pi .g b{font-size:14px}
 .pi .un{font-size:12px;color:var(--ink2);margin-top:5px} .pi .un b{color:var(--verde)}
+.sw-lin{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0}
+.sw-lin span{font-size:14.5px;color:var(--ink);line-height:1.35}
+.sw{position:relative;flex:none;width:50px;height:28px;cursor:pointer}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw i{position:absolute;inset:0;background:#D7DBE0;border-radius:28px;transition:background .15s}
+.sw i:after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.sw input:checked+i{background:var(--verm)}
+.sw input:checked+i:after{transform:translateX(22px)}
+.sw input:focus-visible+i{outline:3px solid var(--azul-bg)}
+.ativo{background:var(--papel);border:1px solid var(--linha);border-radius:14px;padding:14px;margin-bottom:12px}
+.ativo .cab{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.ativo .cab b{font-size:15px}
+.ativo .x{background:none;border:none;color:var(--verm);font-size:22px;line-height:1;cursor:pointer;padding:2px 6px}
+.fotobox{width:112px;height:112px;border:2px dashed #7FB8D6;border-radius:12px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;color:#3B8FBF;font-size:13px;cursor:pointer;background:none;
+  overflow:hidden;padding:0}
+.fotobox img{width:100%;height:100%;object-fit:cover}
+.fotobox .mais{font-size:30px;line-height:1}
+.ptm{display:flex;gap:8px;margin-top:6px}
+.ptm input{flex:1}
+.ptm button{flex:none;background:#3B8FBF;color:#fff;border:none;border-radius:12px;padding:0 18px;
+  font:inherit;font-weight:600;cursor:pointer}
+.adic{width:100%;border:2px dashed #7CC4A6;border-radius:14px;background:none;color:var(--verde);
+  font:inherit;font-weight:600;padding:14px;cursor:pointer;margin-bottom:14px}
+.leitor{position:fixed;inset:0;background:#000;z-index:60;display:flex;flex-direction:column}
+.leitor video{flex:1;width:100%;object-fit:cover;min-height:0}
+.leitor .mira{position:absolute;left:12%;right:12%;top:38%;height:22%;border:3px solid #fff;border-radius:12px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
+.leitor p{position:absolute;left:0;right:0;top:64%;text-align:center;color:#fff;font-size:14px;margin:0}
+.leitor button{margin:14px;padding:15px;border:none;border-radius:12px;font:inherit;font-weight:600}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -289,7 +320,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-25a";
+const VERSAO_APP = "2026-09-25b";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -480,8 +511,9 @@ async function escoarFotos(){
           "Content-Type":"image/jpeg","x-upsert":"true"}, body:f.blob});
       if(r.status===401){ if(await renovar()) continue; throw new Error("sessão expirada"); }
       if(!r.ok&&r.status!==409) throw new Error("HTTP "+r.status);
-      // so agora o registro aponta para a foto
-      fila.poe({tabela:f.alvo.tabela, chave:f.alvo.chave,
+      // so agora o registro aponta para a foto. O censo e excecao: ele grava
+      // tudo de uma vez no Enviar, e a foto so precisa estar no armazenamento.
+      if(!f.alvo.semRegistro) fila.poe({tabela:f.alvo.tabela, chave:f.alvo.chave,
         corpo:{...f.alvo.corpo, foto_url:f.caminho}});
       await cofreFoto.tira(f.id);
       if(DIA){ // tira o "enviando..." da tela
@@ -673,7 +705,7 @@ async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
   if(cache&&!forcar){
-    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA); buscarPedidos(DATA);
+    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA); buscarPedidos(DATA); buscarCenso(DATA); buscarCenso(DATA);
     if(!pularSeHojeVazio()) buscarSemana();
     revalidarDia(DATA);
     return;
@@ -735,6 +767,25 @@ async function buscarPedidos(data){
   }catch(e){}
 }
 const pedidosDe=l=>(PEDIDOS&&PEDIDOS[l.id])||[];
+
+let CENSO=null;   // loja_id -> {feito_na_semana, feito_em, obrigatorio_hoje, anteriores}
+async function buscarCenso(data){
+  const guardado=guarda.lerJ("censo:"+data);
+  if(guardado) CENSO=guardado;
+  if(!navigator.onLine) return;
+  try{
+    const r=await api("/rest/v1/rpc/censo_semana",{method:"POST",body:JSON.stringify({p_data:data})});
+    if(data!==DATA) return;
+    /* O que foi enviado daqui e ainda nao chegou ao servidor vale mais. */
+    const local=guardado||{};
+    CENSO=r||{};
+    for(const [k,v] of Object.entries(local)) if(v&&v.enviado_aqui&&CENSO[k]) Object.assign(CENSO[k],
+      {feito_na_semana:true, feito_em:v.feito_em, obrigatorio_hoje:false, enviado_aqui:true});
+    guarda.porJ("censo:"+data,CENSO);
+    if(TELA==="loja") telaLoja();
+  }catch(e){}
+}
+const censoDe=l=>(CENSO&&CENSO[l.id])||{};
 
 async function revalidarDia(data){
   if(!navigator.onLine || fila.itens().length) return;
@@ -842,7 +893,7 @@ function modulosFeitos(l){
   if((l.notas||[]).length&&(l.notas||[]).every(x=>x.conferido)) n++;
   if((l.exposicoes||[]).length) n++;
   if(cat.some(x=>x.contagem&&x.contagem.preco!=null)) n++;
-  if((l.materiais||[]).length) n++;
+  if(censoDe(l).feito_na_semana) n++;
   return n;
 }
 function pintaLojas(){
@@ -1019,7 +1070,7 @@ const MODULOS=[
   {k:"chegadas", ic:"3", nome:"Informações de Vendas",   tela:()=>telaPedidos()},
   {k:"exposicao",ic:"4", nome:"Exposição e ponto extra", tela:()=>telaExposicao()},
   {k:"preco",    ic:"5", nome:"Preço e concorrência",    tela:()=>telaPreco()},
-  {k:"pdv",      ic:"6", nome:"Materiais e geladeira",   tela:()=>telaPdv()},
+  {k:"pdv",      ic:"6", nome:"Materiais e Geladeiras",  tela:()=>telaAtivos()},
   {k:"conversa", ic:"7", nome:"Conversa",                tela:()=>telaConversa()}
 ];
 let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
@@ -1051,9 +1102,8 @@ function resumo(k){
       pronto:e.length>0&&ruim===0, alerta:ruim>0}; }
   if(k==="preco"){ const pr=cat.filter(x=>x.contagem&&x.contagem.preco!=null).length, cc=(l.concorrentes||[]).length;
     return {txt:`${pr} ${pr===1?"preço":"preços"}${cc?` · ${cc} concorrente`:""}`, pronto:pr>0, alerta:false}; }
-  if(k==="pdv"){ const m=l.materiais||[], ruim=m.filter(x=>x.situacao!=="ok").length;
-    return {txt:m.length?`${m.length} ${m.length===1?"item":"itens"}${ruim?` · ${ruim} com problema`:""}`:"nada registrado",
-      pronto:m.length>0&&ruim===0, alerta:ruim>0}; }
+  if(k==="pdv"){ const e=estadoCenso(l);
+    return {txt:e.txt, pronto:e.k==="feito", alerta:e.k==="obrig"}; }
   if(k==="conversa"){ const n=naoLidas(l.id), v=semVer(l.id);
     const partes=[];
     if(n) partes.push(`${n} ${n===1?"mensagem nova":"mensagens novas"}`);
@@ -1606,47 +1656,172 @@ function telaNovoConcorrente(){ montar(()=>{ TELA="mod"; esconderTudo();
     grava("concorrencia","id",r); telaPreco(); };
 });}
 
-/* ------------------------- 6. materiais ---------------------- */
-const MATERIAIS=[["geladeira","Geladeira"],["faixa_gondola","Faixa de gôndola"],["display","Display"],
-  ["cartaz","Cartaz"],["adesivo","Adesivo"],["movel","Móvel"]];
-const SIT_MAT=[["ok","OK"],["danificado","Danificado"],["ausente","Ausente"],
-  ["desligado","Desligado"],["mal_posicionado","Mal posicionado"],["sujo","Sujo"]];
-function telaPdv(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LOJA.materiais||[];
-  topo("Materiais", ()=>telaLoja(), "");
-  $("corpo").innerHTML=MATERIAIS.map(mt=>{ const r=regs.find(x=>x.tipo===mt[0])||{};
-    return `<div class="item" data-t="${mt[0]}"><div class="nome">${mt[1]}</div>
-      <div class="pilha sit">${SIT_MAT.map(s=>`<button class="${r.situacao===s[0]?("on "+(s[0]==="ok"?"":"mau")):""}" data-s="${s[0]}">${s[1]}</button>`).join("")}</div>
-      ${mt[0]==="geladeira"?`<div class="nums">
-        <div><label>Temperatura °C</label><input type="number" inputmode="decimal" step="0.5" data-c="temperatura" value="${r.temperatura==null?"":r.temperatura}"></div>
-        <div><label>Ocupação %</label><input type="number" inputmode="numeric" min="0" max="100" data-c="ocupacao" value="${r.ocupacao==null?"":r.ocupacao}"></div></div>
-        <div class="campo" style="margin:10px 0 0"><label>Patrimônio</label>
-          <input data-c="patrimonio" value="${esc(r.patrimonio==null?"":r.patrimonio)}" autocapitalize="characters"></div>`:""}
-      ${blocoFoto(r)}</div>`; }).join("");
-  $("corpo").querySelectorAll("[data-t]").forEach(g=>{ const tipo=g.dataset.t;
-    const atual=()=>{ LOJA.materiais=LOJA.materiais||[];
-      let r=LOJA.materiais.find(x=>x.tipo===tipo); if(!r){ r={id:uid(),tipo:tipo}; LOJA.materiais.push(r); } return r; };
-    const envia=r=>{ if(!r.situacao) r.situacao="ok";
-      grava("material_pdv","id",{id:r.id, ...base(), tipo:r.tipo, situacao:r.situacao,
-        patrimonio:r.patrimonio||null, temperatura:r.temperatura==null?null:r.temperatura,
-        ocupacao:r.ocupacao==null?null:r.ocupacao}); };
-    g.querySelectorAll(".sit button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
-      const r=atual(); r.situacao=b.dataset.s;
-      g.querySelectorAll(".sit button").forEach(x=>x.classList.remove("on","mau"));
-      b.classList.add("on"); if(b.dataset.s!=="ok") b.classList.add("mau"); envia(r); });
-    g.querySelectorAll("input[data-c]").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.value=""; return; }
-      const r=atual(), c=inp.dataset.c;
-      r[c]= c==="patrimonio" ? (inp.value.trim()||null) : (inp.value===""?null:Number(inp.value));
-      envia(r); });
-    const r=atual();
-    ligaFoto(g, r, {tabela:"material_pdv", chave:"id", corpo:{id:r.id, ...base(), tipo:r.tipo,
-      situacao:r.situacao||"ok", patrimonio:r.patrimonio||null,
-      temperatura:r.temperatura==null?null:r.temperatura,
-      ocupacao:r.ocupacao==null?null:r.ocupacao}}, telaPdv); });
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`
-    + (quantos("geladeira")?botaoAvisar("geladeira"):""));
-  ligaAvisar();
+/* ------------------ 6. materiais e geladeiras -----------------
+   Censo de ativos, no desenho do censo de geladeiras do RTM: tem geladeira no
+   ponto de venda? Cada uma com foto, patrimonio, se esta visivel e se esta com
+   75% de produto Coca-Cola. O mesmo para gondola, display, ilha e outros.
+
+   Nao e de toda visita: e uma vez por semana por loja, feito por qualquer
+   repositor dela. So trava o encerramento na ULTIMA visita da semana, se
+   ninguem fez ainda. Por isso tem botao Enviar, diferente dos outros modulos:
+   o censo e um retrato, e so conta quando esta completo.
+------------------------------------------------------------- */
+const TIPOS_ATIVO=[["gondola","Gôndola"],["display","Display"],["ilha","Ilha"],
+                   ["checkout","Checkout"],["material","Material de PDV"],["outro","Outro"]];
+const chaveRasc=()=>"rasc:"+LOJA.id+":"+DATA;
+
+function rascunhoCenso(){
+  let r=guarda.lerJ(chaveRasc());
+  if(r) return r;
+  /* Semana nova: traz o que tinha no ultimo censo, com o patrimonio. O
+     repositor confirma que continua la e tira foto nova, que e o que da
+     valor ao censo. */
+  const ant=censoDe(LOJA).anteriores||[];
+  const gel=ant.filter(a=>a.tipo==="geladeira").map(a=>({id:uid(),tipo:"geladeira",patrimonio:a.patrimonio||"",
+    visivel:false,ocupacao_ko_75:false,foto:null,veioDoAnterior:true}));
+  const out=ant.filter(a=>a.tipo!=="geladeira").map(a=>({id:uid(),tipo:a.tipo,patrimonio:a.patrimonio||"",
+    visivel:false,ocupacao_ko_75:false,foto:null,veioDoAnterior:true}));
+  return {tem_geladeira:gel.length>0, tem_outros:out.length>0, geladeiras:gel, outros:out};
+}
+const salvaRasc=r=>guarda.porJ(chaveRasc(),r);
+
+function estadoCenso(l){
+  const c=censoDe(l);
+  if(c.feito_na_semana) return {k:"feito", txt:`feito esta semana${c.feito_em?" em "+dataBr(c.feito_em).slice(0,5):""}`};
+  if(c.obrigatorio_hoje) return {k:"obrig", txt:"obrigatório hoje: última visita da semana"};
+  return {k:"pend", txt:"pendente esta semana"};
+}
+
+/* Leitor de codigo de barras do patrimonio. Usa o leitor que ja vem no
+   navegador do Android. No iPhone ele nao existe; ai o repositor digita. */
+async function escanearPtm(){
+  if(!("BarcodeDetector" in window)){
+    alerta("Este celular não lê código pela câmera. Digite o número do patrimônio.");
+    return null;
+  }
+  let formatos=["code_128","code_39","ean_13","ean_8","qr_code","itf","codabar","upc_a"];
+  try{ const sup=await BarcodeDetector.getSupportedFormats(); formatos=formatos.filter(f=>sup.includes(f)); }catch(e){}
+  let stream;
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}); }
+  catch(e){ alerta("Não consegui abrir a câmera. Libere o acesso ou digite o número."); return null; }
+  return new Promise(res=>{
+    const cx=document.createElement("div"); cx.className="leitor";
+    cx.innerHTML=`<video autoplay playsinline muted></video><div class="mira"></div>
+      <p>Aponte para a etiqueta do patrimônio</p><button id="lfechar">Cancelar e digitar</button>`;
+    document.body.appendChild(cx);
+    const v=cx.querySelector("video"); v.srcObject=stream;
+    const det=new BarcodeDetector({formats:formatos});
+    let fim=false;
+    const acaba=val=>{ if(fim) return; fim=true; stream.getTracks().forEach(t=>t.stop()); cx.remove(); res(val); };
+    cx.querySelector("#lfechar").onclick=()=>acaba(null);
+    const volta=async()=>{ if(fim) return;
+      try{ const cods=await det.detect(v); if(cods&&cods.length) return acaba(String(cods[0].rawValue).trim()); }catch(e){}
+      setTimeout(volta,250); };
+    v.onloadedmetadata=()=>volta();
+  });
+}
+
+function cardAtivo(a, i, grupo){
+  const ehGel=a.tipo==="geladeira";
+  const titulo=ehGel?`Geladeira ${i+1}`:`${(TIPOS_ATIVO.find(t=>t[0]===a.tipo)||[,"Ativo"])[1]} ${i+1}`;
+  const sw=(campo,txt)=>`<div class="sw-lin"><span>${txt}</span>
+    <label class="sw"><input type="checkbox" data-sw="${campo}" ${a[campo]?"checked":""}><i></i></label></div>`;
+  return `<div class="ativo" data-g="${grupo}" data-i="${i}">
+    <div class="cab"><b>${titulo}</b><button class="x" data-rem="1" aria-label="Remover">\u00d7</button></div>
+    ${a.veioDoAnterior?`<div class="emb" style="margin:-4px 0 10px">Estava no censo anterior. Confirme e tire foto nova.</div>`:""}
+    ${!ehGel?`<div class="pilha" style="margin:0 0 10px">${TIPOS_ATIVO.map(([k,t])=>
+      `<button data-tipo="${k}" class="${a.tipo===k?"on":""}">${t}</button>`).join("")}</div>`:""}
+    <label>Foto</label>
+    <button class="fotobox" data-foto="1">${a.fotoLocal?`<img src="${a.fotoLocal}" alt="">`
+      :a.foto?`<span class="mais">\u2713</span>Foto anexada`:`<span class="mais">+</span>Foto`}</button>
+    <input type="file" accept="image/*" capture="environment" hidden>
+    <label style="margin-top:14px">${ehGel?"Scanner ou Digite o PTM":"Patrimônio, se tiver"}</label>
+    <div class="ptm"><input data-ptm="1" value="${esc(a.patrimonio||"")}" placeholder="${ehGel?"Scanner do PTM":"Número do patrimônio"}"
+      autocapitalize="characters" autocorrect="off"><button data-scan="1">Escanear</button></div>
+    <div style="margin-top:6px">
+      ${sw("visivel", ehGel?"Geladeira visível no ponto de venda?":"Visível no ponto de venda?")}
+      ${sw("ocupacao_ko_75", ehGel?"Geladeira Coca-Cola (KO) 75% ocupada?":"75% ocupado com produto Coca-Cola (KO)?")}
+    </div></div>`;
+}
+
+function telaAtivos(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Materiais e Geladeiras", ()=>telaLoja(), "");
+  const est=estadoCenso(LOJA), r=rascunhoCenso();
+  const faixa={feito:`<div class="aviso inf" style="background:var(--verde-bg);color:var(--verde)"><b>Censo ${est.txt}.</b><br>Pode fazer de novo se algo mudou.</div>`,
+               obrig:`<div class="aviso err"><b>Censo ${est.txt}.</b><br>Ninguém fez o censo desta loja nesta semana, e esta é a última visita. É preciso enviar para encerrar.</div>`,
+               pend:`<div class="aviso amb"><b>Censo ${est.txt}.</b><br>Uma vez por semana por loja. Não precisa ser hoje, mas precisa até a última visita da semana.</div>`}[est.k];
+  $("corpo").innerHTML=faixa+`
+    <div class="sw-lin" style="padding-top:4px"><span><b>Tem geladeira no ponto de venda</b></span>
+      <label class="sw"><input type="checkbox" id="tgel" ${r.tem_geladeira?"checked":""}><i></i></label></div>
+    ${r.tem_geladeira?`<h2 class="tit">GELADEIRAS</h2>${r.geladeiras.map((a,i)=>cardAtivo(a,i,"geladeiras")).join("")}
+      <button class="adic" data-add="geladeiras">+ Adicionar geladeira</button>`:""}
+    <div class="sw-lin" style="border-top:1px solid var(--linha);margin-top:6px;padding-top:14px">
+      <span><b>Tem outro ativo na loja</b><br><span style="font-size:13px;color:var(--ink2)">gôndola, display, ilha, checkout, material de PDV</span></span>
+      <label class="sw"><input type="checkbox" id="tout" ${r.tem_outros?"checked":""}><i></i></label></div>
+    ${r.tem_outros?`<h2 class="tit">OUTROS ATIVOS</h2>${r.outros.map((a,i)=>cardAtivo(a,i,"outros")).join("")}
+      <button class="adic" data-add="outros">+ Adicionar ativo</button>`:""}`;
+
+  const redesenha=()=>{ salvaRasc(r); telaAtivos(); };
+  const novo=tipo=>({id:uid(),tipo,patrimonio:"",visivel:false,ocupacao_ko_75:false,foto:null});
+  $("tgel").onchange=e=>{ if(!exigeVisita()){ e.target.checked=!e.target.checked; return; }
+    r.tem_geladeira=e.target.checked; if(r.tem_geladeira&&!r.geladeiras.length) r.geladeiras.push(novo("geladeira")); redesenha(); };
+  $("tout").onchange=e=>{ if(!exigeVisita()){ e.target.checked=!e.target.checked; return; }
+    r.tem_outros=e.target.checked; if(r.tem_outros&&!r.outros.length) r.outros.push(novo("gondola")); redesenha(); };
+  $("corpo").querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+    r[b.dataset.add].push(novo(b.dataset.add==="geladeiras"?"geladeira":"gondola")); redesenha(); });
+
+  $("corpo").querySelectorAll(".ativo").forEach(cx=>{
+    const lista=r[cx.dataset.g], a=lista[+cx.dataset.i];
+    cx.querySelector("[data-rem]").onclick=()=>{ lista.splice(+cx.dataset.i,1);
+      if(!lista.length){ if(cx.dataset.g==="geladeiras") r.tem_geladeira=false; else r.tem_outros=false; }
+      redesenha(); };
+    cx.querySelectorAll("[data-tipo]").forEach(b=>b.onclick=()=>{ a.tipo=b.dataset.tipo; redesenha(); });
+    cx.querySelectorAll("[data-sw]").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.checked=!inp.checked; return; }
+      a[inp.dataset.sw]=inp.checked; salvaRasc(r); });
+    const ptm=cx.querySelector("[data-ptm]");
+    ptm.onchange=()=>{ a.patrimonio=ptm.value.trim().toUpperCase(); salvaRasc(r); };
+    cx.querySelector("[data-scan]").onclick=async()=>{ if(!exigeVisita()) return;
+      const v=await escanearPtm(); if(v){ a.patrimonio=v.toUpperCase(); redesenha(); } };
+    const bf=cx.querySelector("[data-foto]"), inp=cx.querySelector('input[type=file]');
+    bf.onclick=()=>{ if(!exigeVisita()) return; inp.click(); };
+    inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+      bf.innerHTML="Preparando…";
+      try{ const g=await guardaFoto(f,{tabela:"ativo_censo", registro_id:a.id, semRegistro:true});
+        a.foto=g.caminho; a.fotoLocal=g.url; redesenha(); }
+      catch(e){ alerta(e.message); redesenha(); } };
+  });
+
+  rodape(`<button class="bt" id="enviarCenso">Enviar</button>`);
+  $("enviarCenso").onclick=()=>enviarCenso(r);
 });}
 
+function enviarCenso(r){
+  if(!exigeVisita()) return;
+  const gel=r.tem_geladeira?r.geladeiras:[], out=r.tem_outros?r.outros:[];
+  /* O que precisa estar certo antes de valer como censo da semana. */
+  const falta=[];
+  gel.forEach((a,i)=>{ if(!a.foto) falta.push(`Geladeira ${i+1}: falta a foto`);
+                        if(!a.patrimonio) falta.push(`Geladeira ${i+1}: falta o patrimônio`); });
+  out.forEach((a,i)=>{ if(!a.foto) falta.push(`Ativo ${i+1}: falta a foto`); });
+  if(r.tem_geladeira&&!gel.length) falta.push("Marcou que tem geladeira, mas nenhuma foi registrada");
+  if(falta.length) return alerta(falta.slice(0,3).join(" · "));
+  if(!gel.length&&!out.length&&!confirm("Confirmar que esta loja não tem geladeira nem outro ativo?")) return;
+
+  const censoId=uid();
+  grava("censo_loja","id",{id:censoId, visita_id:LOJA.visita.id, loja_id:LOJA.id,
+    pessoa_id:DIA.pessoa.id, data:DIA.data, tem_geladeira:gel.length>0, tem_outros:out.length>0});
+  [...gel,...out].forEach(a=>grava("ativo_censo","id",{id:a.id, censo_id:censoId, loja_id:LOJA.id,
+    pessoa_id:DIA.pessoa.id, tipo:a.tipo, patrimonio:a.patrimonio||null,
+    visivel:!!a.visivel, ocupacao_ko_75:!!a.ocupacao_ko_75, foto_url:a.foto||null}));
+
+  CENSO=CENSO||{}; CENSO[LOJA.id]=Object.assign(CENSO[LOJA.id]||{},
+    {feito_na_semana:true, feito_em:DATA, obrigatorio_hoje:false, enviado_aqui:true,
+     ativos_hoje:[...gel,...out].map(a=>({tipo:a.tipo,patrimonio:a.patrimonio,visivel:!!a.visivel,ocupacao_ko_75:!!a.ocupacao_ko_75}))});
+  guarda.porJ("censo:"+DATA,CENSO); guarda.tira(chaveRasc());
+  alerta("Censo enviado.");
+  telaLoja();
+}
+const telaPdv=telaAtivos;   // nome antigo, caso algo ainda chame
 
 /* --------------------------- 7. conversa ---------------------
    A conversa e presa a LOJA, nao a pessoa. Daqui a tres meses quem
@@ -1712,7 +1887,7 @@ async function atualizarFio(){
 function desenhaCartao(c){
   if(!c) return "";
   const rotulo={ruptura:"Ruptura",validade:"Validade",preco:"Preço",
-                geladeira:"Materiais",estoque:"Estoque"}[c.tipo]||c.tipo;
+                geladeira:"Materiais e Geladeiras",estoque:"Estoque"}[c.tipo]||c.tipo;
   const cor=c.tipo==="ruptura"?"rup":c.tipo==="validade"?"val":"";
   return `<div class="cartao-msg">
     <div class="cab ${cor}">${rotulo} · ${esc(c.titulo)}</div>
@@ -1778,15 +1953,16 @@ const CARTOES=[
   {k:"validade", t:"Validade",  d:"produtos perto de vencer"},
   {k:"estoque",  t:"Estoque",   d:"o que foi contado hoje"},
   {k:"preco",    t:"Preço",     d:"preços e concorrência"},
-  {k:"geladeira",t:"Materiais", d:"geladeira e PDV com problema"}
+  {k:"geladeira",t:"Materiais e Geladeiras", d:"ativos não visíveis ou abaixo de 75%"}
 ];
 function quantos(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
   if(k==="ruptura")  return (oportDe(l).itens||[]).filter(zeradoOport).length;
   if(k==="validade") return (l.validades||[]).filter(v=>diasAte(v.vence_em)<=lim).length;
-  if(k==="estoque")  return cat.filter(x=>x.contagem&&(x.contagem.gondola!=null||x.contagem.deposito!=null)).length;
+  if(k==="estoque")  return (oportDe(l).itens||[]).filter(x=>totalOport(x).tocou).length;
   if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
-  if(k==="geladeira")return (l.materiais||[]).filter(m=>m.situacao&&m.situacao!=="ok").length;
+  if(k==="geladeira"){ const c=censoDe(l);   /* do censo enviado hoje */
+    return ((c.feito_em===DATA&&c.ativos_hoje)||[]).filter(a=>!a.visivel||!a.ocupacao_ko_75).length; }
   return 0;
 }
 function telaAnexar(){ montar(()=>{ TELA="mod"; esconderTudo();
@@ -1909,6 +2085,10 @@ function encerrarVisita(){
     alerta(`${r.semMotivo} ${r.semMotivo===1?"produto zerado está":"produtos zerados estão"} sem motivo. Abra a Oportunidade de Estoque e informe.`);
     return telaOportunidade();
   }
+  if(estadoCenso(LOJA).k==="obrig"){
+    alerta("O censo de Materiais e Geladeiras desta semana não foi feito, e esta é a última visita. Envie o censo para encerrar.");
+    return telaAtivos();
+  }
   const alvo=Math.min(r.total, oportDe(LOJA).limite||15);
   if(alvo&&r.feitos<alvo&&!confirm(`Você registrou ${r.feitos} de ${alvo} oportunidades. Encerrar assim mesmo?`)) return;
   LOJA.visita.hora_fim=agora(); LOJA.visita.situacao="concluida";
@@ -1934,7 +2114,7 @@ function limparDiasGuardados(){
      separar a contagem da visita dela. Se tiver fila, espera a proxima. */
   if(fila.itens().length) return false;
   const ks=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
-    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k==="semana")) ks.push(k); } }catch(e){}
+    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k.startsWith("censo:")||k==="semana")) ks.push(k); } }catch(e){}
   ks.forEach(guarda.tira); SEMANA=[];
   return true;
 }

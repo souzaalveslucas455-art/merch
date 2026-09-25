@@ -107,7 +107,7 @@ const hoje=()=>new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-dig
 function desenhaCartao(c){
   if(!c) return "";
   const rotulo={ruptura:"Ruptura",validade:"Validade",preco:"Preço",
-                geladeira:"Materiais",estoque:"Estoque"}[c.tipo]||c.tipo;
+                geladeira:"Materiais e Geladeiras",estoque:"Estoque"}[c.tipo]||c.tipo;
   const cor=c.tipo==="ruptura"?"rup":c.tipo==="validade"?"val":"";
   return `<div class="cartao-msg">
     <div class="cab ${cor}">${rotulo} · ${esc(c.titulo)}</div>
