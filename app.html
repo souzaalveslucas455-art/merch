@@ -320,7 +320,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-25b";
+const VERSAO_APP = "2026-09-25c";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -705,7 +705,7 @@ async function carregarDia(data,forcar){
   DATA=data||hojeIso();
   const cache=guarda.lerJ("dia:"+DATA);
   if(cache&&!forcar){
-    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA); buscarPedidos(DATA); buscarCenso(DATA); buscarCenso(DATA);
+    DIA=cache; telaVisitas(); escoar(); buscarNaoLidas(); buscarOportunidades(DATA); buscarPedidos(DATA); buscarCenso(DATA); buscarObrigacoes(DATA); buscarObrigacoes(DATA); buscarCenso(DATA);
     if(!pularSeHojeVazio()) buscarSemana();
     revalidarDia(DATA);
     return;
@@ -767,6 +767,68 @@ async function buscarPedidos(data){
   }catch(e){}
 }
 const pedidosDe=l=>(PEDIDOS&&PEDIDOS[l.id])||[];
+
+/* ------------------------- regras de tarefa --------------------------
+   Cada modulo tem uma regra. Vem do banco (app_meta.regras_modulos), entao
+   muda sem atualizar o app. Estes sao os padroes, caso o banco nao responda.
+------------------------------------------------------------------------ */
+const REGRA_PADRAO={oportunidade:"toda_visita", validade:"toda_visita", chegadas:"informativo",
+  exposicao:"semanal", preco:"semanal", pdv:"semanal", conversa:"ferramenta"};
+const MOD_REGRA={contagem:"oportunidade", validade:"validade", chegadas:"chegadas",
+  exposicao:"exposicao", preco:"preco", pdv:"pdv", conversa:"conversa"};
+let OBRIG=null;   // {regras, lojas:{loja_id:{semana, hoje, tarefas, ultima_visita_da_semana}}}
+async function buscarObrigacoes(data){
+  const guardado=guarda.lerJ("obrig:"+data);
+  if(guardado) OBRIG=guardado;
+  if(!navigator.onLine) return;
+  try{
+    const r=await api("/rest/v1/rpc/obrigacoes_do_dia",{method:"POST",body:JSON.stringify({p_data:data})});
+    if(data!==DATA) return;
+    /* O que foi concluido ou respondido aqui e ainda esta na fila vale mais. */
+    const loc=(guardado&&guardado.lojas)||{};
+    OBRIG=r||{regras:{},lojas:{}};
+    for(const [id,v] of Object.entries(loc)){ const n=OBRIG.lojas[id]; if(!n) continue;
+      n.hoje=Object.assign({}, n.hoje||{}, v.hoje||{});
+      for(const [m,sv] of Object.entries(v.semana||{})) if(sv&&sv.feito_em&&!(n.semana[m]||{}).feito_em) n.semana[m]=sv;
+      (v.tarefas||[]).forEach(tl=>{ if(!tl.resposta) return;
+        const tn=(n.tarefas||[]).find(x=>x.id===tl.id); if(tn&&!tn.resposta) tn.resposta=tl.resposta; });
+    }
+    guarda.porJ("obrig:"+data,OBRIG);
+    if(TELA==="loja") telaLoja();
+  }catch(e){}
+}
+const obrigDe=l=>(OBRIG&&OBRIG.lojas&&OBRIG.lojas[l.id])||{semana:{},hoje:{},tarefas:[]};
+const regraDe=k=>((OBRIG&&OBRIG.regras)||REGRA_PADRAO)[MOD_REGRA[k]]||REGRA_PADRAO[MOD_REGRA[k]];
+const salvaObrig=()=>{ if(OBRIG) guarda.porJ("obrig:"+DATA,OBRIG); };
+
+/* Como cada modulo esta nesta loja, hoje. */
+function estadoModulo(l,k){
+  const rg=regraDe(k), mod=MOD_REGRA[k], o=obrigDe(l);
+  if(rg==="informativo") return {k:"info"};
+  if(rg==="ferramenta")  return {k:"tool"};
+  if(rg==="toda_visita"){
+    return (o.hoje||{})[mod] ? {k:"feito", txt:"concluído nesta visita"} : {k:"obrig", txt:"obrigatório nesta visita"};
+  }
+  const feitoEm=((o.semana||{})[mod]||{}).feito_em || (mod==="pdv"&&censoDe(l).feito_na_semana&&(censoDe(l).feito_em||DATA));
+  if(feitoEm) return {k:"feito", txt:`feito esta semana em ${dataBr(feitoEm).slice(0,5)}`};
+  if(o.ultima_visita_da_semana) return {k:"obrig", txt:"obrigatório hoje: última visita da semana"};
+  return {k:"pend", txt:"pendente esta semana"};
+}
+const tarefasDe=(l,mod)=>(obrigDe(l).tarefas||[]).filter(t=>!mod||t.modulo===mod);
+const tarefaAberta=t=>!t.resposta||t.resposta.situacao!=="feita";
+const tarefaVencida=t=>tarefaAberta(t)&&!t.resposta&&t.prazo&&String(t.prazo).slice(0,10)<=DATA;
+
+/* Concluir um modulo: grava a checagem e marca aqui na hora. */
+function concluirModulo(k, resultado){
+  const mod=MOD_REGRA[k];
+  grava("checagem_modulo","visita_id,modulo",{id:uid(), visita_id:LOJA.visita.id, loja_id:LOJA.id,
+    pessoa_id:DIA.pessoa.id, modulo:mod, resultado:resultado||"feito", data:DIA.data});
+  OBRIG=OBRIG||{regras:{},lojas:{}}; OBRIG.lojas=OBRIG.lojas||{};
+  const o=OBRIG.lojas[LOJA.id]=OBRIG.lojas[LOJA.id]||{semana:{},hoje:{},tarefas:[]};
+  o.hoje=o.hoje||{}; o.hoje[mod]=resultado||"feito";
+  if(regraDe(k)==="semanal"){ o.semana=o.semana||{}; o.semana[mod]={feito_em:DATA}; }
+  salvaObrig();
+}
 
 let CENSO=null;   // loja_id -> {feito_na_semana, feito_em, obrigatorio_hoje, anteriores}
 async function buscarCenso(data){
@@ -886,16 +948,10 @@ function prioridade(l){
   return atras||venc?"Alta":"Normal";
 }
 function modulosFeitos(l){
-  const lim=DIA.dias_alerta_validade||30, cat=l.catalogo||[];
-  let n=0;
-  { const r=resumoOport(l); if(r.total&&r.feitos>=Math.min(r.total,oportDe(l).limite||15)) n++; }
-  if((l.validades||[]).length) n++;
-  if((l.notas||[]).length&&(l.notas||[]).every(x=>x.conferido)) n++;
-  if((l.exposicoes||[]).length) n++;
-  if(cat.some(x=>x.contagem&&x.contagem.preco!=null)) n++;
-  if(censoDe(l).feito_na_semana) n++;
-  return n;
+  /* So conta modulo de tarefa. Informativo e ferramenta nao sao trabalho. */
+  return MODULOS.filter(m=>{ const e=estadoModulo(l,m.k); return e.k==="feito"; }).length;
 }
+function modulosDeTarefa(){ return MODULOS.filter(m=>{ const rg=regraDe(m.k); return rg==="toda_visita"||rg==="semanal"; }).length; }
 function pintaLojas(){
   const ls=lojasFiltradas();
   $("corpo").innerHTML=ls.length?ls.map((l,i)=>{
@@ -918,8 +974,8 @@ function pintaLojas(){
           ${temGps(l)
             ? `<a class="bolinha" href="${mapaDe(l)}" target="_blank" rel="noopener" aria-label="Navegar até a loja">${IC.seta}</a>`
             : `<a class="bolinha sem" aria-label="Sem localização">${IC.seta}</a>`}
-          <div class="progresso"><div class="trilho"><i style="width:${Math.round(k/6*100)}%"></i></div>
-            <span class="fracao">${k}/6</span></div>
+          <div class="progresso"><div class="trilho"><i style="width:${Math.round(k/modulosDeTarefa()*100)}%"></i></div>
+            <span class="fracao">${k}/${modulosDeTarefa()}</span></div>
         </div></div></div>`; }).join("")
     : FILTRO ? `<div class="vazio">Nenhuma loja com esse nome.</div>` : diaVazio();
   $("corpo").querySelectorAll(".loja").forEach(c=>{
@@ -1090,13 +1146,13 @@ function resumo(k){
   if(k==="chegadas"){ const ps=pedidosDe(l);
     if(!ps.length){ const n=l.notas||[];
       return {txt:n.length?`${n.length} ${n.length===1?"nota prevista":"notas previstas"}`:"pedidos e entregas da loja",
-              pronto:false, alerta:n.some(x=>x.dias>0&&!x.conferido)}; }
+              pronto:false, alerta:false}; }
     const ab=ps.filter(x=>situacaoPedido(x).k==="aberto").length;
     const cam=ps.filter(x=>situacaoPedido(x).k==="caminho").length;
     const p=[`${ps.length} ${ps.length===1?"pedido":"pedidos"}`];
     if(cam) p.push(`${cam} a caminho`);
     if(ab) p.push(`${ab} em aberto`);
-    return {txt:p.join(" · "), pronto:ab===0, alerta:ab>0}; }
+    return {txt:p.join(" · "), pronto:false, alerta:false}; }
   if(k==="exposicao"){ const e=l.exposicoes||[], ruim=e.filter(x=>x.situacao==="ausente").length;
     return {txt:e.length?`${e.length} ${e.length===1?"ponto":"pontos"}${ruim?` · ${ruim} ausente`:""}`:"nada registrado",
       pronto:e.length>0&&ruim===0, alerta:ruim>0}; }
@@ -1112,23 +1168,60 @@ function resumo(k){
       pronto:false, alerta:n>0||v>0, badge:n||null}; }
   return {txt:"",pronto:false,alerta:false};
 }
+/* A entrada da loja e um roteiro, separado por tipo:
+     solicitacoes da lideranca, o obrigatorio desta visita, o da semana,
+     e o que e so consulta. */
+function botaoModulo(m,i){
+  const e=estadoModulo(LOJA,m.k), r=resumo(m.k);
+  const abertas=tarefasDe(LOJA,MOD_REGRA[m.k]).filter(tarefaAberta).length;
+  const cls=e.k==="feito"?"pronto":e.k==="obrig"?"alerta":"";
+  const cor=e.k==="feito"?"var(--verde)":e.k==="obrig"?"var(--verm)":e.k==="pend"?"var(--amb)":"var(--ink3)";
+  return `<button class="mod ${cls}" data-m="${i}">
+    ${abertas||r.badge?`<span class="sino">${abertas||r.badge}</span>`:""}
+    <span class="ic">${e.k==="feito"?"\u2713":m.ic}</span>
+    <span class="txt"><b>${m.nome}</b>
+      ${e.txt?`<span style="color:${cor};font-weight:500">${esc(e.txt)}</span><br>`:""}
+      <span>${esc(r.txt||"")}</span></span>
+    <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`;
+}
+function cartaoTarefa(t,idx){
+  const venc=tarefaVencida(t), aberta=tarefaAberta(t);
+  const quem=t.de_perfil==="gerente"?"Gerente":t.de_perfil==="admin"?"Gestão":"Seu líder";
+  const cor=!aberta?"var(--verde)":venc?"var(--verm)":"var(--amb)";
+  return `<button class="mod ${!aberta?"pronto":venc?"alerta":""}" data-t="${idx}" style="border-left:4px solid ${cor}">
+    <span class="ic">${!aberta?"\u2713":"!"}</span>
+    <span class="txt"><b>${esc(t.titulo)}</b>
+      <span style="color:${cor};font-weight:500">${!aberta?"respondida":t.resposta?"não conseguiu · reenviar se fizer":
+        venc?`venceu ${dataBr(t.prazo).slice(0,5)} · responda para encerrar`:t.prazo?`prazo ${dataBr(t.prazo).slice(0,5)}`:"sem prazo"}</span><br>
+      <span>${quem}${t.de?" · "+esc(String(t.de).split(" ")[0]):""}${t.modulo&&t.modulo!=="livre"?" · "+esc(nomeDoModulo(t.modulo)):""}</span></span>
+    <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`;
+}
+const nomeDoModulo=mod=>{ const k=Object.keys(MOD_REGRA).find(x=>MOD_REGRA[x]===mod);
+  const m=MODULOS.find(x=>x.k===k); return m?m.nome:"Solicitação"; };
+
 function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
   const v=LOJA.visita, fim=v&&v.hora_fim;
   topo(LOJA.nome, telaVisitas, "");
+  const tarefas=tarefasDe(LOJA);
+  const g={obrig:[], semana:[], consulta:[]};
+  MODULOS.forEach((m,i)=>{ const e=estadoModulo(LOJA,m.k), rg=regraDe(m.k);
+    if(e.k==="info"||e.k==="tool") g.consulta.push([m,i]);
+    else if(rg==="toda_visita"||e.k==="obrig") g.obrig.push([m,i]);
+    else g.semana.push([m,i]); });
+  const bloco=(tit,lista)=>lista.length?`<h2 class="tit">${tit}</h2>`+lista.map(([m,i])=>botaoModulo(m,i)).join(""):"";
   $("corpo").innerHTML=`
     <div class="cartao"><div style="font-size:14.5px;color:var(--ink2)">${esc(LOJA.endereco||"")}</div>
       ${LOJA.cep?`<div style="font-size:14.5px;color:var(--ink2)">${esc(LOJA.cep)} · ${esc(LOJA.cidade||"")}</div>`:""}
       ${LOJA.consultor?`<div style="font-size:13.5px;color:var(--ink3);margin-top:6px">Consultor: ${esc(LOJA.consultor)}${LOJA.consultor_tel?` · ${esc(LOJA.consultor_tel)}`:""}</div>`:""}</div>
     ${!editavel()?`<div class="aviso amb">Você está vendo ${dataBr(DATA)}. Só dá para registrar no dia de hoje.</div>`
       :!v?`<div class="aviso inf">Toque em iniciar visita quando estiver dentro da loja.</div>`:""}
-    <h2 class="tit">O QUE FAZER AQUI</h2>
-    ${MODULOS.map((m,i)=>{ const r=resumo(m.k);
-      return `<button class="mod ${r.alerta?"alerta":r.pronto?"pronto":""}" data-m="${i}">
-        ${r.badge?`<span class="sino">${r.badge}</span>`:""}
-        <span class="ic">${r.pronto?"\u2713":m.ic}</span>
-        <span class="txt"><b>${m.nome}</b><span>${esc(r.txt)}</span></span>
-        <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`; }).join("")}`;
+    ${tarefas.length?`<h2 class="tit" style="color:var(--verm)">SOLICITAÇÕES · ${tarefas.filter(tarefaAberta).length} em aberto</h2>`
+      +tarefas.map((t,i)=>cartaoTarefa(t,i)).join(""):""}
+    ${bloco("OBRIGATÓRIAS NESTA VISITA", g.obrig)}
+    ${bloco("DA SEMANA", g.semana)}
+    ${bloco("CONSULTA", g.consulta)}`;
   $("corpo").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>MODULOS[+b.dataset.m].tela());
+  $("corpo").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>telaTarefa(tarefas[+b.dataset.t]));
   rodape(!editavel()?null
     :fim?`<button class="bt sec" disabled>Concluída às ${esc(String(v.hora_fim).slice(0,5))}</button>`
     :v?`<button class="bt" id="fim">Encerrar visita</button>`
@@ -1136,6 +1229,83 @@ function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
   if($("ini")) $("ini").onclick=iniciarVisita;
   if($("fim")) $("fim").onclick=encerrarVisita;
 });}
+
+/* Responder uma solicitacao. "Nao consegui" exige o motivo: e isso que o
+   lider precisa para resolver, e sem motivo a resposta nao ajuda ninguem. */
+function telaTarefa(t){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Solicitação", ()=>telaLoja(), "");
+  const quem=t.de_perfil==="gerente"?"Gerente de merchandising":t.de_perfil==="admin"?"Gestão":"Seu líder";
+  const f=t._form=t._form||{situacao:null, comentario:"", foto:null, fotoLocal:null};
+  const modK=Object.keys(MOD_REGRA).find(x=>MOD_REGRA[x]===t.modulo);
+  $("corpo").innerHTML=`
+    <div class="cartao">
+      <div style="font-size:12.5px;color:var(--ink3)">${quem}${t.de?" · "+esc(t.de):""} · ${dataBr(String(t.criado_em).slice(0,10))}</div>
+      <div style="font-size:17px;font-weight:700;margin-top:6px">${esc(t.titulo)}</div>
+      ${t.descricao?`<div style="font-size:14px;color:var(--ink2);margin-top:6px;white-space:pre-wrap">${esc(t.descricao)}</div>`:""}
+      <div style="font-size:13px;margin-top:10px;color:${tarefaVencida(t)?"var(--verm)":"var(--ink2)"}">
+        ${t.prazo?`Prazo: ${dataBr(t.prazo)}${tarefaVencida(t)?" · vencido":""}`:"Sem prazo"}${t.exige_foto?" · pede foto":""}</div>
+    </div>
+    ${modK&&t.modulo!=="livre"?`<button class="bt sec" id="abrirmod" style="margin-bottom:14px">Abrir ${esc(nomeDoModulo(t.modulo))}</button>`:""}
+    ${t.resposta?`<div class="aviso ${t.resposta.situacao==="feita"?"inf":"amb"}">
+      Resposta: <b>${t.resposta.situacao==="feita"?"feito":"não consegui"}</b>${t.resposta.comentario?" · "+esc(t.resposta.comentario):""}</div>`:""}
+    <h2 class="tit">SUA RESPOSTA</h2>
+    <div class="pilha" id="sit" style="margin-top:0">
+      <button data-s="feita" class="${f.situacao==="feita"?"on":""}">Feito</button>
+      <button data-s="nao_feita" class="${f.situacao==="nao_feita"?"on mau":""}">Não consegui</button></div>
+    <div class="campo" style="margin-top:12px"><label>${f.situacao==="nao_feita"?"Por que não conseguiu":"Comentário, se quiser"}</label>
+      <textarea id="com" rows="3" style="width:100%;font:inherit;padding:12px;border:1px solid var(--linha);border-radius:12px">${esc(f.comentario)}</textarea></div>
+    <label>Foto${t.exige_foto?" (obrigatória)":", se quiser"}</label>
+    <button class="fotobox" id="tfoto">${f.fotoLocal?`<img src="${f.fotoLocal}" alt="">`:f.foto?`<span class="mais">\u2713</span>Foto anexada`:`<span class="mais">+</span>Foto`}</button>
+    <input type="file" id="tfotoin" accept="image/*" capture="environment" hidden>`;
+  if($("abrirmod")) $("abrirmod").onclick=()=>MODULOS.find(x=>x.k===modK).tela();
+  $("sit").querySelectorAll("button").forEach(b=>b.onclick=()=>{ f.situacao=b.dataset.s; f.comentario=$("com").value; telaTarefa(t); });
+  $("com").oninput=e=>{ f.comentario=e.target.value; };
+  $("tfoto").onclick=()=>{ if(!exigeVisita()) return; $("tfotoin").click(); };
+  $("tfotoin").onchange=async()=>{ const a=$("tfotoin").files&&$("tfotoin").files[0]; if(!a) return;
+    try{ const gf=await guardaFoto(a,{tabela:"tarefa_resposta", registro_id:t.id, semRegistro:true});
+      f.foto=gf.caminho; f.fotoLocal=gf.url; telaTarefa(t); }catch(e){ alerta(e.message); } };
+  rodape(`<button class="bt" id="enviarT">Enviar resposta</button>`);
+  $("enviarT").onclick=()=>{
+    if(!exigeVisita()) return;
+    f.comentario=$("com").value.trim();
+    if(!f.situacao) return alerta("Escolha Feito ou Não consegui.");
+    if(f.situacao==="nao_feita"&&!f.comentario) return alerta("Conte por que não conseguiu. É isso que o líder precisa para resolver.");
+    if(f.situacao==="feita"&&t.exige_foto&&!f.foto) return alerta("Esta solicitação pede foto.");
+    grava("tarefa_resposta","id",{id:uid(), tarefa_id:t.id, visita_id:LOJA.visita.id, pessoa_id:DIA.pessoa.id,
+      situacao:f.situacao, comentario:f.comentario||null, foto_url:f.foto||null});
+    t.resposta={situacao:f.situacao, comentario:f.comentario, em:new Date().toISOString(), por:DIA.pessoa.nome};
+    delete t._form; salvaObrig(); alerta("Resposta enviada."); telaLoja();
+  };
+});}
+
+/* Botao Concluir padrao dos modulos de tarefa. */
+function botaoConcluir(k){
+  const e=estadoModulo(LOJA,k);
+  if(!editavel()) return "";
+  return e.k==="feito"&&regraDe(k)==="toda_visita"
+    ? `<button class="bt sec" disabled>Concluído nesta visita</button>`
+    : `<button class="bt" id="concluir" data-k="${k}">Concluir</button>`;
+}
+function ligaConcluir(validar){
+  const b=$("concluir"); if(!b) return;
+  b.onclick=()=>{ if(!exigeVisita()) return;
+    const k=b.dataset.k, v=validar?validar():{ok:true};
+    if(!v.ok) return alerta(v.msg);
+    if(v.confirmar&&!confirm(v.confirmar)) return;
+    concluirModulo(k, v.resultado);
+    alerta("Concluído."); telaLoja(); };
+}
+
+/* Dentro do modulo, a solicitacao que pertence a ele aparece no topo. */
+function poeSolicitacoes(k){
+  const ts=tarefasDe(LOJA,MOD_REGRA[k]).filter(tarefaAberta); if(!ts.length) return;
+  const d=document.createElement("div");
+  d.innerHTML=ts.map((t,i)=>`<div class="aviso ${tarefaVencida(t)?"err":"amb"}" style="display:flex;gap:10px;align-items:center">
+    <span style="flex:1"><b>Solicitação:</b> ${esc(t.titulo)}${t.prazo?` · prazo ${dataBr(t.prazo).slice(0,5)}`:""}</span>
+    <button class="bt sec" data-rt="${i}" style="flex:none;width:auto;padding:9px 14px;font-size:13.5px">Responder</button></div>`).join("");
+  $("corpo").prepend(d);
+  d.querySelectorAll("[data-rt]").forEach(b=>b.onclick=()=>telaTarefa(ts[+b.dataset.rt]));
+}
 
 /* -------------------- 1. contagem e ruptura ------------------
    Conta em caixa E unidade. O total em unidades e calculado com o fator de
@@ -1278,7 +1448,9 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     $("corpo").innerHTML=`<div class="vazio">${o.sem_base
       ?"A base de vendas ainda não foi carregada. Sem ela o app não sabe o que esta loja compra normalmente."
       :"Nenhuma oportunidade nesta loja: tudo o que ela compra com regularidade está pedindo dentro do normal."}</div>`;
-    return rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
+    rodape(botaoConcluir("contagem")||`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
+    ligaConcluir(()=>({ok:true, resultado:"nada_a_registrar"}));
+    return poeSolicitacoes("contagem");
   }
 
   const u=unidAtual(), rot=u==="cx"?"cx":"un";
@@ -1369,9 +1541,15 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
       it.contagem.motivo=b.dataset.v; salva(it); telaOportunidade(); }); });
 
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`
-    + (r.ruptura||r.abaixo||r.excesso?botaoAvisar("ruptura"):""));
+  rodape((r.ruptura||r.abaixo||r.excesso?botaoAvisar("ruptura").replace('class="bt"','class="bt sec"'):"")
+    + botaoConcluir("contagem"));
   ligaAvisar();
+  ligaConcluir(()=>{ const x=resumoOport(LOJA), alvo=Math.min(x.total, oportDe(LOJA).limite||15);
+    if(x.semMotivo) return {ok:false, msg:`${x.semMotivo} ${x.semMotivo===1?"produto zerado":"produtos zerados"} sem motivo. Informe antes de concluir.`};
+    if(!x.total) return {ok:true, resultado:"nada_a_registrar"};
+    if(x.feitos<alvo) return {ok:true, confirmar:`Você registrou ${x.feitos} de ${alvo}. Concluir assim mesmo?`};
+    return {ok:true}; });
+  poeSolicitacoes("contagem");
 });}
 const telaContagem=telaOportunidade;   // nome antigo, caso algo ainda chame
 
@@ -1400,10 +1578,17 @@ function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   $("corpo").querySelectorAll(".item").forEach((caixa,i)=>{ const v=regs[i]; if(!v) return;
     ligaFoto(caixa, v, {tabela:"validade", chave:"id", corpo:corpoVal(v)}, telaValidade); });
   rodape(editavel()
-    ? `<button class="bt sec" onclick="telaNovaValidade()">Registrar</button>` +
-      (regs.length?botaoAvisar("validade"):"")
+    ? `<button class="bt sec" onclick="telaNovaValidade()">Registrar</button>` + botaoConcluir("validade")
     : null);
+  if(regs.length&&editavel()){ /* avisar fica acima, para o rodape nao ter tres botoes */
+    const d=document.createElement("div"); d.innerHTML=botaoAvisar("validade").replace('class="bt"','class="bt sec" style="margin-top:6px"');
+    $("corpo").appendChild(d.firstElementChild); }
   ligaAvisar();
+  ligaConcluir(()=>{ const venc=regs.filter(v=>diasAte(v.vence_em)<0&&!v.acao).length;
+    if(venc) return {ok:false, msg:`${venc} ${venc===1?"produto vencido está":"produtos vencidos estão"} sem ação. Diga o que foi feito antes de concluir.`};
+    if(!regs.length) return {ok:true, resultado:"nada_a_registrar", confirmar:"Nenhum produto vencendo nesta loja. Concluir assim?"};
+    return {ok:true}; });
+  poeSolicitacoes("validade");
 });}
 function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.catalogo||[];
   topo("Nova validade", telaValidade, "");
@@ -1500,8 +1685,7 @@ function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
   const vis=todos.map((n,i)=>({n,i})).filter(x=>FILTRO_PED==="todos"||situacaoPedido(x.n).k===FILTRO_PED);
   const abertos=todos.filter(n=>situacaoPedido(n).k==="aberto").length;
   $("corpo").innerHTML=`
-    ${abertos?`<div class="aviso amb"><b>${abertos} ${abertos===1?"pedido em aberto":"pedidos em aberto"}.</b><br>
-      Toque no pedido e confirme se chegou.</div>`:""}
+    <div class="aviso inf">Consulta: os pedidos desta loja e a situação de cada um no sistema.${abertos?` ${abertos} em aberto.`:""}</div>
     <div class="pilha" id="fped" style="margin:0 0 12px">
       ${FILTROS.map(([k,t])=>`<button data-f="${k}" class="${FILTRO_PED===k?"on":""}">${t} · ${conta(k)}</button>`).join("")}
     </div>
@@ -1525,8 +1709,7 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
           t:{chegou:"Repositor confirmou: chegou",parcial:"Repositor confirmou: chegou em parte",
              nao_chegou:"Repositor confirmou: não chegou"}[conf.situacao]||"Conferido",
           d:`${conf.por?String(conf.por).split(" ")[0]+" · ":""}${new Date(conf.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`}
-        :(n.status==="ACERTADA"?null
-          :{t:"Aguardando conferência do repositor", d:"confirme abaixo quando estiver na loja"}),
+        :null,
     n.status==="ACERTADA"?{ok:true,t:"Acertado no caixa",d:"baixado no sistema"}
                          :{t:"Ainda não acertado no caixa",d:"aberto no sistema"}
   ];
@@ -1535,12 +1718,6 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
     <h2 class="tit">HISTÓRICO DE STATUS</h2>
     <div class="tl">${passos.filter(Boolean).map(x=>`<div class="p ${x.mau?"mau":x.al?"al":x.ok?"ok":""}"><span class="b"></span>
       <div>${esc(x.t)}<small>${esc(x.d)}</small></div></div>`).join("")}</div>
-    ${n.status!=="ACERTADA"?`<h2 class="tit">O PEDIDO CHEGOU?</h2>
-      <div class="pilha" id="confped" style="margin-top:0">
-        <button data-s="chegou" class="${conf&&conf.situacao==="chegou"?"on":""}">Chegou</button>
-        <button data-s="parcial" class="${conf&&conf.situacao==="parcial"?"on meio":""}">Em parte</button>
-        <button data-s="nao_chegou" class="${conf&&conf.situacao==="nao_chegou"?"on mau":""}">Não chegou</button>
-      </div>`:""}
     <h2 class="tit">PRODUTOS · ${(n.itens||[]).length}</h2>
     <div class="tl">${(n.itens||[]).map(x=>{
       const vc=Number(x.caixas)>0?Number(x.valor)/Number(x.caixas):null;
@@ -1557,14 +1734,7 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
       border-top:1px solid var(--linha);margin-top:4px;font-size:17px;font-weight:700">
       <span>Total</span><span>${reais(n.valor)}</span></div>`;
   $("corpo").querySelectorAll(".compart").forEach(b=>b.onclick=e=>{ e.stopPropagation(); compartilharPedido(n); });
-  if($("confped")) $("confped").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    if(!exigeVisita()) return;
-    n.conferido={situacao:b.dataset.s, em:new Date().toISOString(), por:DIA.pessoa&&DIA.pessoa.nome};
-    guarda.porJ("pedidos:"+DATA,PEDIDOS);
-    const notaDia=(LOJA.notas||[]).find(x=>x.numero===n.numero); if(notaDia) notaDia.conferido=b.dataset.s;
-    grava("entrega_confirmada","nota_numero,visita_id",{nota_numero:n.numero,
-      visita_id:LOJA.visita.id, pessoa_id:DIA.pessoa.id, situacao:b.dataset.s});
-    telaPedido(n); });
+
   rodape(`<button class="bt sec" onclick="telaPedidos()">Voltar aos pedidos</button>`);
 });}
 const telaChegadas=telaPedidos;   // nome antigo, caso algo ainda chame
@@ -1599,7 +1769,10 @@ function telaExposicao(){ montar(()=>{ TELA="mod"; esconderTudo(); const regs=LO
     ligaFoto(g, r, {tabela:"exposicao", chave:"id", corpo:{id:r.id, ...base(), tipo:r.tipo,
       situacao:r.situacao||"montado", frentes:r.frentes==null?null:r.frentes,
       share:r.share==null?null:r.share}}, telaExposicao); });
-  rodape(`<button class="bt sec" onclick="telaLoja()">Voltar aos módulos</button>`);
+  rodape(botaoConcluir("exposicao")||`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
+  ligaConcluir(()=>((LOJA.exposicoes||[]).length?{ok:true}
+    :{ok:true, resultado:"nada_a_registrar", confirmar:"Nenhum ponto registrado. Concluir a exposição assim?"}));
+  poeSolicitacoes("exposicao");
 });}
 
 /* --------------------- 5. preco e concorrencia ---------------
@@ -1629,10 +1802,15 @@ function telaPreco(){ montar(()=>{ TELA="mod"; esconderTudo(); const cat=LOJA.ca
       p.contagem=p.contagem||{}; p.contagem[inp.dataset.c]=inp.value===""?null:Number(inp.value);
       enviaPreco(p); }); });
   rodape(editavel()
-    ? `<button class="bt sec" onclick="telaNovoConcorrente()">Concorrente</button>` +
-      (quantos("preco")?botaoAvisar("preco"):"")
+    ? `<button class="bt sec" onclick="telaNovoConcorrente()">Concorrente</button>` + botaoConcluir("preco")
     : null);
+  if(quantos("preco")&&editavel()){
+    const d=document.createElement("div"); d.innerHTML=botaoAvisar("preco").replace('class="bt"','class="bt sec" style="margin-top:6px"');
+    $("corpo").appendChild(d.firstElementChild); }
   ligaAvisar();
+  ligaConcluir(()=>(quantos("preco")?{ok:true}
+    :{ok:true, resultado:"nada_a_registrar", confirmar:"Nenhum preço anotado. Concluir assim?"}));
+  poeSolicitacoes("preco");
 });}
 function telaNovoConcorrente(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Concorrente", telaPreco, "");
@@ -1686,6 +1864,7 @@ function rascunhoCenso(){
 const salvaRasc=r=>guarda.porJ(chaveRasc(),r);
 
 function estadoCenso(l){
+  const e=estadoModulo(l,"pdv"); if(e.k&&e.txt) return e;
   const c=censoDe(l);
   if(c.feito_na_semana) return {k:"feito", txt:`feito esta semana${c.feito_em?" em "+dataBr(c.feito_em).slice(0,5):""}`};
   if(c.obrigatorio_hoje) return {k:"obrig", txt:"obrigatório hoje: última visita da semana"};
@@ -1793,6 +1972,7 @@ function telaAtivos(){ montar(()=>{ TELA="mod"; esconderTudo();
 
   rodape(`<button class="bt" id="enviarCenso">Enviar</button>`);
   $("enviarCenso").onclick=()=>enviarCenso(r);
+  poeSolicitacoes("pdv");
 });}
 
 function enviarCenso(r){
@@ -1818,6 +1998,7 @@ function enviarCenso(r){
     {feito_na_semana:true, feito_em:DATA, obrigatorio_hoje:false, enviado_aqui:true,
      ativos_hoje:[...gel,...out].map(a=>({tipo:a.tipo,patrimonio:a.patrimonio,visivel:!!a.visivel,ocupacao_ko_75:!!a.ocupacao_ko_75}))});
   guarda.porJ("censo:"+DATA,CENSO); guarda.tira(chaveRasc());
+  concluirModulo("pdv");
   alerta("Censo enviado.");
   telaLoja();
 }
@@ -2078,19 +2259,26 @@ async function iniciarVisita(){
   if(!g) alerta("Sem GPS agora. A visita foi registrada assim mesmo.");
 }
 function encerrarVisita(){
+  /* O que trava o encerramento, nesta ordem:
+       1. produto zerado sem motivo na Oportunidade de Estoque
+       2. modulo obrigatorio desta visita sem concluir
+       3. modulo semanal na ultima visita da semana, se ninguem fez
+       4. solicitacao da lideranca com prazo vencido e sem resposta   */
   const r=resumoOport(LOJA);
-  /* Zerado sem motivo nao passa: o dado sem motivo nao serve para o lider
-     nem para o comercial. O resto e aviso; este e barreira. */
   if(r.semMotivo){
     alerta(`${r.semMotivo} ${r.semMotivo===1?"produto zerado está":"produtos zerados estão"} sem motivo. Abra a Oportunidade de Estoque e informe.`);
     return telaOportunidade();
   }
-  if(estadoCenso(LOJA).k==="obrig"){
-    alerta("O censo de Materiais e Geladeiras desta semana não foi feito, e esta é a última visita. Envie o censo para encerrar.");
-    return telaAtivos();
+  const falta=MODULOS.filter(m=>estadoModulo(LOJA,m.k).k==="obrig");
+  if(falta.length){
+    alerta(`Falta concluir: ${falta.map(m=>m.nome).join(", ")}.`);
+    return falta[0].tela();
   }
-  const alvo=Math.min(r.total, oportDe(LOJA).limite||15);
-  if(alvo&&r.feitos<alvo&&!confirm(`Você registrou ${r.feitos} de ${alvo} oportunidades. Encerrar assim mesmo?`)) return;
+  const venc=tarefasDe(LOJA).filter(tarefaVencida);
+  if(venc.length){
+    alerta(`${venc.length} ${venc.length===1?"solicitação vencida está":"solicitações vencidas estão"} sem resposta.`);
+    return telaTarefa(venc[0]);
+  }
   LOJA.visita.hora_fim=agora(); LOJA.visita.situacao="concluida";
   grava("visita","pessoa_id,loja_id,data",{id:LOJA.visita.id, pessoa_id:DIA.pessoa.id,
     rota_id:DIA.rota?DIA.rota.id:null, loja_id:LOJA.id, data:DIA.data,
@@ -2114,7 +2302,7 @@ function limparDiasGuardados(){
      separar a contagem da visita dela. Se tiver fila, espera a proxima. */
   if(fila.itens().length) return false;
   const ks=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
-    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k.startsWith("censo:")||k==="semana")) ks.push(k); } }catch(e){}
+    if(k&&(k.startsWith("dia:")||k.startsWith("oport:")||k.startsWith("pedidos:")||k.startsWith("censo:")||k.startsWith("obrig:")||k==="semana")) ks.push(k); } }catch(e){}
   ks.forEach(guarda.tira); SEMANA=[];
   return true;
 }
