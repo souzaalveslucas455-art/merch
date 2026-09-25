@@ -860,7 +860,8 @@ function nivelLote(x){
   return {k:"ok", t:`vence em ${d} dias`, cor:"var(--ink2)", bg:"var(--fundo)"};
 }
 /* Precisa ser contado nesta visita: ativo, e nao registrado agora mesmo. */
-const pedeContagem=x=>x.status!=="encerrado" && !x.registrado_hoje && !x.hoje;
+/* Contado e ter QUANTIDADE salva hoje. So escolher a acao nao conta. */
+const pedeContagem=x=>x.status!=="encerrado" && !x.registrado_hoje && !(x.hoje&&x.hoje.quantidade!=null);
 
 let CENSO=null;   // loja_id -> {feito_na_semana, feito_em, obrigatorio_hoje, anteriores}
 async function buscarCenso(data){
@@ -1618,8 +1619,10 @@ const telaContagem=telaOportunidade;   // nome antigo, caso algo ainda chame
    que garante que o produto e acompanhado ate acabar, e nao esquecido.
    Quantidade em unidades: produto perto de vencer se conta na gondola.
 ------------------------------------------------------------- */
-const ACOES=[["girar","Mudei de lugar para girar"],["registrar","Só registrei e avisei"],
-  ["remarcar","Remarquei o preço"],["troca","Acionei troca"],["retirar","Retirei da gôndola"]];
+/* "So registrei e avisei" e "remarquei o preco" sairam da tela. Continuam no
+   banco para o historico, mas nao sao mais oferecidas. */
+const ACOES=[["girar","Mudei de lugar para girar"],["troca","Acionei troca"],
+  ["retirar","Retirei da gôndola"],["outro","Outro"]];
 
 function cardLote(x,i){
   const nv=nivelLote(x), ativo=x.status!=="encerrado", h=x.hoje||{};
@@ -1638,10 +1641,17 @@ function cardLote(x,i){
       ${giro!=null&&giro>0?` · <b style="color:var(--verde)">${giro}% já saiu</b>`:""}</div>
     ${x.registrado_hoje?`<div class="emb" style="margin-top:6px">Registrado agora. Na próxima visita o app pede a contagem.</div>`
     :ativo||h.quantidade!=null?`
-      <div class="nums" style="margin-top:9px"><div style="flex:1"><label>Quanto sobrou hoje (un)</label>
-        <input type="number" inputmode="numeric" min="0" data-q="${i}" value="${h.quantidade??""}" ${ativo||h.quantidade!=null?"":"disabled"}></div>
-        <button class="bt sec" data-zero="${i}" style="flex:none;width:auto;align-self:flex-end;padding:12px 14px">Acabou</button></div>
-      <div class="pilha" data-a="${i}">${ACOES.map(a=>`<button class="${h.acao===a[0]?"on":""}" data-v="${a[0]}">${a[1]}</button>`).join("")}</div>`:""}
+      <label style="margin-top:10px">Quanto sobrou hoje (un)</label>
+      <div class="ptm" style="margin-top:4px">
+        <input type="number" inputmode="numeric" min="0" enterkeyhint="done" data-q="${i}"
+          value="${x._rascQtd??h.quantidade??""}" placeholder="unidades">
+        <button data-salvar="${i}" style="${x._pendente||h.quantidade==null?"":"background:var(--verde-bg);color:var(--verde)"}">
+          ${x._pendente||h.quantidade==null?"Salvar":"Salvo \u2713"}</button>
+        <button data-zero="${i}" style="background:var(--papel);color:var(--ink);border:1px solid var(--linha)">Acabou</button></div>
+      <div class="pilha" data-a="${i}">${ACOES.map(a=>`<button class="${h.acao===a[0]?(a[0]==="outro"?"on meio":"on"):""}" data-v="${a[0]}">${a[1]}</button>`).join("")}</div>
+      ${h.acao==="outro"?`<textarea data-obs="${i}" rows="2" placeholder="O que foi feito?"
+        style="width:100%;margin-top:8px;font:inherit;padding:10px;border:1px solid ${String(h.obs||"").trim()?"var(--linha)":"var(--verm)"};border-radius:12px">${esc(h.obs||"")}</textarea>`:""}
+      ${x._pendente?`<div class="emb" style="color:var(--verm);margin-top:6px">Alterado e ainda não salvo.</div>`:""}`:""}
   </div>`;
 }
 
@@ -1659,23 +1669,46 @@ function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     ${ativos.length?`<h2 class="tit">EM ACOMPANHAMENTO</h2>`+ativos.map(x=>cardLote(x,lotes.indexOf(x))).join(""):""}
     ${fechados.length?`<h2 class="tit">ENCERRADOS HOJE</h2>`+fechados.map(x=>cardLote(x,lotes.indexOf(x))).join(""):""}`;
 
-  const mover=(x,qtd,acao)=>{ if(!exigeVisita()) return;
-    x.hoje=Object.assign({},x.hoje||{}); if(qtd!==undefined) x.hoje.quantidade=qtd; if(acao!==undefined) x.hoje.acao=acao;
-    if(x.hoje.quantidade==null) { salvaVenc(); return telaValidade(); }      /* acao sem quantidade: espera */
+  /* O Salvar e o unico ponto que grava. Antes a quantidade gravava quando o
+     dedo saia do campo: invisivel para quem esta na loja, que nao sabia se
+     tinha ficado. Acao e texto marcam o lote como alterado ate salvar. */
+  const enviar=x=>{
+    const hh=x.hoje||{};
+    if(hh.quantidade==null){ alerta("Digite quanto sobrou antes de salvar."); return false; }
+    if(hh.acao==="outro"&&!String(hh.obs||"").trim()){ alerta("Escreva o que foi feito no campo Outro."); return false; }
     grava("validade_movimento","validade_id,visita_id",{id:uid(), validade_id:x.id, visita_id:LOJA.visita.id,
-      loja_id:LOJA.id, pessoa_id:DIA.pessoa.id, quantidade:x.hoje.quantidade, acao:x.hoje.acao||null});
-    x.quantidade_atual=x.hoje.quantidade;
-    const fecha=Number(x.hoje.quantidade)<=0||x.hoje.acao==="retirar";
-    x.status=fecha?"encerrado":"ativo"; x.encerramento=fecha?(x.hoje.acao==="retirar"?"retirado":"esgotado"):null;
-    salvaVenc(); telaValidade(); };
-  $("corpo").querySelectorAll("input[data-q]").forEach(inp=>inp.onchange=()=>{
-    const x=lotes[+inp.dataset.q], v=inp.value===""?null:Math.max(0,Math.round(Number(inp.value)));
-    if(v!=null&&Number(x.quantidade_atual)&&v>Number(x.quantidade_atual)
-       &&!confirm(`Tinha ${x.quantidade_atual} un e agora tem ${v}. Chegou mais do mesmo lote?`)) return telaValidade();
-    mover(x,v); });
-  $("corpo").querySelectorAll("[data-zero]").forEach(b=>b.onclick=()=>mover(lotes[+b.dataset.zero],0));
+      loja_id:LOJA.id, pessoa_id:DIA.pessoa.id, quantidade:hh.quantidade, acao:hh.acao||null,
+      observacao:hh.acao==="outro"?String(hh.obs).trim():null});
+    x.quantidade_atual=hh.quantidade;
+    const fecha=Number(hh.quantidade)<=0||hh.acao==="retirar";
+    x.status=fecha?"encerrado":"ativo"; x.encerramento=fecha?(hh.acao==="retirar"?"retirado":"esgotado"):null;
+    delete x._pendente; delete x._rascQtd;
+    salvaVenc(); return true;
+  };
+  const salvar=x=>{ if(!exigeVisita()) return;
+    const inp=$("corpo").querySelector(`input[data-q="${lotes.indexOf(x)}"]`);
+    const bruto=inp?inp.value:(x._rascQtd??"");
+    const v=bruto===""?null:Math.max(0,Math.round(Number(bruto)));
+    if(v==null) return alerta("Digite quanto sobrou antes de salvar.");
+    const antes=Number(x.quantidade_atual)||0;          /* o saldo que o lote tem agora */
+    if(antes&&v>antes&&!confirm(`Tinha ${antes} un e agora tem ${v}. Chegou mais do mesmo lote?`)) return;
+    x.hoje=Object.assign({},x.hoje||{},{quantidade:v});
+    if(enviar(x)) telaValidade(); };
+  $("corpo").querySelectorAll("input[data-q]").forEach(inp=>{ const x=lotes[+inp.dataset.q];
+    inp.oninput=()=>{ x._rascQtd=inp.value; x._pendente=true;       /* sem redesenhar: o teclado fica aberto */
+      const b=$("corpo").querySelector(`[data-salvar="${inp.dataset.q}"]`);
+      if(b){ b.textContent="Salvar"; b.removeAttribute("style"); } };
+    inp.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); salvar(x); } }; });
+  $("corpo").querySelectorAll("[data-salvar]").forEach(b=>b.onclick=()=>salvar(lotes[+b.dataset.salvar]));
+  $("corpo").querySelectorAll("[data-zero]").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+    const x=lotes[+b.dataset.zero]; x.hoje=Object.assign({},x.hoje||{},{quantidade:0}); if(enviar(x)) telaValidade(); });
   $("corpo").querySelectorAll("[data-a]").forEach(g=>{ const x=lotes[+g.dataset.a];
-    g.querySelectorAll("button").forEach(b=>b.onclick=()=>mover(x,undefined,b.dataset.v)); });
+    g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
+      x.hoje=Object.assign({},x.hoje||{}); x.hoje.acao=x.hoje.acao===b.dataset.v?null:b.dataset.v;
+      x._pendente=true; salvaVenc(); telaValidade();
+      if(b.dataset.v==="outro"){ const tx=$("corpo").querySelector(`[data-obs="${g.dataset.a}"]`); if(tx) tx.focus(); } }); });
+  $("corpo").querySelectorAll("textarea[data-obs]").forEach(tx=>{ const x=lotes[+tx.dataset.obs];
+    tx.oninput=()=>{ x.hoje.obs=tx.value; x._pendente=true; salvaVenc(); }; });
 
   rodape(editavel()
     ? `<button class="bt sec" onclick="telaNovaValidade()">Registrar lote</button>` + botaoConcluir("validade")
@@ -1685,6 +1718,8 @@ function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     $("corpo").appendChild(d.firstElementChild); }
   ligaAvisar();
   ligaConcluir(()=>{
+    const pend=lotesDe(LOJA).filter(x=>x._pendente);
+    if(pend.length) return {ok:false, msg:`${pend.length} ${pend.length===1?"lote foi alterado":"lotes foram alterados"} e não salvo: ${pend.slice(0,2).map(x=>x.nome).join(", ")}. Toque em Salvar.`};
     const semContar=lotesAtivos(LOJA).filter(pedeContagem);
     if(semContar.length) return {ok:false, msg:`Falta contar ${semContar.length} ${semContar.length===1?"lote":"lotes"}: ${semContar.slice(0,2).map(x=>x.nome).join(", ")}. Diga quanto sobrou.`};
     const vencSem=lotesAtivos(LOJA).filter(x=>diasAte(x.vence_em)<0&&Number(x.quantidade_atual)>0&&!(x.hoje&&x.hoje.acao)&&!x.registrado_hoje);
