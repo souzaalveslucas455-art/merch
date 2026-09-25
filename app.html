@@ -320,7 +320,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-25c";
+const VERSAO_APP = "2026-09-25d";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1835,30 +1835,47 @@ function telaNovoConcorrente(){ montar(()=>{ TELA="mod"; esconderTudo();
 });}
 
 /* ------------------ 6. materiais e geladeiras -----------------
-   Censo de ativos, no desenho do censo de geladeiras do RTM: tem geladeira no
-   ponto de venda? Cada uma com foto, patrimonio, se esta visivel e se esta com
-   75% de produto Coca-Cola. O mesmo para gondola, display, ilha e outros.
+   Censo de ativos, uma vez por semana por loja. Geladeira com as duas
+   perguntas do RTM; os outros ativos com perguntas proprias, porque
+   perguntar se uma gondola esta 75% ocupada nao faz sentido.
 
-   Nao e de toda visita: e uma vez por semana por loja, feito por qualquer
-   repositor dela. So trava o encerramento na ULTIMA visita da semana, se
-   ninguem fez ainda. Por isso tem botao Enviar, diferente dos outros modulos:
-   o censo e um retrato, e so conta quando esta completo.
+   As perguntas vem do banco (app_meta.perguntas_ativos) e sao escritas para
+   que SIM seja bom e NAO seja problema. Sim/Nao em vez de chave liga/desliga:
+   a chave desligada nao diferencia "nao" de "esqueci de responder", e isso
+   encheria o painel de problema falso. So envia com tudo respondido.
+
+   Depois de enviado, o modulo vira o RESUMO do que foi feito na semana, com
+   foto, PTM e respostas. Antes, o censo sumia da vista do repositor.
 ------------------------------------------------------------- */
 const TIPOS_ATIVO=[["gondola","Gôndola"],["display","Display"],["ilha","Ilha"],
                    ["checkout","Checkout"],["material","Material de PDV"],["outro","Outro"]];
+const NOME_TIPO={geladeira:"Geladeira",gondola:"Gôndola",display:"Display",ilha:"Ilha",
+                 checkout:"Checkout",material:"Material de PDV",outro:"Outro ativo"};
+const PERGUNTAS_PADRAO={
+  geladeira:[{k:"visivel",t:"Geladeira visível no ponto de venda?"},{k:"ocupacao_ko_75",t:"Geladeira Coca-Cola (KO) 75% ocupada?"}],
+  gondola:[{k:"abastecida",t:"Gôndola abastecida com nossos produtos?"},{k:"precificada",t:"Todos os nossos produtos com preço?"},
+           {k:"planograma",t:"Produtos organizados conforme o planograma?"},{k:"sem_concorrente",t:"Nosso espaço está livre de produto concorrente?"}],
+  display:[{k:"montado",t:"Display montado e completo?"},{k:"abastecido",t:"Display abastecido?"},
+           {k:"posicao",t:"Em local visível e de fluxo de clientes?"},{k:"precificado",t:"Com preço?"}],
+  ilha:[{k:"montada",t:"Ilha montada?"},{k:"abastecida",t:"Ilha abastecida?"},
+        {k:"comunicacao",t:"Com material de comunicação, como cartaz ou splash?"},{k:"precificada",t:"Com preço?"}],
+  checkout:[{k:"abastecido",t:"Checkout abastecido?"},{k:"visivel",t:"Visível para quem está no caixa?"},{k:"precificado",t:"Com preço?"}],
+  material:[{k:"instalado",t:"Material instalado?"},{k:"vigente",t:"Campanha em vigor, sem estar vencida?"},{k:"conservado",t:"Em bom estado?"}],
+  outro:[{k:"conservado",t:"Em bom estado?"},{k:"abastecido",t:"Abastecido com nossos produtos?"}]};
+const perguntasDe=tipo=>((censoDe(LOJA).perguntas||{})[tipo])||PERGUNTAS_PADRAO[tipo]||PERGUNTAS_PADRAO.outro;
+const temProblema=a=>Object.values(a.respostas||{}).some(v=>v===false);
 const chaveRasc=()=>"rasc:"+LOJA.id+":"+DATA;
+let REFAZER_CENSO=false;
 
 function rascunhoCenso(){
   let r=guarda.lerJ(chaveRasc());
   if(r) return r;
-  /* Semana nova: traz o que tinha no ultimo censo, com o patrimonio. O
-     repositor confirma que continua la e tira foto nova, que e o que da
-     valor ao censo. */
-  const ant=censoDe(LOJA).anteriores||[];
-  const gel=ant.filter(a=>a.tipo==="geladeira").map(a=>({id:uid(),tipo:"geladeira",patrimonio:a.patrimonio||"",
-    visivel:false,ocupacao_ko_75:false,foto:null,veioDoAnterior:true}));
-  const out=ant.filter(a=>a.tipo!=="geladeira").map(a=>({id:uid(),tipo:a.tipo,patrimonio:a.patrimonio||"",
-    visivel:false,ocupacao_ko_75:false,foto:null,veioDoAnterior:true}));
+  /* Refazer parte do que ja foi feito nesta semana; semana nova parte do
+     ultimo censo anterior. Nos dois casos o patrimonio vem preenchido e as
+     respostas e a foto sao novas: e isso que da valor ao censo. */
+  const c=censoDe(LOJA), base=(REFAZER_CENSO&&c.desta_semana&&c.desta_semana.ativos)||c.anteriores||[];
+  const mk=a=>({id:uid(),tipo:a.tipo,patrimonio:a.patrimonio||"",respostas:{},observacao:"",foto:null,veioDoAnterior:true});
+  const gel=base.filter(a=>a.tipo==="geladeira").map(mk), out=base.filter(a=>a.tipo!=="geladeira").map(mk);
   return {tem_geladeira:gel.length>0, tem_outros:out.length>0, geladeiras:gel, outros:out};
 }
 const salvaRasc=r=>guarda.porJ(chaveRasc(),r);
@@ -1869,6 +1886,25 @@ function estadoCenso(l){
   if(c.feito_na_semana) return {k:"feito", txt:`feito esta semana${c.feito_em?" em "+dataBr(c.feito_em).slice(0,5):""}`};
   if(c.obrigatorio_hoje) return {k:"obrig", txt:"obrigatório hoje: última visita da semana"};
   return {k:"pend", txt:"pendente esta semana"};
+}
+
+/* Foto do censo mora no balde privado: precisa do login para abrir. Busca com
+   a credencial e guarda na memoria, para nao baixar de novo a cada tela. */
+const FOTOS_MEM={};
+async function fotoPrivada(caminho){
+  if(!caminho) return null;
+  if(FOTOS_MEM[caminho]) return FOTOS_MEM[caminho];
+  try{
+    const r=await fetch(URLB.replace(/\/+$/,"")+"/storage/v1/object/authenticated/fotos/"+caminho,
+      {headers:{"apikey":CHAVE,"Authorization":"Bearer "+guarda.ler("token")}});
+    if(!r.ok) return null;
+    return FOTOS_MEM[caminho]=URL.createObjectURL(await r.blob());
+  }catch(e){ return null; }
+}
+function carregaFotos(raiz){
+  (raiz||document).querySelectorAll("img[data-foto-priv]").forEach(async img=>{
+    const u=await fotoPrivada(img.dataset.fotoPriv); if(u) img.src=u; else img.replaceWith(Object.assign(document.createElement("span"),{textContent:"foto enviada",className:"emb"}));
+  });
 }
 
 /* Leitor de codigo de barras do patrimonio. Usa o leitor que ja vem no
@@ -1900,11 +1936,16 @@ async function escanearPtm(){
   });
 }
 
+
 function cardAtivo(a, i, grupo){
-  const ehGel=a.tipo==="geladeira";
-  const titulo=ehGel?`Geladeira ${i+1}`:`${(TIPOS_ATIVO.find(t=>t[0]===a.tipo)||[,"Ativo"])[1]} ${i+1}`;
-  const sw=(campo,txt)=>`<div class="sw-lin"><span>${txt}</span>
-    <label class="sw"><input type="checkbox" data-sw="${campo}" ${a[campo]?"checked":""}><i></i></label></div>`;
+  const ehGel=a.tipo==="geladeira", semPtm=a.tipo==="material";
+  const titulo=ehGel?`Geladeira ${i+1}`:`${NOME_TIPO[a.tipo]||"Ativo"} ${i+1}`;
+  a.respostas=a.respostas||{};
+  const sn=q=>`<div class="sw-lin" style="align-items:flex-start;flex-direction:column;gap:6px">
+    <span>${esc(q.t)}</span>
+    <div class="pilha" style="margin:0;width:100%" data-q="${q.k}">
+      <button data-v="sim" class="${a.respostas[q.k]===true?"on":""}">Sim</button>
+      <button data-v="nao" class="${a.respostas[q.k]===false?"on mau":""}">Não</button></div></div>`;
   return `<div class="ativo" data-g="${grupo}" data-i="${i}">
     <div class="cab"><b>${titulo}</b><button class="x" data-rem="1" aria-label="Remover">\u00d7</button></div>
     ${a.veioDoAnterior?`<div class="emb" style="margin:-4px 0 10px">Estava no censo anterior. Confirme e tire foto nova.</div>`:""}
@@ -1914,21 +1955,60 @@ function cardAtivo(a, i, grupo){
     <button class="fotobox" data-foto="1">${a.fotoLocal?`<img src="${a.fotoLocal}" alt="">`
       :a.foto?`<span class="mais">\u2713</span>Foto anexada`:`<span class="mais">+</span>Foto`}</button>
     <input type="file" accept="image/*" capture="environment" hidden>
-    <label style="margin-top:14px">${ehGel?"Scanner ou Digite o PTM":"Patrimônio, se tiver"}</label>
+    ${semPtm?"":`<label style="margin-top:14px">${ehGel?"Scanner ou Digite o PTM":"Patrimônio, se tiver"}</label>
     <div class="ptm"><input data-ptm="1" value="${esc(a.patrimonio||"")}" placeholder="${ehGel?"Scanner do PTM":"Número do patrimônio"}"
-      autocapitalize="characters" autocorrect="off"><button data-scan="1">Escanear</button></div>
-    <div style="margin-top:6px">
-      ${sw("visivel", ehGel?"Geladeira visível no ponto de venda?":"Visível no ponto de venda?")}
-      ${sw("ocupacao_ko_75", ehGel?"Geladeira Coca-Cola (KO) 75% ocupada?":"75% ocupado com produto Coca-Cola (KO)?")}
-    </div></div>`;
+      autocapitalize="characters" autocorrect="off"><button data-scan="1">Escanear</button></div>`}
+    <div style="margin-top:8px">${perguntasDe(a.tipo).map(sn).join("")}</div>
+    <label style="margin-top:6px">Observação, se precisar</label>
+    <textarea data-obs="1" rows="2" style="width:100%;font:inherit;padding:10px;border:1px solid var(--linha);border-radius:12px">${esc(a.observacao||"")}</textarea>
+  </div>`;
+}
+
+/* O que foi feito nesta semana: e o que o repositor ve depois de enviar. */
+function resumoCensoHTML(c){
+  const ds=c.desta_semana, ats=(ds&&ds.ativos)||[];
+  const linhaAtivo=a=>{
+    const ps=perguntasDe(a.tipo), prob=temProblema(a);
+    return `<div class="ativo" style="border-left:4px solid ${prob?"var(--verm)":"var(--verde)"}">
+      <div style="display:flex;gap:12px">
+        ${a.fotoLocal?`<img src="${a.fotoLocal}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:10px;flex:none">`
+          :a.foto_url?`<img data-foto-priv="${esc(a.foto_url)}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:10px;flex:none;background:var(--fundo)">`:""}
+        <div style="flex:1;min-width:0">
+          <b style="font-size:15px">${NOME_TIPO[a.tipo]||"Ativo"}${a.patrimonio?" · PTM "+esc(a.patrimonio):""}</b>
+          ${ps.map(q=>{ const v=(a.respostas||{})[q.k];
+            return `<div style="font-size:13px;margin-top:4px;color:${v===false?"var(--verm)":v===true?"var(--ink2)":"var(--ink3)"}">
+              ${v===true?"\u2713":v===false?"\u2717":"–"} ${esc(q.t)}</div>`; }).join("")}
+          ${a.observacao?`<div class="emb" style="margin-top:5px">“${esc(a.observacao)}”</div>`:""}
+        </div></div></div>`; };
+  const gel=ats.filter(a=>a.tipo==="geladeira"), out=ats.filter(a=>a.tipo!=="geladeira");
+  const probs=ats.filter(temProblema).length;
+  return `<div class="aviso inf" style="background:var(--verde-bg);color:var(--verde)">
+      <b>Censo feito em ${dataBr(ds.data)}${ds.por?" por "+esc(String(ds.por).split(" ")[0]):""}.</b><br>
+      ${gel.length} ${gel.length===1?"geladeira":"geladeiras"} · ${out.length} ${out.length===1?"outro ativo":"outros ativos"}
+      ${probs?` · <b style="color:var(--verm)">${probs} com problema</b>`:" · nada com problema"}</div>
+    ${!ats.length?`<div class="vazio" style="padding:18px">Registrado que a loja não tem geladeira nem outro ativo.</div>`:""}
+    ${gel.length?`<h2 class="tit">GELADEIRAS</h2>${gel.map(linhaAtivo).join("")}`:""}
+    ${out.length?`<h2 class="tit">OUTROS ATIVOS</h2>${out.map(linhaAtivo).join("")}`:""}
+    ${(c.historico||[]).length>1?`<h2 class="tit">SEMANAS ANTERIORES</h2><div class="tl">${c.historico.slice(1).map(h=>
+      `<div class="p ${h.problemas?"al":"ok"}"><span class="b"></span><div>${dataBr(h.data)}${h.por?" · "+esc(String(h.por).split(" ")[0]):""}
+        <small>${h.geladeiras} ${h.geladeiras===1?"geladeira":"geladeiras"} · ${h.outros} ${h.outros===1?"outro ativo":"outros ativos"}${h.problemas?` · ${h.problemas} com problema`:""}</small></div></div>`).join("")}</div>`:""}`;
 }
 
 function telaAtivos(){ montar(()=>{ TELA="mod"; esconderTudo();
-  topo("Materiais e Geladeiras", ()=>telaLoja(), "");
+  topo("Materiais e Geladeiras", ()=>{ REFAZER_CENSO=false; telaLoja(); }, "");
+  const c=censoDe(LOJA);
+  /* Feito nesta semana: mostra o que foi feito, e deixa refazer. */
+  if(c.desta_semana && !REFAZER_CENSO){
+    $("corpo").innerHTML=resumoCensoHTML(c);
+    carregaFotos($("corpo"));
+    rodape(editavel()?`<button class="bt sec" id="refazer">Refazer o censo</button>`:null);
+    if($("refazer")) $("refazer").onclick=()=>{ if(!exigeVisita()) return; REFAZER_CENSO=true; guarda.tira(chaveRasc()); telaAtivos(); };
+    return poeSolicitacoes("pdv");
+  }
   const est=estadoCenso(LOJA), r=rascunhoCenso();
-  const faixa={feito:`<div class="aviso inf" style="background:var(--verde-bg);color:var(--verde)"><b>Censo ${est.txt}.</b><br>Pode fazer de novo se algo mudou.</div>`,
+  const faixa={feito:`<div class="aviso amb"><b>Refazendo o censo desta semana.</b><br>O novo substitui o anterior no resumo.</div>`,
                obrig:`<div class="aviso err"><b>Censo ${est.txt}.</b><br>Ninguém fez o censo desta loja nesta semana, e esta é a última visita. É preciso enviar para encerrar.</div>`,
-               pend:`<div class="aviso amb"><b>Censo ${est.txt}.</b><br>Uma vez por semana por loja. Não precisa ser hoje, mas precisa até a última visita da semana.</div>`}[est.k];
+               pend:`<div class="aviso amb"><b>Censo ${est.txt}.</b><br>Uma vez por semana por loja. Não precisa ser hoje, mas precisa até a última visita da semana.</div>`}[est.k]||"";
   $("corpo").innerHTML=faixa+`
     <div class="sw-lin" style="padding-top:4px"><span><b>Tem geladeira no ponto de venda</b></span>
       <label class="sw"><input type="checkbox" id="tgel" ${r.tem_geladeira?"checked":""}><i></i></label></div>
@@ -1941,7 +2021,7 @@ function telaAtivos(){ montar(()=>{ TELA="mod"; esconderTudo();
       <button class="adic" data-add="outros">+ Adicionar ativo</button>`:""}`;
 
   const redesenha=()=>{ salvaRasc(r); telaAtivos(); };
-  const novo=tipo=>({id:uid(),tipo,patrimonio:"",visivel:false,ocupacao_ko_75:false,foto:null});
+  const novo=tipo=>({id:uid(),tipo,patrimonio:"",respostas:{},observacao:"",foto:null});
   $("tgel").onchange=e=>{ if(!exigeVisita()){ e.target.checked=!e.target.checked; return; }
     r.tem_geladeira=e.target.checked; if(r.tem_geladeira&&!r.geladeiras.length) r.geladeiras.push(novo("geladeira")); redesenha(); };
   $("tout").onchange=e=>{ if(!exigeVisita()){ e.target.checked=!e.target.checked; return; }
@@ -1954,23 +2034,29 @@ function telaAtivos(){ montar(()=>{ TELA="mod"; esconderTudo();
     cx.querySelector("[data-rem]").onclick=()=>{ lista.splice(+cx.dataset.i,1);
       if(!lista.length){ if(cx.dataset.g==="geladeiras") r.tem_geladeira=false; else r.tem_outros=false; }
       redesenha(); };
-    cx.querySelectorAll("[data-tipo]").forEach(b=>b.onclick=()=>{ a.tipo=b.dataset.tipo; redesenha(); });
-    cx.querySelectorAll("[data-sw]").forEach(inp=>inp.onchange=()=>{ if(!exigeVisita()){ inp.checked=!inp.checked; return; }
-      a[inp.dataset.sw]=inp.checked; salvaRasc(r); });
+    /* trocar o tipo troca as perguntas, entao as respostas antigas nao valem */
+    cx.querySelectorAll("[data-tipo]").forEach(b=>b.onclick=()=>{ if(a.tipo!==b.dataset.tipo){ a.tipo=b.dataset.tipo; a.respostas={}; } redesenha(); });
+    cx.querySelectorAll("[data-q]").forEach(g=>g.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+      if(!exigeVisita()) return; a.respostas=a.respostas||{}; a.respostas[g.dataset.q]=b.dataset.v==="sim";
+      g.querySelectorAll("button").forEach(x=>x.classList.remove("on","mau"));
+      b.classList.add("on"); if(b.dataset.v==="nao") b.classList.add("mau"); salvaRasc(r); }));
     const ptm=cx.querySelector("[data-ptm]");
-    ptm.onchange=()=>{ a.patrimonio=ptm.value.trim().toUpperCase(); salvaRasc(r); };
-    cx.querySelector("[data-scan]").onclick=async()=>{ if(!exigeVisita()) return;
+    if(ptm) ptm.onchange=()=>{ a.patrimonio=ptm.value.trim().toUpperCase(); salvaRasc(r); };
+    const scan=cx.querySelector("[data-scan]");
+    if(scan) scan.onclick=async()=>{ if(!exigeVisita()) return;
       const v=await escanearPtm(); if(v){ a.patrimonio=v.toUpperCase(); redesenha(); } };
+    cx.querySelector("[data-obs]").oninput=e=>{ a.observacao=e.target.value; salvaRasc(r); };
     const bf=cx.querySelector("[data-foto]"), inp=cx.querySelector('input[type=file]');
     bf.onclick=()=>{ if(!exigeVisita()) return; inp.click(); };
     inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
       bf.innerHTML="Preparando…";
       try{ const g=await guardaFoto(f,{tabela:"ativo_censo", registro_id:a.id, semRegistro:true});
-        a.foto=g.caminho; a.fotoLocal=g.url; redesenha(); }
+        a.foto=g.caminho; a.fotoLocal=g.url; FOTOS_MEM[g.caminho]=g.url; redesenha(); }
       catch(e){ alerta(e.message); redesenha(); } };
   });
 
-  rodape(`<button class="bt" id="enviarCenso">Enviar</button>`);
+  rodape((REFAZER_CENSO?`<button class="bt sec" id="cancelaRef">Cancelar</button>`:"")+`<button class="bt" id="enviarCenso">Enviar</button>`);
+  if($("cancelaRef")) $("cancelaRef").onclick=()=>{ REFAZER_CENSO=false; guarda.tira(chaveRasc()); telaAtivos(); };
   $("enviarCenso").onclick=()=>enviarCenso(r);
   poeSolicitacoes("pdv");
 });}
@@ -1978,11 +2064,12 @@ function telaAtivos(){ montar(()=>{ TELA="mod"; esconderTudo();
 function enviarCenso(r){
   if(!exigeVisita()) return;
   const gel=r.tem_geladeira?r.geladeiras:[], out=r.tem_outros?r.outros:[];
-  /* O que precisa estar certo antes de valer como censo da semana. */
   const falta=[];
   gel.forEach((a,i)=>{ if(!a.foto) falta.push(`Geladeira ${i+1}: falta a foto`);
-                        if(!a.patrimonio) falta.push(`Geladeira ${i+1}: falta o patrimônio`); });
-  out.forEach((a,i)=>{ if(!a.foto) falta.push(`Ativo ${i+1}: falta a foto`); });
+                        if(!a.patrimonio) falta.push(`Geladeira ${i+1}: falta o PTM`); });
+  out.forEach((a,i)=>{ if(!a.foto) falta.push(`${NOME_TIPO[a.tipo]} ${i+1}: falta a foto`); });
+  [...gel,...out].forEach((a,i)=>{ const sem=perguntasDe(a.tipo).filter(q=>typeof (a.respostas||{})[q.k]!=="boolean").length;
+    if(sem) falta.push(`${NOME_TIPO[a.tipo]} ${a.patrimonio||""}: ${sem} ${sem===1?"pergunta sem resposta":"perguntas sem resposta"}`); });
   if(r.tem_geladeira&&!gel.length) falta.push("Marcou que tem geladeira, mas nenhuma foi registrada");
   if(falta.length) return alerta(falta.slice(0,3).join(" · "));
   if(!gel.length&&!out.length&&!confirm("Confirmar que esta loja não tem geladeira nem outro ativo?")) return;
@@ -1991,16 +2078,26 @@ function enviarCenso(r){
   grava("censo_loja","id",{id:censoId, visita_id:LOJA.visita.id, loja_id:LOJA.id,
     pessoa_id:DIA.pessoa.id, data:DIA.data, tem_geladeira:gel.length>0, tem_outros:out.length>0});
   [...gel,...out].forEach(a=>grava("ativo_censo","id",{id:a.id, censo_id:censoId, loja_id:LOJA.id,
-    pessoa_id:DIA.pessoa.id, tipo:a.tipo, patrimonio:a.patrimonio||null,
-    visivel:!!a.visivel, ocupacao_ko_75:!!a.ocupacao_ko_75, foto_url:a.foto||null}));
+    pessoa_id:DIA.pessoa.id, tipo:a.tipo, patrimonio:a.tipo==="material"?null:(a.patrimonio||null),
+    respostas:a.respostas||{}, observacao:(a.observacao||"").trim()||null,
+    /* as duas colunas antigas continuam preenchidas na geladeira */
+    visivel:a.tipo==="geladeira"?!!a.respostas.visivel:null,
+    ocupacao_ko_75:a.tipo==="geladeira"?!!a.respostas.ocupacao_ko_75:null,
+    foto_url:a.foto||null}));
 
-  CENSO=CENSO||{}; CENSO[LOJA.id]=Object.assign(CENSO[LOJA.id]||{},
-    {feito_na_semana:true, feito_em:DATA, obrigatorio_hoje:false, enviado_aqui:true,
-     ativos_hoje:[...gel,...out].map(a=>({tipo:a.tipo,patrimonio:a.patrimonio,visivel:!!a.visivel,ocupacao_ko_75:!!a.ocupacao_ko_75}))});
+  CENSO=CENSO||{};
+  const c=CENSO[LOJA.id]=Object.assign(CENSO[LOJA.id]||{}, {feito_na_semana:true, feito_em:DATA,
+    obrigatorio_hoje:false, enviado_aqui:true});
+  c.desta_semana={id:censoId, data:DATA, por:DIA.pessoa.nome, tem_geladeira:gel.length>0, tem_outros:out.length>0,
+    ativos:[...gel,...out].map(a=>({tipo:a.tipo, patrimonio:a.patrimonio, respostas:a.respostas,
+      observacao:a.observacao, foto_url:a.foto, fotoLocal:a.fotoLocal}))};
+  c.historico=[{data:DATA, por:DIA.pessoa.nome, geladeiras:gel.length, outros:out.length,
+    problemas:[...gel,...out].filter(temProblema).length}, ...((c.historico||[]).filter(h=>h.data!==DATA))];
   guarda.porJ("censo:"+DATA,CENSO); guarda.tira(chaveRasc());
+  REFAZER_CENSO=false;
   concluirModulo("pdv");
   alerta("Censo enviado.");
-  telaLoja();
+  telaAtivos();                       /* abre o resumo do que foi feito */
 }
 const telaPdv=telaAtivos;   // nome antigo, caso algo ainda chame
 
@@ -2142,8 +2239,8 @@ function quantos(k){
   if(k==="validade") return (l.validades||[]).filter(v=>diasAte(v.vence_em)<=lim).length;
   if(k==="estoque")  return (oportDe(l).itens||[]).filter(x=>totalOport(x).tocou).length;
   if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
-  if(k==="geladeira"){ const c=censoDe(l);   /* do censo enviado hoje */
-    return ((c.feito_em===DATA&&c.ativos_hoje)||[]).filter(a=>!a.visivel||!a.ocupacao_ko_75).length; }
+  if(k==="geladeira"){ const c=censoDe(l), ds=c.desta_semana;   /* do censo enviado hoje */
+    return ((ds&&ds.data===DATA&&ds.ativos)||[]).filter(temProblema).length; }
   return 0;
 }
 function telaAnexar(){ montar(()=>{ TELA="mod"; esconderTudo();
