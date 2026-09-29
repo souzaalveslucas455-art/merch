@@ -372,7 +372,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29b";
+const VERSAO_APP = "2026-09-29c";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -456,6 +456,12 @@ const emailDaRota=c=>`rota-${String(c).trim().toLowerCase()}@${CFG.dominio}`;
 const fila={ itens:()=>guarda.lerJ("fila")||[],
   poe(i){ const f=this.itens(); f.push({...i,fid:uid(),tentativas:0}); guarda.porJ("fila",f); pintaFila(); },
   tira(fid){ guarda.porJ("fila",this.itens().filter(x=>x.fid!==fid)); pintaFila(); } };
+/* Pendente de verdade e o que ainda vai tentar subir. Item PARADO (falhou 5
+   vezes) nao conta: antes ele contava, e um so item parado, de qualquer dia,
+   impedia o app de atualizar o dia e as oportunidades para sempre. */
+const pendentes=()=>fila.itens().filter(x=>!x.parado).length;
+/* O ultimo erro de cada busca, para a tela dizer o motivo em vez de esperar. */
+const ERRO_BUSCA={};
 let enviando=false;
 async function escoar(){
   if(enviando||!navigator.onLine) return;
@@ -798,11 +804,17 @@ async function buscarOportunidades(data){
   try{
     const o=await api("/rest/v1/rpc/minhas_oportunidades",{method:"POST",body:JSON.stringify({p_data:data})});
     if(data!==DATA) return;
-    /* Com envio pendente, o que esta no aparelho e mais novo que o servidor. */
-    if(fila.itens().length && guardado) return;
-    OPORT=o||{}; guarda.porJ("oport:"+data,OPORT);
+    /* Os numeros vem sempre do servidor. Com envio pendente, a CONTAGEM que o
+       repositor digitou e ainda nao subiu e preservada, produto por produto. */
+    const novo=o||{};
+    if(guardado && pendentes()){
+      for(const [lid,lj] of Object.entries(novo)){ const velho=guardado[lid]; if(!velho||!lj||!lj.itens) continue;
+        const loc={}; (velho.itens||[]).forEach(x=>{ if(x.contagem) loc[x.produto_id]=x.contagem; });
+        lj.itens.forEach(x=>{ if(loc[x.produto_id]&&!x.contagem) x.contagem=loc[x.produto_id]; }); }
+    }
+    OPORT=novo; delete ERRO_BUSCA.oport; guarda.porJ("oport:"+data,OPORT); guarda.por("oport_em:"+data,new Date().toISOString());
     if(TELA==="home") pintaLojas(); else if(TELA==="loja") telaLoja();
-  }catch(e){}
+  }catch(e){ ERRO_BUSCA.oport=e.message; }
 }
 const oportDe=l=>(OPORT&&OPORT[l.id])||{total:0,itens:[],limite:15};
 
@@ -814,9 +826,9 @@ async function buscarPedidos(data){
   try{
     const r=await api("/rest/v1/rpc/meus_pedidos",{method:"POST",body:JSON.stringify({p_data:data})});
     if(data!==DATA) return;
-    PEDIDOS=r||{}; guarda.porJ("pedidos:"+data,PEDIDOS);
-    if(TELA==="loja") telaLoja();
-  }catch(e){}
+    PEDIDOS=r||{}; delete ERRO_BUSCA.pedidos; guarda.porJ("pedidos:"+data,PEDIDOS);
+    if(TELA==="loja") telaLoja(); else if(TELA==="mod"&&$("topo").textContent.includes("Informações de Vendas")) telaPedidos();
+  }catch(e){ ERRO_BUSCA.pedidos=e.message; if(TELA==="mod"&&$("topo").textContent.includes("Informações de Vendas")) telaPedidos(); }
 }
 /* A resposta do banco passou a ser {resumo, pedidos} por loja. O formato
    antigo, so a lista, continua lido: pode estar guardado no celular. */
@@ -947,10 +959,10 @@ function buscarTudoDoDia(data){
 }
 
 async function revalidarDia(data){
-  if(!navigator.onLine || fila.itens().length) return;
+  if(!navigator.onLine || pendentes()) return;
   try{
     const novo=await api("/rest/v1/rpc/meu_dia",{method:"POST",body:JSON.stringify({p_data:data})});
-    if(fila.itens().length || data!==DATA) return;
+    if(pendentes() || data!==DATA) return;
     guarda.porJ("dia:"+data,novo);
     DIA=novo;
     if(TELA==="home"){ pintaDias(); pintaLojas(); }
@@ -1646,6 +1658,8 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
       <button class="st ${FILTRO_OP===k?"on":""}" data-f="${k}" ${cor?`style="--c:${cor}"`:""}>
         <span class="rot">${cor?"<i></i>":""}${t}</span><span class="n">${n}</span>
         <span class="cx">${Math.round(somaJogo(k)).toLocaleString("pt-BR")} ${rot} em jogo</span></button>`).join("")}</div>
+    ${ERRO_BUSCA.oport?`<div class="aviso amb"><b>Não consegui atualizar as oportunidades</b>${guarda.ler("oport_em:"+DATA)?`; estes números são de ${new Date(guarda.ler("oport_em:"+DATA)).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`:""}.<br>${esc(traduz(ERRO_BUSCA.oport))}
+      <button class="bt sec" id="tentaOp" style="margin-top:8px">Tentar de novo</button></div>`:""}
     ${r.semMotivo?`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"produto zerado sem motivo":"produtos zerados sem motivo"}.</b> Informe por que zerou antes de concluir.</div>`:""}
     <div class="emb" style="margin:2px 2px 4px">${lista.length<filtradas.length?`As ${lista.length} de maior volume em jogo, de ${filtradas.length}`:`${filtradas.length} ${filtradas.length===1?"produto":"produtos"}`}
       · ${filtradas.filter(x=>totalOport(x).tocou).length} registrados</div>
@@ -1653,6 +1667,7 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     ${filtradas.length>lim?`<button class="bt sec" id="vertodas" style="margin-top:6px">${VER_TODAS?"Ver só as principais":`Ver todas as ${filtradas.length}`}</button>`:""}`;
 
   $("filtros").querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ FILTRO_OP=b.dataset.f; VER_TODAS=false; telaOportunidade(); });
+  if($("tentaOp")) $("tentaOp").onclick=async()=>{ $("tentaOp").textContent="Buscando…"; await buscarOportunidades(DATA); telaOportunidade(); };
   $("unid").querySelectorAll("button").forEach(b=>b.onclick=()=>{
     const novo=b.dataset.u, velho=unidAtual(); if(novo===velho) return;
     if(!exigeVisita()) return;
@@ -1960,8 +1975,14 @@ function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Informações de Vendas", ()=>{ FILTRO_PED="todos"; telaLoja(); }, "");
   const todos=pedidosDe(LOJA), rv=resumoVendasDe(LOJA);
   if(!todos.length){
-    $("corpo").innerHTML=`<div class="vazio">${PEDIDOS?"Nenhum pedido desta loja nos últimos 30 dias."
-      :"Ainda buscando os pedidos. Se estiver sem sinal, eles aparecem quando voltar."}</div>`;
+    $("corpo").innerHTML = ERRO_BUSCA.pedidos && !PEDIDOS
+      ? `<div class="aviso err"><b>Não consegui buscar os pedidos.</b><br>${esc(traduz(ERRO_BUSCA.pedidos))}</div>
+         <button class="bt" id="tentaPed">Tentar de novo</button>`
+      : `<div class="vazio">${PEDIDOS?"Nenhum pedido desta loja nos últimos 30 dias."
+         :!navigator.onLine?"Sem sinal. Os pedidos aparecem quando a internet voltar."
+         :"Buscando os pedidos…"}</div>`;
+    if($("tentaPed")) $("tentaPed").onclick=()=>{ $("corpo").innerHTML=`<div class="vazio">Buscando os pedidos…</div>`; buscarPedidos(DATA); };
+    if(!PEDIDOS&&!ERRO_BUSCA.pedidos&&navigator.onLine) buscarPedidos(DATA);
     return rodape(`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
   }
   const conta=k=>todos.filter(n=>k==="todos"||situacaoPedido(n).k===k).length;
