@@ -380,7 +380,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29g";
+const VERSAO_APP = "2026-09-29h";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -2043,6 +2043,7 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
     n.status==="ACERTADA"?{ok:true,t:"Acertado no caixa",d:"baixado no sistema"}
                          :{t:"Ainda não acertado no caixa",d:"aberto no sistema"}
   ];
+  const algumaFoto=(n.itens||[]).some(x=>x.imagem);
   $("corpo").innerHTML=`
     ${cardPedido(n,0).replace('class="ped"','class="ped" style="cursor:default"')}
     <h2 class="tit">HISTÓRICO DE STATUS</h2>
@@ -2052,7 +2053,12 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
     <div class="tl">${(n.itens||[]).map(x=>{
       const vc=Number(x.caixas)>0?Number(x.valor)/Number(x.caixas):null;
       const vu=vc!=null&&Number(x.fator_cx)>0?vc/Number(x.fator_cx):null;
-      return `<div class="pi">${x.imagem?`<img class="pifoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="fotoFalhou(this)">`:`<div class="semfoto">sem foto</div>`}<div style="flex:1;min-width:0">
+      /* O espaco da foto so existe quando o pedido tem pelo menos uma foto.
+         Sem nenhuma, o detalhe fica como era antes das fotos. */
+      const foto = !algumaFoto ? "" : x.imagem
+        ? `<img class="pifoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="fotoFalhou(this)">`
+        : `<div class="semfoto">sem foto</div>`;
+      return `<div class="pi">${foto}<div style="flex:1;min-width:0">
         <div class="n">${esc(x.sku)} • ${esc(x.nome)}</div>
         <div class="g">
           <div><small>Caixas</small><b>${cxTxt(x.caixas)}</b></div>
