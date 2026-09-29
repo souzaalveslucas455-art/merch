@@ -354,6 +354,12 @@ h2.tit:first-child{margin-top:2px}
 .rv .canais{display:flex;height:8px;border-radius:8px;overflow:hidden;margin-top:12px;background:var(--linha)}
 .rv .leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:7px;font-size:12px;color:var(--ink2)}
 .rv .leg i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.ped .prods img.pfoto{width:46px;height:46px;object-fit:contain;background:#fff;border:1px solid var(--linha);border-radius:9px;padding:2px}
+.ped .prods .mais{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:9px;
+  background:var(--fundo);border:1px solid var(--linha);color:var(--ink2);font-weight:700;font-size:14px;max-width:none;padding:0}
+.pi .pifoto{flex:none;width:68px;height:68px;object-fit:contain;border-radius:11px;background:#fff;border:1px solid var(--linha);padding:3px}
+.pi .semfoto{flex:none;width:68px;height:68px;border-radius:11px;background:var(--fundo);border:1px solid var(--linha);
+  display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:11px;text-align:center;line-height:1.2}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -374,7 +380,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29e";
+const VERSAO_APP = "2026-09-29f";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1949,6 +1955,15 @@ function compartilharPedido(n){
   else open("https://wa.me/?text="+encodeURIComponent(t),"_blank");
 }
 
+/* Foto do produto vem do servidor de imagens do RTM. Se nao carregar (sem
+   sinal, endereco mudou, produto sem foto), a imagem some e fica o nome no
+   lugar, em vez do icone de imagem quebrada. */
+function fotoFalhou(img){
+  const nome=img.getAttribute("alt")||"";
+  if(img.classList.contains("pifoto")){ const d=document.createElement("div"); d.className="semfoto"; d.textContent="sem foto"; img.replaceWith(d); }
+  else { const sp=document.createElement("span"); sp.textContent=nome; img.replaceWith(sp); }
+}
+window.fotoFalhou=fotoFalhou;   /* chamada direto pela imagem (onerror): precisa estar a vista da pagina */
 function cardPedido(n,i){
   const st=situacaoPedido(n), its=n.itens||[], og=origemDe(n.origem);
   return `<div class="ped" data-p="${i}">
@@ -1960,9 +1975,14 @@ function cardPedido(n,i){
     <div class="lin forte">${IC.lojaic}${esc(LOJA.codigo)} • ${esc(LOJA.nome)}</div>
     <div class="lin">${IC.cal}${dataLonga(n.emissao)}${n.hora?` às ${esc(n.hora)}`:""}</div>
     <div style="display:flex;align-items:flex-end;gap:10px">
-      <div class="prods" style="flex:1;min-width:0">
-        ${its.slice(0,3).map(x=>`<span>${esc(x.nome)}</span>`).join("")}
-        ${its.length>3?`<span>+${its.length-3}</span>`:""}
+      <div class="prods" style="flex:1;min-width:0">${(()=>{
+        /* Com foto: as fotos dos produtos de maior valor, como no RTM. Sem
+           nenhuma foto no pedido: os nomes, como antes. */
+        const fotos=its.filter(x=>x.imagem).slice(0,4);
+        if(fotos.length) return fotos.map(x=>`<img class="pfoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" onerror="fotoFalhou(this)">`).join("")
+          + (its.length>fotos.length?`<span class="mais">+${its.length-fotos.length}</span>`:"");
+        return its.slice(0,3).map(x=>`<span>${esc(x.nome)}</span>`).join("") + (its.length>3?`<span>+${its.length-3}</span>`:"");
+      })()}
       </div>
       <button class="compart" data-c="${i}" aria-label="Compartilhar">${IC.comp}</button>
     </div>
@@ -2032,7 +2052,7 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
     <div class="tl">${(n.itens||[]).map(x=>{
       const vc=Number(x.caixas)>0?Number(x.valor)/Number(x.caixas):null;
       const vu=vc!=null&&Number(x.fator_cx)>0?vc/Number(x.fator_cx):null;
-      return `<div class="pi"><div style="flex:1;min-width:0">
+      return `<div class="pi">${x.imagem?`<img class="pifoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" onerror="fotoFalhou(this)">`:`<div class="semfoto">sem foto</div>`}<div style="flex:1;min-width:0">
         <div class="n">${esc(x.sku)} • ${esc(x.nome)}</div>
         <div class="g">
           <div><small>Caixas</small><b>${cxTxt(x.caixas)}</b></div>
