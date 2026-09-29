@@ -341,6 +341,17 @@ h2.tit:first-child{margin-top:2px}
 .op .tot{margin-top:9px;font-size:12.5px;color:var(--ink2)}
 .op .pares{margin:10px 14px 0;font-size:13px;color:var(--ink2);background:var(--roxo-bg);border-radius:11px;padding:9px 11px}
 .op .pares b{color:var(--roxo)}
+.orig{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;letter-spacing:.02em;
+  padding:5px 10px;border-radius:9px;background:var(--ob,#E7F3FB);color:var(--oc,#1672A8)}
+.orig svg{flex:none}
+.rv{background:var(--papel);border-radius:16px;box-shadow:var(--sombra);padding:14px 15px;margin-bottom:14px}
+.rv .t{font-size:11.5px;font-weight:700;color:var(--ink3);letter-spacing:.04em}
+.rv .g3{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-top:8px}
+.rv .g3 b{display:block;font-size:19px;line-height:1.15} .rv .g3 small{font-size:11.5px;color:var(--ink3)}
+.rv .sit{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:700;padding:4px 10px;border-radius:20px}
+.rv .canais{display:flex;height:8px;border-radius:8px;overflow:hidden;margin-top:12px;background:var(--linha)}
+.rv .leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:7px;font-size:12px;color:var(--ink2)}
+.rv .leg i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -361,7 +372,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-26a";
+const VERSAO_APP = "2026-09-29a";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -807,7 +818,10 @@ async function buscarPedidos(data){
     if(TELA==="loja") telaLoja();
   }catch(e){}
 }
-const pedidosDe=l=>(PEDIDOS&&PEDIDOS[l.id])||[];
+/* A resposta do banco passou a ser {resumo, pedidos} por loja. O formato
+   antigo, so a lista, continua lido: pode estar guardado no celular. */
+const pedidosDe=l=>{ const x=PEDIDOS&&PEDIDOS[l.id]; return Array.isArray(x)?x:((x&&x.pedidos)||[]); };
+const resumoVendasDe=l=>{ const x=PEDIDOS&&PEDIDOS[l.id]; return (x&&!Array.isArray(x)&&x.resumo)||null; };
 
 /* ------------------------- regras de tarefa --------------------------
    Cada modulo tem uma regra. Vem do banco (app_meta.regras_modulos), entao
@@ -1026,7 +1040,8 @@ function lojasFiltradas(){
   return ls.filter(l=>String(l.nome).toLowerCase().includes(f)||String(l.bairro||"").toLowerCase().includes(f));
 }
 function prioridade(l){
-  const atras=(l.notas||[]).some(n=>n.dias>0);
+  const ps=pedidosDe(l);
+  const atras=ps.length ? ps.some(n=>n.status!=="ACERTADA"&&n.dias>0) : (l.notas||[]).some(n=>n.dias>0);
   const venc=lotesAtivos(l).some(x=>{ const k=nivelLote(x).k; return k==="vencido"||k==="critico"; });
   return atras||venc?"Alta":"Normal";
 }
@@ -1849,16 +1864,28 @@ const reais=v=>"R$ "+Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:
 const cxTxt=n=>{ const v=Number(n||0); return `${v.toLocaleString("pt-BR",{maximumFractionDigits:1})} ${v===1?"Caixa":"Caixas"}`; };
 
 /* A situacao que o repositor enxerga, em ordem de importancia. */
+/* Origem do pedido, no desenho do RTM. */
+const ORIGEM={"COKE TOGO":{t:"COKE TOGO",c:"#1672A8",b:"#E7F3FB",
+    ic:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>'},
+  "INFOCOM":{t:"INFOCOM",c:"#0E7C7B",b:"#E3F4F3",
+    ic:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'},
+  "B2B":{t:"B2B",c:"#6D4BC4",b:"#F0EBFB",
+    ic:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 21V8l9-5 9 5v13M9 21v-6h6v6"/></svg>'},
+  "EDI":{t:"EDI",c:"#4B5563",b:"#EEF0F2",
+    ic:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 7h16M4 12h16M4 17h10"/></svg>'}};
+const origemDe=o=>ORIGEM[String(o||"").toUpperCase()]||(o?{t:String(o).toUpperCase(),c:"#4B5563",b:"#EEF0F2",ic:""}:null);
+const COR_CANAL={"COKE TOGO":"#1672A8","INFOCOM":"#0E7C7B","B2B":"#6D4BC4","EDI":"#9CA3AF"};
+
 function situacaoPedido(n){
   const conf=n.conferido&&n.conferido.situacao;
-  if(n.status==="ACERTADA") return {k:"entregue", t:"Entregue", cor:"var(--verde)", bg:"var(--verde-bg)"};
+  if(n.status==="ACERTADA") return {k:"entregue", t:"Acertado", cor:"var(--verde)", bg:"var(--verde-bg)"};
   if(conf==="chegou")       return {k:"entregue", t:"Chegou · sem acerto", cor:"var(--verde)", bg:"var(--verde-bg)"};
   if(conf==="nao_chegou")   return {k:"aberto",   t:"Não chegou", cor:"var(--verm)", bg:"var(--verm-bg)"};
   if(conf==="parcial")      return {k:"aberto",   t:"Chegou em parte", cor:"var(--amb)", bg:"var(--amb-bg)"};
   if(n.dias>0)              return {k:"aberto",   t:`Em aberto há ${n.dias} ${n.dias===1?"dia":"dias"}`, cor:"var(--amb)", bg:"var(--amb-bg)"};
   return                           {k:"caminho",  t:"A caminho", cor:"var(--azul)", bg:"var(--azul-bg)"};
 }
-const FILTROS=[["todos","Todos"],["caminho","A caminho"],["aberto","Em aberto"],["entregue","Entregues"]];
+const FILTROS=[["todos","Todos"],["caminho","A caminho"],["aberto","Em aberto"],["entregue","Acertados"]];
 let FILTRO_PED="todos";
 
 function textoPedido(n){
@@ -1873,15 +1900,15 @@ function compartilharPedido(n){
 }
 
 function cardPedido(n,i){
-  const st=situacaoPedido(n), its=n.itens||[];
+  const st=situacaoPedido(n), its=n.itens||[], og=origemDe(n.origem);
   return `<div class="ped" data-p="${i}">
     <div class="topo-ped">
+      ${og?`<span class="orig" style="--oc:${og.c};--ob:${og.b}">${og.ic}${og.t}</span>`:`<span></span>`}
       <span class="selo" style="background:${st.bg};color:${st.cor};font-weight:600">${st.t}</span>
-      ${n.consultor?`<span style="font-size:12px;color:var(--ink3);text-align:right">${esc(String(n.consultor).split(" ").slice(0,2).join(" "))}</span>`:""}
     </div>
-    <div class="lin forte">${IC.nf}NF ${esc(n.numero)}</div>
+    <div class="lin forte">${IC.nf}${og?"":"NF "}${esc(n.numero)}${n.imediato?` <span class="selo" style="background:var(--amb-bg);color:var(--amb);font-size:11px;margin-left:4px">Pedido imediato</span>`:""}</div>
     <div class="lin forte">${IC.lojaic}${esc(LOJA.codigo)} • ${esc(LOJA.nome)}</div>
-    <div class="lin">${IC.cal}${dataLonga(n.emissao)}</div>
+    <div class="lin">${IC.cal}${dataLonga(n.emissao)}${n.hora?` às ${esc(n.hora)}`:""}</div>
     <div style="display:flex;align-items:flex-end;gap:10px">
       <div class="prods" style="flex:1;min-width:0">
         ${its.slice(0,3).map(x=>`<span>${esc(x.nome)}</span>`).join("")}
@@ -1892,13 +1919,37 @@ function cardPedido(n,i){
     <div class="num3">
       <div><small>${IC.cx}Caixas</small><b>${cxTxt(n.caixas)}</b></div>
       <div><small>${IC.din}Total</small><b>${reais(n.valor)}</b></div>
-      <div><small>${IC.cam2}Entrega</small><b>${dataBr(n.previsao).slice(0,5)}</b></div>
+      <div><small>${IC.cam2}Entrega</small><b>${n.previsao?dataBr(n.previsao).slice(0,5):"—"}</b></div>
     </div></div>`;
+}
+
+/* Resumo de vendas da loja no mes: o que faturou, se esta no ritmo das lojas
+   parecidas, e por qual canal ela compra. */
+function resumoVendasHTML(r){
+  if(!r||!r.pedidos) return "";
+  const MES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const nomeMes=MES[Number(String(r.mes).slice(4))-1]||"";
+  const sit={"sem compra no mes":["Sem compra no mês","var(--verm)","var(--verm-bg)"],"bem abaixo":["Bem abaixo do esperado","var(--verm)","var(--verm-bg)"],
+    "abaixo":["Abaixo do esperado","var(--amb)","var(--amb-bg)"],"no ritmo":["No ritmo","var(--verde)","var(--verde-bg)"],
+    "acima":["Acima do esperado","var(--verde)","var(--verde-bg)"]}[r.situacao];
+  const orig=Object.entries(r.por_origem||{}).sort((a,b)=>b[1]-a[1]), tot=orig.reduce((a,x)=>a+x[1],0)||1;
+  const cor=o=>COR_CANAL[String(o).toUpperCase()]||"#9CA3AF";
+  return `<div class="rv">
+    <div class="t">VENDAS DE ${nomeMes.toUpperCase()}${r.atualizado_em?` · ATUALIZADO ${esc(String(r.atualizado_em).slice(0,5))} ${esc(String(r.atualizado_em).slice(11))}`:""}</div>
+    <div class="g3">
+      <div><b>R$ ${Math.round(Number(r.faturado)).toLocaleString("pt-BR")}</b><small>faturado</small></div>
+      <div><b>${Math.round(Number(r.caixas)).toLocaleString("pt-BR")}</b><small>caixas</small></div>
+      <div><b>${r.pedidos}</b><small>${r.pedidos===1?"pedido":"pedidos"}${r.em_aberto?` · ${r.em_aberto} em aberto`:""}</small></div>
+    </div>
+    ${sit?`<span class="sit" style="color:${sit[1]};background:${sit[2]}">${sit[0]}${r.pct_do_esperado!=null?` · ${r.pct_do_esperado}% do esperado para hoje`:""}</span>`:""}
+    ${orig.length?`<div class="canais">${orig.map(([o,n])=>`<span style="width:${n/tot*100}%;background:${cor(o)}"></span>`).join("")}</div>
+      <div class="leg">${orig.map(([o,n])=>`<span><i style="background:${cor(o)}"></i>${esc(o)} ${Math.round(n/tot*100)}%</span>`).join("")}</div>`:""}
+  </div>`;
 }
 
 function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Informações de Vendas", ()=>{ FILTRO_PED="todos"; telaLoja(); }, "");
-  const todos=pedidosDe(LOJA);
+  const todos=pedidosDe(LOJA), rv=resumoVendasDe(LOJA);
   if(!todos.length){
     $("corpo").innerHTML=`<div class="vazio">${PEDIDOS?"Nenhum pedido desta loja nos últimos 30 dias."
       :"Ainda buscando os pedidos. Se estiver sem sinal, eles aparecem quando voltar."}</div>`;
@@ -1908,7 +1959,7 @@ function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
   const vis=todos.map((n,i)=>({n,i})).filter(x=>FILTRO_PED==="todos"||situacaoPedido(x.n).k===FILTRO_PED);
   const abertos=todos.filter(n=>situacaoPedido(n).k==="aberto").length;
   $("corpo").innerHTML=`
-    <div class="aviso inf">Consulta: os pedidos desta loja e a situação de cada um no sistema.${abertos?` ${abertos} em aberto.`:""}</div>
+    ${resumoVendasHTML(rv)||`<div class="aviso inf">Consulta: os pedidos desta loja e a situação de cada um no sistema.${abertos?` ${abertos} em aberto.`:""}</div>`}
     <div class="pilha" id="fped" style="margin:0 0 12px">
       ${FILTROS.map(([k,t])=>`<button data-f="${k}" class="${FILTRO_PED===k?"on":""}">${t} · ${conta(k)}</button>`).join("")}
     </div>
@@ -1925,9 +1976,11 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Detalhes do pedido", telaPedidos, "");
   const st=situacaoPedido(n), conf=n.conferido;
   const passos=[
-    {ok:true, t:"Pedido faturado", d:dataLonga(n.emissao)},
+    {ok:true, t:n.origem?`Pedido feito pelo ${origemDe(n.origem).t==="COKE TOGO"?"Coke ToGo":n.origem}`:"Pedido faturado",
+     d:dataLonga(n.emissao)+(n.hora?` às ${n.hora}`:"")},
+    n.hora_expedicao?{ok:true, t:"Expedido", d:`às ${n.hora_expedicao}`}:null,
     {ok:true, al:n.dias>0&&n.status!=="ACERTADA"&&!(conf&&conf.situacao==="chegou"),
-     t:`Previsão de entrega: ${dataBr(n.previsao)}`, d:"2 dias úteis após o faturamento"},
+     t:`Previsão de entrega: ${dataBr(n.previsao)}`, d:n.imediato?"pedido imediato":"2 dias úteis após o pedido"},
     conf?{ok:conf.situacao==="chegou", al:conf.situacao==="parcial", mau:conf.situacao==="nao_chegou",
           t:{chegou:"Repositor confirmou: chegou",parcial:"Repositor confirmou: chegou em parte",
              nao_chegou:"Repositor confirmou: não chegou"}[conf.situacao]||"Conferido",
