@@ -339,6 +339,8 @@ h2.tit:first-child{margin-top:2px}
 .op .qtds{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
 .op .qtds label{font-size:12px;color:var(--ink2);margin:0 0 4px;display:block}
 .op .tot{margin-top:9px;font-size:12.5px;color:var(--ink2)}
+.op .fazer{margin:10px 14px 0;font-size:13.5px;line-height:1.4;color:var(--ink);background:var(--cb);border-radius:11px;padding:9px 11px}
+.op .fazer b:first-child{color:var(--c)}
 .op .pares{margin:10px 14px 0;font-size:13px;color:var(--ink2);background:var(--roxo-bg);border-radius:11px;padding:9px 11px}
 .op .pares b{color:var(--roxo)}
 .orig{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;letter-spacing:.02em;
@@ -372,7 +374,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29c";
+const VERSAO_APP = "2026-09-29d";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1521,14 +1523,20 @@ const LOCAIS=[["g","Gôndola"],["d","Depósito"],["i","Ilha"],["k","Checkout"]];
 /* Quatro status. Os tres primeiros olham o que a loja JA compra; "nunca
    comprou" olha o que as lojas parecidas compram e esta nao: e a
    oportunidade de venda, nao um problema de estoque. */
+/* Linguagem de loja, nao de planilha: o repositor bate o olho e sabe o que
+   aconteceu com o produto e o que fazer agora. */
 const CLASSE={ruptura:{t:"Ruptura", cor:"var(--verm)", bg:"var(--verm-bg)",
-                       d:"compra todo mês e não pediu"},
+                       d:"compra todo mês e não pediu", fila:"sem compra no mês",
+                       fazer:"A loja não comprou este mês. Veja se tem na gôndola ou no depósito. Se não tiver, avise o consultor."},
               abaixo: {t:"Abaixo do normal", curto:"Abaixo", cor:"var(--amb)", bg:"var(--amb-bg)",
-                       d:"pedindo menos que o normal"},
+                       d:"pedindo menos que o normal", fila:"comprando pouco",
+                       fazer:"A loja está comprando menos que o normal. Confira se o produto está na gôndola, bem exposto e com preço."},
               excesso:{t:"Excesso", cor:"var(--azul)", bg:"var(--azul-bg)",
-                       d:"pediu acima do normal"},
+                       d:"pediu acima do normal", fila:"comprou demais",
+                       fazer:"A loja comprou mais que o normal. Veja se não está parado no depósito e ajude a girar: gôndola cheia, ponta ou ilha."},
               nunca:  {t:"Nunca comprou", cor:"var(--roxo)", bg:"var(--roxo-bg)",
-                       d:"lojas parecidas vendem, esta nunca comprou"}};
+                       d:"lojas parecidas vendem, esta nunca comprou", fila:"vende nas parecidas",
+                       fazer:"Lojas parecidas vendem e esta nunca comprou. Veja se ela tem por outro fornecedor e avise o consultor."}};
 const ORDEM_CLASSE=["ruptura","abaixo","excesso","nunca"];
 /* O segmento vira frase, para o repositor usar como argumento com a loja:
    "87% dos supermercados vendem este produto". */
@@ -1612,21 +1620,20 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     const ativos=c.locais||LOCAIS.map(x=>x[0]).filter(k=>c[k+"cx"]!=null||c[k+"un"]!=null);
     const valor=k=>u==="cx"?c[k+"cx"]:c[k+"un"];
     const pct=Number(it.normal_cx)>0?Number(it.pedido_cx)/Number(it.normal_cx):0;
+    const terceiro = it.classe==="excesso" ? "Comprou a mais" : "Faltou comprar até hoje";
     const met=nunca
-      ? `<div><small>Lojas ${esc(String(it.segmento||"").toLowerCase()==="rede"?"da rede":"parecidas")}</small><b>${it.penetracao}%</b></div>
-         <div><small>Média por loja</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
-         <div><small>Potencial</small><b style="color:${cl.cor}">${volumeTxt(it.em_jogo_cx,it)}</b></div>`
-      : `<div><small>Compra normal</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
-         <div><small>Pediu no mês</small><b>${volumeTxt(it.pedido_cx,it)}</b></div>
-         <div><small>Em jogo</small><b style="color:${cl.cor}">${volumeTxt(it.em_jogo_cx,it)}</b></div>`;
+      ? `<div><small>Lojas parecidas que compram</small><b>${it.penetracao}%</b></div>
+         <div><small>Cada uma compra</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
+         <div><small>Esta loja</small><b style="color:${cl.cor}">nunca comprou</b></div>`
+      : `<div><small>Costuma comprar</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
+         <div><small>Comprou este mês</small><b>${volumeTxt(it.pedido_cx,it)}</b></div>
+         <div><small>${terceiro}</small><b style="color:${cl.cor}">${volumeTxt(it.em_jogo_cx,it)}</b></div>`;
     return `<div class="op" data-o="${i}" style="--c:${cl.cor};--cb:${cl.bg}">
       <div class="cab"><div class="nm">${esc(it.nome)}
           <div class="em">${esc(it.embalagem||"")}${fator(it)>1?` · 1 cx = ${fator(it)} un`:""}</div></div>
         <span class="tag">${cl.t}</span></div>
       <div class="met">${met}</div>
-      ${nunca?`<div class="pares"><b>${it.penetracao}% ${esc(segFrase(it.segmento))}</b> compram este produto todo mês, e esta loja nunca comprou. Confira se ela tem por outro fornecedor.</div>`
-        :`<div class="barra"><span style="width:${Math.min(pct,1.5)/1.5*100}%"></span><em style="left:${100/1.5}%"></em></div>
-          <div class="barra-leg"><span>pedido do mês</span><span>normal</span></div>`}
+      <div class="fazer"><b>O que fazer:</b> ${nunca?`<b>${it.penetracao}% ${esc(segFrase(it.segmento))}</b> compram este produto todo mês, e esta loja nunca comprou. Veja se ela tem por outro fornecedor e avise o consultor.`:esc(cl.fazer)}</div>
       <div class="corpo-op">
         <div class="onde">${nunca?"Tem na loja?":"Onde está na loja?"}</div>
         <div class="locs" data-loc="${i}">
@@ -1657,11 +1664,11 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     <div class="st-fila" id="filtros">${tiles.map(([k,t,cor,n])=>`
       <button class="st ${FILTRO_OP===k?"on":""}" data-f="${k}" ${cor?`style="--c:${cor}"`:""}>
         <span class="rot">${cor?"<i></i>":""}${t}</span><span class="n">${n}</span>
-        <span class="cx">${Math.round(somaJogo(k)).toLocaleString("pt-BR")} ${rot} em jogo</span></button>`).join("")}</div>
+        <span class="cx">${k==="todos"?"para conferir":CLASSE[k].fila}</span></button>`).join("")}</div>
     ${ERRO_BUSCA.oport?`<div class="aviso amb"><b>Não consegui atualizar as oportunidades</b>${guarda.ler("oport_em:"+DATA)?`; estes números são de ${new Date(guarda.ler("oport_em:"+DATA)).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`:""}.<br>${esc(traduz(ERRO_BUSCA.oport))}
       <button class="bt sec" id="tentaOp" style="margin-top:8px">Tentar de novo</button></div>`:""}
     ${r.semMotivo?`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"produto zerado sem motivo":"produtos zerados sem motivo"}.</b> Informe por que zerou antes de concluir.</div>`:""}
-    <div class="emb" style="margin:2px 2px 4px">${lista.length<filtradas.length?`As ${lista.length} de maior volume em jogo, de ${filtradas.length}`:`${filtradas.length} ${filtradas.length===1?"produto":"produtos"}`}
+    <div class="emb" style="margin:2px 2px 4px">${lista.length<filtradas.length?`As ${lista.length} mais importantes, de ${filtradas.length}`:`${filtradas.length} ${filtradas.length===1?"produto":"produtos"}`}
       · ${filtradas.filter(x=>totalOport(x).tocou).length} registrados</div>
     ${FILTRO_OP==="todos"?ORDEM_CLASSE.map(grupo).join(""):lista.map(x=>cartao(x,todas.indexOf(x))).join("")}
     ${filtradas.length>lim?`<button class="bt sec" id="vertodas" style="margin-top:6px">${VER_TODAS?"Ver só as principais":`Ver todas as ${filtradas.length}`}</button>`:""}`;
@@ -1947,33 +1954,11 @@ function cardPedido(n,i){
     </div></div>`;
 }
 
-/* Resumo de vendas da loja no mes: o que faturou, se esta no ritmo das lojas
-   parecidas, e por qual canal ela compra. */
-function resumoVendasHTML(r){
-  if(!r||!r.pedidos) return "";
-  const MES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-  const nomeMes=MES[Number(String(r.mes).slice(4))-1]||"";
-  const sit={"sem compra no mes":["Sem compra no mês","var(--verm)","var(--verm-bg)"],"bem abaixo":["Bem abaixo do esperado","var(--verm)","var(--verm-bg)"],
-    "abaixo":["Abaixo do esperado","var(--amb)","var(--amb-bg)"],"no ritmo":["No ritmo","var(--verde)","var(--verde-bg)"],
-    "acima":["Acima do esperado","var(--verde)","var(--verde-bg)"]}[r.situacao];
-  const orig=Object.entries(r.por_origem||{}).sort((a,b)=>b[1]-a[1]), tot=orig.reduce((a,x)=>a+x[1],0)||1;
-  const cor=o=>COR_CANAL[String(o).toUpperCase()]||"#9CA3AF";
-  return `<div class="rv">
-    <div class="t">VENDAS DE ${nomeMes.toUpperCase()}${r.atualizado_em?` · ATUALIZADO ${esc(String(r.atualizado_em).slice(0,5))} ${esc(String(r.atualizado_em).slice(11))}`:""}</div>
-    <div class="g3">
-      <div><b>R$ ${Math.round(Number(r.faturado)).toLocaleString("pt-BR")}</b><small>faturado</small></div>
-      <div><b>${Math.round(Number(r.caixas)).toLocaleString("pt-BR")}</b><small>caixas</small></div>
-      <div><b>${r.pedidos}</b><small>${r.pedidos===1?"pedido":"pedidos"}${r.em_aberto?` · ${r.em_aberto} em aberto`:""}</small></div>
-    </div>
-    ${sit?`<span class="sit" style="color:${sit[1]};background:${sit[2]}">${sit[0]}${r.pct_do_esperado!=null?` · ${r.pct_do_esperado}% do esperado para hoje`:""}</span>`:""}
-    ${orig.length?`<div class="canais">${orig.map(([o,n])=>`<span style="width:${n/tot*100}%;background:${cor(o)}"></span>`).join("")}</div>
-      <div class="leg">${orig.map(([o,n])=>`<span><i style="background:${cor(o)}"></i>${esc(o)} ${Math.round(n/tot*100)}%</span>`).join("")}</div>`:""}
-  </div>`;
-}
+
 
 function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
   topo("Informações de Vendas", ()=>{ FILTRO_PED="todos"; telaLoja(); }, "");
-  const todos=pedidosDe(LOJA), rv=resumoVendasDe(LOJA);
+  const todos=pedidosDe(LOJA);
   if(!todos.length){
     $("corpo").innerHTML = ERRO_BUSCA.pedidos && !PEDIDOS
       ? `<div class="aviso err"><b>Não consegui buscar os pedidos.</b><br>${esc(traduz(ERRO_BUSCA.pedidos))}</div>
@@ -1989,7 +1974,7 @@ function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
   const vis=todos.map((n,i)=>({n,i})).filter(x=>FILTRO_PED==="todos"||situacaoPedido(x.n).k===FILTRO_PED);
   const abertos=todos.filter(n=>situacaoPedido(n).k==="aberto").length;
   $("corpo").innerHTML=`
-    ${resumoVendasHTML(rv)||`<div class="aviso inf">Consulta: os pedidos desta loja e a situação de cada um no sistema.${abertos?` ${abertos} em aberto.`:""}</div>`}
+    <div class="aviso inf">Consulta: os pedidos desta loja e a situação de cada um no sistema.${abertos?` ${abertos} em aberto.`:""}</div>
     <div class="pilha" id="fped" style="margin:0 0 12px">
       ${FILTROS.map(([k,t])=>`<button data-f="${k}" class="${FILTRO_PED===k?"on":""}">${t} · ${conta(k)}</button>`).join("")}
     </div>
