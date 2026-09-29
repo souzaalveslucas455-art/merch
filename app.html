@@ -374,7 +374,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29d";
+const VERSAO_APP = "2026-09-29e";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1527,13 +1527,13 @@ const LOCAIS=[["g","Gôndola"],["d","Depósito"],["i","Ilha"],["k","Checkout"]];
    aconteceu com o produto e o que fazer agora. */
 const CLASSE={ruptura:{t:"Ruptura", cor:"var(--verm)", bg:"var(--verm-bg)",
                        d:"compra todo mês e não pediu", fila:"sem compra no mês",
-                       fazer:"A loja não comprou este mês. Veja se tem na gôndola ou no depósito. Se não tiver, avise o consultor."},
+                       fazer:"A loja não comprou este mês. Procure na gôndola e no depósito e marque onde está e quanto tem. Se não tiver, marque Não tem e escolha o motivo: isso chega para o seu líder e o gerente."},
               abaixo: {t:"Abaixo do normal", curto:"Abaixo", cor:"var(--amb)", bg:"var(--amb-bg)",
                        d:"pedindo menos que o normal", fila:"comprando pouco",
-                       fazer:"A loja está comprando menos que o normal. Confira se o produto está na gôndola, bem exposto e com preço."},
+                       fazer:"A loja está comprando menos que o normal. Confira se o produto está na gôndola, bem exposto e com preço, e marque onde está e quanto tem."},
               excesso:{t:"Excesso", cor:"var(--azul)", bg:"var(--azul-bg)",
                        d:"pediu acima do normal", fila:"comprou demais",
-                       fazer:"A loja comprou mais que o normal. Veja se não está parado no depósito e ajude a girar: gôndola cheia, ponta ou ilha."},
+                       fazer:"A loja comprou mais que o normal. Marque onde está e quanto tem. Se estiver parado no depósito, ajude a girar: gôndola cheia, ponta ou ilha."},
               nunca:  {t:"Nunca comprou", cor:"var(--roxo)", bg:"var(--roxo-bg)",
                        d:"lojas parecidas vendem, esta nunca comprou", fila:"vende nas parecidas",
                        fazer:"Lojas parecidas vendem e esta nunca comprou. Veja se ela tem por outro fornecedor e avise o consultor."}};
@@ -1543,6 +1543,14 @@ const ORDEM_CLASSE=["ruptura","abaixo","excesso","nunca"];
 const SEG_FRASE={"SUPER":"dos supermercados","HIPER":"dos hipermercados","AS 1-4":"das lojas de autosserviço até 4 caixas",
   "CASH & CARRY":"dos atacarejos","ATACADO GROSSISTA":"dos atacados","REDE":"das lojas da rede"};
 const segFrase=sg=>SEG_FRASE[String(sg||"").toUpperCase()]||("das lojas "+String(sg||"").toLowerCase());
+const SEG_NOME={"SUPER":"supermercados","HIPER":"hipermercados","AS 1-4":"lojas de autosserviço",
+  "CASH & CARRY":"atacarejos","ATACADO GROSSISTA":"atacados","REDE":"lojas da rede"};
+const segNome=sg=>SEG_NOME[String(sg||"").toUpperCase()]||("lojas "+String(sg||"").toLowerCase());
+/* Os tres meses da base, por extenso, a partir do mes atual ("202609"). */
+function tresMeses(mes){ const N=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const a=Number(String(mes||"").slice(0,4)), m=Number(String(mes||"").slice(4));
+  if(!a||!m) return "nos últimos três meses";
+  const ns=[m-2,m-1,m].map(x=>N[(x+11)%12]); return `em ${ns[0]}, ${ns[1]} e ${ns[2]}`; }
 
 function totalOport(it){
   const c=it.contagem||{}, f=fator(it); let u=0, tocou=false;
@@ -1620,20 +1628,31 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     const ativos=c.locais||LOCAIS.map(x=>x[0]).filter(k=>c[k+"cx"]!=null||c[k+"un"]!=null);
     const valor=k=>u==="cx"?c[k+"cx"]:c[k+"un"];
     const pct=Number(it.normal_cx)>0?Number(it.pedido_cx)/Number(it.normal_cx):0;
-    const terceiro = it.classe==="excesso" ? "Comprou a mais" : "Faltou comprar até hoje";
+    /* Conta que o repositor confere de cabeca: costuma comprar menos o que
+       comprou. O ritmo do mes continua por dentro, so para decidir quem esta
+       abaixo no meio do mes; aqui ele nao aparece. */
+    const falta=Math.max(0, Number(it.normal_cx||0)-Number(it.pedido_cx||0));
+    const aMais=Math.max(0, Number(it.pedido_cx||0)-Number(it.normal_cx||0));
+    const quantas = it.lojas_segmento ? `${it.lojas_pares} de ${it.lojas_segmento}` : `${it.penetracao}%`;
     const met=nunca
-      ? `<div><small>Lojas parecidas que compram</small><b>${it.penetracao}%</b></div>
-         <div><small>Cada uma compra</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
+      ? `<div><small>${esc(segNome(it.segmento))} que compram todo mês</small><b>${quantas}</b></div>
+         <div><small>Cada um compra</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
          <div><small>Esta loja</small><b style="color:${cl.cor}">nunca comprou</b></div>`
       : `<div><small>Costuma comprar</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
          <div><small>Comprou este mês</small><b>${volumeTxt(it.pedido_cx,it)}</b></div>
-         <div><small>${terceiro}</small><b style="color:${cl.cor}">${volumeTxt(it.em_jogo_cx,it)}</b></div>`;
+         ${it.classe==="excesso"
+           ? `<div><small>Comprou a mais</small><b style="color:${cl.cor}">${volumeTxt(aMais,it)}</b></div>`
+           : `<div><small>Falta para o mês normal</small><b style="color:${cl.cor}">${volumeTxt(falta,it)}</b></div>`}`;
     return `<div class="op" data-o="${i}" style="--c:${cl.cor};--cb:${cl.bg}">
       <div class="cab"><div class="nm">${esc(it.nome)}
           <div class="em">${esc(it.embalagem||"")}${fator(it)>1?` · 1 cx = ${fator(it)} un`:""}</div></div>
         <span class="tag">${cl.t}</span></div>
       <div class="met">${met}</div>
-      <div class="fazer"><b>O que fazer:</b> ${nunca?`<b>${it.penetracao}% ${esc(segFrase(it.segmento))}</b> compram este produto todo mês, e esta loja nunca comprou. Veja se ela tem por outro fornecedor e avise o consultor.`:esc(cl.fazer)}</div>
+      <div class="fazer"><b>O que fazer:</b> ${nunca
+        ? `<b>${it.lojas_segmento?`${it.lojas_pares} dos ${it.lojas_segmento} ${esc(segNome(it.segmento))}`:`${it.penetracao}% ${esc(segFrase(it.segmento))}`}</b>
+           que a Bandeirantes atende compram este produto todo mês, e esta loja não comprou nenhuma vez ${esc(tresMeses(o.mes))}.
+           Se ela tiver por outro fornecedor, marque onde está. Se não tiver, marque Não trabalha: isso chega para o seu líder e o gerente como oportunidade de venda.`
+        : esc(cl.fazer)}</div>
       <div class="corpo-op">
         <div class="onde">${nunca?"Tem na loja?":"Onde está na loja?"}</div>
         <div class="locs" data-loc="${i}">
