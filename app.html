@@ -372,7 +372,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29a";
+const VERSAO_APP = "2026-09-29b";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1039,6 +1039,15 @@ function lojasFiltradas(){
   if(!f) return ls;
   return ls.filter(l=>String(l.nome).toLowerCase().includes(f)||String(l.bairro||"").toLowerCase().includes(f));
 }
+/* O cartao da loja fala dos pedidos do movimento. As notas antigas so entram
+   quando ainda nao ha movimento carregado: sem carga nova de notas, as que
+   estavam em aberto ficariam "previstas" para sempre. */
+function linhaPedidos(l){
+  const ps=pedidosDe(l);
+  if(ps.length){ const cam=ps.filter(n=>n.status!=="ACERTADA"&&!(n.dias>0)).length, ab=ps.filter(n=>n.status!=="ACERTADA"&&n.dias>0).length;
+    return (cam?` · ${cam} ${cam===1?"pedido a caminho":"pedidos a caminho"}`:"")+(ab?` · ${ab} em aberto`:""); }
+  const ns=l.notas||[]; return ns.length?` · ${ns.length} nota(s) prevista(s)`:"";
+}
 function prioridade(l){
   const ps=pedidosDe(l);
   const atras=ps.length ? ps.some(n=>n.status!=="ACERTADA"&&n.dias>0) : (l.notas||[]).some(n=>n.dias>0);
@@ -1064,7 +1073,7 @@ function pintaLojas(){
           </div></div>
         ${fim?`<div class="hora">${esc(String(v.hora_inicio||"").slice(0,5))} – ${esc(String(v.hora_fim).slice(0,5))}</div>`:""}
         <div class="end">${esc([l.bairro,l.cidade].filter(Boolean).join(", ").toUpperCase())}</div>
-        <div class="desc">${(l.catalogo||[]).length} itens de contagem${(l.notas||[]).length?` · ${(l.notas||[]).length} nota(s) prevista(s)`:""}${
+        <div class="desc">${(l.catalogo||[]).length} itens de contagem${linhaPedidos(l)}${
           naoLidas(l.id)?` · <b style="color:var(--verm)">${naoLidas(l.id)} mensagem(ns)</b>`:""}${
           semVer(l.id)?` · <b style="color:var(--amb)">consultor não viu</b>`:""}</div>
         <div class="pe">
