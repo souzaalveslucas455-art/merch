@@ -13,6 +13,7 @@
   --linha:#E5E7EB; --papel:#FFF; --fundo:#F2F3F5;
   --verde:#0F7A52; --verde-bg:#E6F4EE;
   --amb:#96620F; --amb-bg:#FDF2DC;
+  --roxo:#6D4BC4; --roxo-bg:#F0EBFB;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --sombra:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
   --topo:env(safe-area-inset-top,0px); --base:env(safe-area-inset-bottom,0px);
@@ -300,6 +301,46 @@ h2.tit:first-child{margin-top:2px}
   box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
 .leitor p{position:absolute;left:0;right:0;top:64%;text-align:center;color:#fff;font-size:14px;margin:0}
 .leitor button{margin:14px;padding:15px;border:none;border-radius:12px;font:inherit;font-weight:600}
+/* --------- oportunidade de estoque --------- */
+.st-fila{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px 4px;scrollbar-width:none}
+.st-fila::-webkit-scrollbar{display:none}
+.st{flex:none;min-width:94px;text-align:left;background:var(--papel);border:1.5px solid var(--linha);
+  border-radius:14px;padding:10px 12px;cursor:pointer;font:inherit;color:var(--ink);box-shadow:var(--sombra);
+  transition:transform .12s,background .12s}
+.st:active{transform:scale(.97)}
+.st .rot{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.st .rot i{width:8px;height:8px;border-radius:50%;background:var(--c,var(--ink3))}
+.st .n{display:block;font-size:24px;font-weight:700;line-height:1.1;margin-top:4px;color:var(--c,var(--ink))}
+.st .cx{display:block;font-size:11px;color:var(--ink3);margin-top:1px;white-space:nowrap}
+.st.on{background:var(--c,var(--ink));border-color:var(--c,var(--ink))}
+.st.on .rot,.st.on .n,.st.on .cx{color:#fff}.st.on .rot i{background:#fff}
+.op{background:var(--papel);border-radius:16px;box-shadow:var(--sombra);margin-bottom:12px;overflow:hidden;
+  border-left:5px solid var(--c)}
+.op .cab{padding:13px 14px 0;display:flex;gap:10px;align-items:flex-start}
+.op .cab .nm{flex:1;min-width:0;font-size:15px;font-weight:700;line-height:1.3}
+.op .cab .em{font-size:12px;color:var(--ink3);font-weight:400;margin-top:2px}
+.op .tag{flex:none;font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--cb);color:var(--c)}
+.op .met{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--linha);margin:11px 14px 0;
+  border-radius:11px;overflow:hidden}
+.op .met div{background:var(--fundo);padding:8px 9px}
+.op .met small{display:block;font-size:10.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.03em}
+.op .met b{display:block;font-size:14.5px;margin-top:2px}
+.op .barra{margin:10px 14px 0;height:6px;border-radius:6px;background:var(--linha);position:relative}
+.op .barra span{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--c)}
+.op .barra em{position:absolute;top:-3px;width:2px;height:12px;background:var(--ink2);border-radius:2px}
+.op .barra-leg{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);margin:4px 14px 0}
+.op .corpo-op{padding:6px 14px 14px}
+.op .onde{font-size:12px;font-weight:600;color:var(--ink2);margin:12px 0 6px}
+.op .locs{display:flex;flex-wrap:wrap;gap:7px}
+.op .locs button{border:1.5px solid var(--linha);background:var(--papel);border-radius:22px;padding:8px 13px;
+  font:inherit;font-size:13.5px;cursor:pointer;color:var(--ink)}
+.op .locs button.on{border-color:var(--c);background:var(--cb);color:var(--c);font-weight:600}
+.op .locs button.nt.on{border-color:var(--ink2);background:var(--fundo);color:var(--ink);}
+.op .qtds{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.op .qtds label{font-size:12px;color:var(--ink2);margin:0 0 4px;display:block}
+.op .tot{margin-top:9px;font-size:12.5px;color:var(--ink2)}
+.op .pares{margin:10px 14px 0;font-size:13px;color:var(--ink2);background:var(--roxo-bg);border-radius:11px;padding:9px 11px}
+.op .pares b{color:var(--roxo)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -320,7 +361,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-25e";
+const VERSAO_APP = "2026-09-26a";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1180,6 +1221,7 @@ function resumo(k){
     if(r.ruptura) p.push(`${r.ruptura} ruptura`);
     if(r.abaixo) p.push(`${r.abaixo} abaixo`);
     if(r.excesso) p.push(`${r.excesso} excesso`);
+    if(r.nunca) p.push(`${r.nunca} nunca comprou`);
     return {txt:p.join(" · "), pronto:r.feitos>=Math.min(r.total,oportDe(l).limite||15)&&!r.semMotivo,
       alerta:r.semMotivo>0||r.ruptura>0}; }
   if(k==="validade"){ const at=lotesAtivos(l);
@@ -1440,12 +1482,23 @@ const MOTIVOS=[["sem_pedido","Não pediu"],["pedido_nao_chegou","Pedido não che
    (gondola, deposito, ilha, checkout) e quanto tem em cada lugar.
 ------------------------------------------------------------- */
 const LOCAIS=[["g","Gôndola"],["d","Depósito"],["i","Ilha"],["k","Checkout"]];
-const CLASSE={ruptura:{t:"Ruptura",   cor:"var(--verm)", bg:"var(--verm-bg)", ordem:1,
+/* Quatro status. Os tres primeiros olham o que a loja JA compra; "nunca
+   comprou" olha o que as lojas parecidas compram e esta nao: e a
+   oportunidade de venda, nao um problema de estoque. */
+const CLASSE={ruptura:{t:"Ruptura", cor:"var(--verm)", bg:"var(--verm-bg)",
                        d:"compra todo mês e não pediu"},
-              abaixo: {t:"Abaixo do normal", cor:"var(--amb)", bg:"var(--amb-bg)", ordem:2,
+              abaixo: {t:"Abaixo do normal", curto:"Abaixo", cor:"var(--amb)", bg:"var(--amb-bg)",
                        d:"pedindo menos que o normal"},
-              excesso:{t:"Excesso",   cor:"var(--azul)", bg:"var(--azul-bg)", ordem:3,
-                       d:"pediu acima do normal"}};
+              excesso:{t:"Excesso", cor:"var(--azul)", bg:"var(--azul-bg)",
+                       d:"pediu acima do normal"},
+              nunca:  {t:"Nunca comprou", cor:"var(--roxo)", bg:"var(--roxo-bg)",
+                       d:"lojas parecidas vendem, esta nunca comprou"}};
+const ORDEM_CLASSE=["ruptura","abaixo","excesso","nunca"];
+/* O segmento vira frase, para o repositor usar como argumento com a loja:
+   "87% dos supermercados vendem este produto". */
+const SEG_FRASE={"SUPER":"dos supermercados","HIPER":"dos hipermercados","AS 1-4":"das lojas de autosserviço até 4 caixas",
+  "CASH & CARRY":"dos atacarejos","ATACADO GROSSISTA":"dos atacados","REDE":"das lojas da rede"};
+const segFrase=sg=>SEG_FRASE[String(sg||"").toUpperCase()]||("das lojas "+String(sg||"").toLowerCase());
 
 function totalOport(it){
   const c=it.contagem||{}, f=fator(it); let u=0, tocou=false;
@@ -1457,10 +1510,11 @@ function totalOport(it){
   return {un:u, cx:u/f, tocou:tocou||!!c.naoTem};
 }
 const zeradoOport=it=>{ const t=totalOport(it); return t.tocou && t.un===0; };
-/* Zerado precisa de motivo; e "Outro" precisa dizer qual. "Outro" sozinho
-   nao explica nada para o lider nem para o comercial. */
+/* Zerado precisa de motivo; e "Outro" precisa dizer qual. "Nunca comprou"
+   nao: a loja nao ter o produto e justamente o esperado. */
 const semMotivoOport=it=>{ const c=it.contagem||{};
-  return zeradoOport(it) && (!c.motivo || (c.motivo==="outro" && !String(c.obs||"").trim())); };
+  return it.classe!=="nunca" && zeradoOport(it) && (!c.motivo || (c.motivo==="outro" && !String(c.obs||"").trim())); };
+const rupturaOport=it=>it.classe!=="nunca" && zeradoOport(it);
 
 function enviaOportunidade(it){
   const c=it.contagem||{}, t=totalOport(it);
@@ -1474,30 +1528,27 @@ function enviaOportunidade(it){
     checkout_cx:val("kcx"), checkout_un:val("kun"),
     estoque_gondola: t.tocou? Math.round((Number(c.gcx)||0)*fator(it)+(Number(c.gun)||0)) : null,
     estoque_deposito: t.tocou? Math.round((Number(c.dcx)||0)*fator(it)+(Number(c.dun)||0)) : null,
-    ruptura: zeradoOport(it), ruptura_motivo: zeradoOport(it)?(c.motivo||null):null,
-    ruptura_obs: zeradoOport(it)&&c.motivo==="outro"?(String(c.obs||"").trim()||null):null,
+    ruptura: rupturaOport(it), ruptura_motivo: rupturaOport(it)?(c.motivo||null):null,
+    ruptura_obs: rupturaOport(it)&&c.motivo==="outro"?(String(c.obs||"").trim()||null):null,
     oportunidade: it.classe});
 }
 
 function resumoOport(l){
-  const o=oportDe(l), its=o.itens||[];
+  const o=oportDe(l), its=o.itens||[], n=k=>its.filter(x=>x.classe===k).length;
   return {total:its.length, feitos:its.filter(x=>totalOport(x).tocou).length,
           semMotivo:its.filter(semMotivoOport).length,
-          ruptura:its.filter(x=>x.classe==="ruptura").length,
-          abaixo:its.filter(x=>x.classe==="abaixo").length,
-          excesso:its.filter(x=>x.classe==="excesso").length};
+          ruptura:n("ruptura"), abaixo:n("abaixo"), excesso:n("excesso"), nunca:n("nunca")};
 }
 
-let VER_TODAS=false;
+let VER_TODAS=false, FILTRO_OP="todos";
 function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   const o=oportDe(LOJA), todas=o.itens||[], lim=o.limite||15;
-  const lista=VER_TODAS?todas:todas.slice(0,lim);
-  topo("Oportunidade de Estoque", ()=>{ VER_TODAS=false; telaLoja(); }, "");
+  topo("Oportunidade de Estoque", ()=>{ VER_TODAS=false; FILTRO_OP="todos"; telaLoja(); }, "");
 
   if(o.sem_base || !todas.length){
     $("corpo").innerHTML=`<div class="vazio">${o.sem_base
       ?"A base de vendas ainda não foi carregada. Sem ela o app não sabe o que esta loja compra normalmente."
-      :"Nenhuma oportunidade nesta loja: tudo o que ela compra com regularidade está pedindo dentro do normal."}</div>`;
+      :"Nenhuma oportunidade nesta loja: tudo o que ela compra com regularidade está pedindo dentro do normal, e ela já trabalha com o mix das lojas parecidas."}</div>`;
     rodape(botaoConcluir("contagem")||`<button class="bt sec" onclick="telaLoja()">Voltar</button>`);
     ligaConcluir(()=>({ok:true, resultado:"nada_a_registrar"}));
     return poeSolicitacoes("contagem");
@@ -1506,55 +1557,78 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   const u=unidAtual(), rot=u==="cx"?"cx":"un";
   const r=resumoOport(LOJA);
   const fmt=n=>Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1});
-  /* Tudo no card segue o seletor do topo: a compra normal, o pedido e o
-     total. Antes so os campos de digitar mudavam, e a linha de compra ficava
-     presa em caixa, com o repositor contando em unidade. */
-  const volumeTxt=(cx,it)=> u==="cx"
-    ? `${fmt(cx)} cx`
+  const volumeTxt=(cx,it)=> u==="cx" ? `${fmt(cx)} cx`
     : `${Math.round(Number(cx)*fator(it)).toLocaleString("pt-BR")} un`;
+  /* caixas (ou unidades) em jogo no filtro, na volumetria escolhida */
+  const somaJogo=k=>todas.filter(x=>k==="todos"||x.classe===k)
+    .reduce((a,x)=>a+Number(x.em_jogo_cx||0)*(u==="cx"?1:fator(x)),0);
+
+  /* Os filtros sao os proprios cartoes de resumo: cada um mostra quantos e
+     quantas caixas estao em jogo, e tocando filtra a lista. */
+  const tiles=[["todos","Todos",null,todas.length], ...ORDEM_CLASSE.map(k=>[k,CLASSE[k].curto||CLASSE[k].t,CLASSE[k].cor,r[k]])]
+    .filter(([k,,,n])=>k==="todos"||n>0);
+  if(FILTRO_OP!=="todos"&&!r[FILTRO_OP]) FILTRO_OP="todos";
+  const filtradas=todas.filter(x=>FILTRO_OP==="todos"||x.classe===FILTRO_OP);
+  const lista=VER_TODAS?filtradas:filtradas.slice(0,lim);
+
   const cartao=(it,i)=>{
-    const cl=CLASSE[it.classe]||{}, c=it.contagem||{}, t=totalOport(it);
+    const cl=CLASSE[it.classe]||{}, c=it.contagem||{}, t=totalOport(it), nunca=it.classe==="nunca";
     const ativos=c.locais||LOCAIS.map(x=>x[0]).filter(k=>c[k+"cx"]!=null||c[k+"un"]!=null);
     const valor=k=>u==="cx"?c[k+"cx"]:c[k+"un"];
-    return `<div class="item" data-o="${i}" style="border-left:4px solid ${cl.cor}">
-      <div style="display:flex;gap:8px;align-items:flex-start">
-        <div style="flex:1;min-width:0"><div class="nome">${esc(it.nome)}</div>
-          <div class="emb">${esc(it.embalagem||"")}${fator(it)>1?` · 1 cx = ${fator(it)} un`:""}</div></div>
-        <span class="selo" style="background:${cl.bg};color:${cl.cor};flex:none">${cl.t}</span></div>
-      <div class="emb" style="margin-top:6px;color:var(--ink2)">
-        Compra normal <b>${volumeTxt(it.normal_cx,it)}/mês</b> · pediu <b>${volumeTxt(it.pedido_cx,it)}</b> este mês</div>
-      <div class="pilha" data-loc="${i}">
-        ${LOCAIS.map(([k,n])=>`<button data-k="${k}" class="${ativos.includes(k)?"on":""}">${n}</button>`).join("")}
-        <button data-k="x" class="${c.naoTem?"on mau":""}">Não tem</button>
-      </div>
-      ${ativos.length?`<div class="nums" style="flex-wrap:wrap">${ativos.map(k=>`
-        <div style="min-width:44%"><label>${LOCAIS.find(x=>x[0]===k)[1]} (${rot})</label>
-          <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-q="${k}" value="${valor(k)??""}"></div>`).join("")}
-      </div>`:""}
-      ${t.tocou?`<div class="emb" style="margin-top:7px">total contado <b>${u==="cx"?fmt(t.cx)+" cx":Math.round(t.un).toLocaleString("pt-BR")+" un"}</b>${fator(it)>1?` · ${u==="cx"?Math.round(t.un).toLocaleString("pt-BR")+" un":fmt(t.cx)+" cx"}`:""}</div>`:""}
-      ${zeradoOport(it)?`<div class="pilha" data-mo="${i}">
-        ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}</div>
-        ${c.motivo==="outro"?`<textarea data-obs="${i}" rows="2" placeholder="Qual o motivo?"
-          style="width:100%;margin-top:8px;font:inherit;padding:10px;border:1px solid ${String(c.obs||"").trim()?"var(--linha)":"var(--verm)"};border-radius:12px">${esc(c.obs||"")}</textarea>`:""}`:""}
-    </div>`;
+    const pct=Number(it.normal_cx)>0?Number(it.pedido_cx)/Number(it.normal_cx):0;
+    const met=nunca
+      ? `<div><small>Lojas ${esc(String(it.segmento||"").toLowerCase()==="rede"?"da rede":"parecidas")}</small><b>${it.penetracao}%</b></div>
+         <div><small>Média por loja</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
+         <div><small>Potencial</small><b style="color:${cl.cor}">${volumeTxt(it.em_jogo_cx,it)}</b></div>`
+      : `<div><small>Compra normal</small><b>${volumeTxt(it.normal_cx,it)}/mês</b></div>
+         <div><small>Pediu no mês</small><b>${volumeTxt(it.pedido_cx,it)}</b></div>
+         <div><small>Em jogo</small><b style="color:${cl.cor}">${volumeTxt(it.em_jogo_cx,it)}</b></div>`;
+    return `<div class="op" data-o="${i}" style="--c:${cl.cor};--cb:${cl.bg}">
+      <div class="cab"><div class="nm">${esc(it.nome)}
+          <div class="em">${esc(it.embalagem||"")}${fator(it)>1?` · 1 cx = ${fator(it)} un`:""}</div></div>
+        <span class="tag">${cl.t}</span></div>
+      <div class="met">${met}</div>
+      ${nunca?`<div class="pares"><b>${it.penetracao}% ${esc(segFrase(it.segmento))}</b> compram este produto todo mês, e esta loja nunca comprou. Confira se ela tem por outro fornecedor.</div>`
+        :`<div class="barra"><span style="width:${Math.min(pct,1.5)/1.5*100}%"></span><em style="left:${100/1.5}%"></em></div>
+          <div class="barra-leg"><span>pedido do mês</span><span>normal</span></div>`}
+      <div class="corpo-op">
+        <div class="onde">${nunca?"Tem na loja?":"Onde está na loja?"}</div>
+        <div class="locs" data-loc="${i}">
+          ${LOCAIS.map(([k,n])=>`<button data-k="${k}" class="${ativos.includes(k)?"on":""}">${n}</button>`).join("")}
+          <button data-k="x" class="nt ${c.naoTem?"on":""}">${nunca?"Não trabalha":"Não tem"}</button>
+        </div>
+        ${ativos.length?`<div class="qtds">${ativos.map(k=>`
+          <div><label>${LOCAIS.find(x=>x[0]===k)[1]} (${rot})</label>
+            <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-q="${k}" value="${valor(k)??""}"></div>`).join("")}
+        </div>`:""}
+        ${t.tocou&&!c.naoTem?`<div class="tot">Total contado <b>${u==="cx"?fmt(t.cx)+" cx":Math.round(t.un).toLocaleString("pt-BR")+" un"}</b>${fator(it)>1?` · ${u==="cx"?Math.round(t.un).toLocaleString("pt-BR")+" un":fmt(t.cx)+" cx"}`:""}</div>`:""}
+        ${rupturaOport(it)?`<div class="onde">Por que não tem?</div><div class="pilha" data-mo="${i}" style="margin-top:0">
+          ${MOTIVOS.map(m=>`<button class="${c.motivo===m[0]?"on meio":""}" data-v="${m[0]}">${m[1]}</button>`).join("")}</div>
+          ${c.motivo==="outro"?`<textarea data-obs="${i}" rows="2" placeholder="Qual o motivo?"
+            style="width:100%;margin-top:8px;font:inherit;padding:10px;border:1px solid ${String(c.obs||"").trim()?"var(--linha)":"var(--verm)"};border-radius:12px">${esc(c.obs||"")}</textarea>`:""}`:""}
+      </div></div>`;
   };
 
-  const grupos=["ruptura","abaixo","excesso"].map(g=>{
-    const its=lista.map((it,i)=>({it,i:todas.indexOf(it)})).filter(x=>x.it.classe===g);
-    return its.length?`<h2 class="tit" style="color:${CLASSE[g].cor}">${CLASSE[g].t.toUpperCase()} · ${its.length}</h2>
-      <div class="emb" style="margin:-4px 0 9px">${CLASSE[g].d}</div>`+its.map(x=>cartao(x.it,x.i)).join(""):"";
-  }).join("");
+  const grupo=k=>{ const its=lista.filter(x=>x.classe===k); if(!its.length) return "";
+    return (FILTRO_OP==="todos"?`<h2 class="tit" style="color:${CLASSE[k].cor};margin-top:14px">${CLASSE[k].t.toUpperCase()} · ${its.length}
+      <span style="font-weight:400;color:var(--ink3);text-transform:none;letter-spacing:0"> · ${CLASSE[k].d}</span></h2>`:"")
+      + its.map(x=>cartao(x,todas.indexOf(x))).join(""); };
 
   $("corpo").innerHTML=`
-    <div class="abas" id="unid">
+    <div class="abas" id="unid" style="margin-bottom:12px">
       <button data-u="cx" class="${u==="cx"?"on":""}">Caixa física</button>
       <button data-u="un" class="${u==="un"?"on":""}">Unidade</button></div>
-    ${r.semMotivo?`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"produto zerado sem motivo":"produtos zerados sem motivo"}.</b><br>Informe por que zerou antes de encerrar.</div>`:""}
-    <div class="aviso inf">${r.feitos} de ${lista.length} registrados · as ${lista.length} de maior volume em jogo${todas.length>lista.length?` de ${todas.length}`:""}.<br>
-      Toque onde o produto está e anote a quantidade.</div>
-    ${grupos}
-    ${todas.length>lim?`<button class="bt sec" id="vertodas" style="margin-top:6px">${VER_TODAS?"Ver só as principais":`Ver todas as ${todas.length}`}</button>`:""}`;
+    <div class="st-fila" id="filtros">${tiles.map(([k,t,cor,n])=>`
+      <button class="st ${FILTRO_OP===k?"on":""}" data-f="${k}" ${cor?`style="--c:${cor}"`:""}>
+        <span class="rot">${cor?"<i></i>":""}${t}</span><span class="n">${n}</span>
+        <span class="cx">${Math.round(somaJogo(k)).toLocaleString("pt-BR")} ${rot} em jogo</span></button>`).join("")}</div>
+    ${r.semMotivo?`<div class="aviso err"><b>${r.semMotivo} ${r.semMotivo===1?"produto zerado sem motivo":"produtos zerados sem motivo"}.</b> Informe por que zerou antes de concluir.</div>`:""}
+    <div class="emb" style="margin:2px 2px 4px">${lista.length<filtradas.length?`As ${lista.length} de maior volume em jogo, de ${filtradas.length}`:`${filtradas.length} ${filtradas.length===1?"produto":"produtos"}`}
+      · ${filtradas.filter(x=>totalOport(x).tocou).length} registrados</div>
+    ${FILTRO_OP==="todos"?ORDEM_CLASSE.map(grupo).join(""):lista.map(x=>cartao(x,todas.indexOf(x))).join("")}
+    ${filtradas.length>lim?`<button class="bt sec" id="vertodas" style="margin-top:6px">${VER_TODAS?"Ver só as principais":`Ver todas as ${filtradas.length}`}</button>`:""}`;
 
+  $("filtros").querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ FILTRO_OP=b.dataset.f; VER_TODAS=false; telaOportunidade(); });
   $("unid").querySelectorAll("button").forEach(b=>b.onclick=()=>{
     const novo=b.dataset.u, velho=unidAtual(); if(novo===velho) return;
     if(!exigeVisita()) return;
@@ -1571,7 +1645,7 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   $("corpo").querySelectorAll("[data-loc]").forEach(g=>{ const it=todas[+g.dataset.loc];
     g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
       it.contagem=it.contagem||{}; const c=it.contagem, k=b.dataset.k;
-      if(k==="x"){ /* nao tem em lugar nenhum: zera tudo e pede o motivo */
+      if(k==="x"){
         c.naoTem=!c.naoTem;
         if(c.naoTem){ LOCAIS.forEach(([q])=>{ c[q+"cx"]=null; c[q+"un"]=null; }); c.locais=[]; }
       } else {
@@ -1587,18 +1661,17 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
     const k=inp.dataset.q, v=inp.value===""?null:Number(inp.value);
     if(unidAtual()==="cx"){ it.contagem[k+"cx"]=v; it.contagem[k+"un"]=null; }
     else { it.contagem[k+"un"]=v; it.contagem[k+"cx"]=null; }
-    if(zeradoOport(it)&&!it.contagem.motivo) alerta("Zerado. Informe por que não tem.");
+    if(rupturaOport(it)&&!it.contagem.motivo) alerta("Zerado. Informe por que não tem.");
     salva(it); telaOportunidade(); });
   $("corpo").querySelectorAll("[data-mo]").forEach(g=>{ const it=todas[+g.dataset.mo];
     g.querySelectorAll("button").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return;
       it.contagem.motivo=b.dataset.v; salva(it); telaOportunidade();
       if(b.dataset.v==="outro"){ const tx=$("corpo").querySelector(`[data-obs="${g.dataset.mo}"]`); if(tx) tx.focus(); } }); });
-  /* salva ao sair do campo, e nao a cada letra, para nao encher a fila */
   $("corpo").querySelectorAll("textarea[data-obs]").forEach(tx=>{ const it=todas[+tx.dataset.obs];
     tx.oninput=()=>{ it.contagem.obs=tx.value; guarda.porJ("oport:"+DATA,OPORT); };
     tx.onchange=()=>{ it.contagem.obs=tx.value.trim(); salva(it); telaOportunidade(); }; });
 
-  rodape((r.ruptura||r.abaixo||r.excesso?botaoAvisar("ruptura").replace('class="bt"','class="bt sec"'):"")
+  rodape((r.ruptura||r.abaixo||r.excesso||r.nunca?botaoAvisar("ruptura").replace('class="bt"','class="bt sec"'):"")
     + botaoConcluir("contagem"));
   ligaAvisar();
   ligaConcluir(()=>{ const x=resumoOport(LOJA), alvo=Math.min(x.total, oportDe(LOJA).limite||15);
@@ -2385,7 +2458,7 @@ const CARTOES=[
 ];
 function quantos(k){
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
-  if(k==="ruptura")  return (oportDe(l).itens||[]).filter(zeradoOport).length;
+  if(k==="ruptura")  return (oportDe(l).itens||[]).filter(rupturaOport).length;
   if(k==="validade") return lotesAtivos(l).filter(x=>diasAte(x.vence_em)<=lim).length;
   if(k==="estoque")  return (oportDe(l).itens||[]).filter(x=>totalOport(x).tocou).length;
   if(k==="preco")    return cat.filter(x=>x.contagem&&x.contagem.preco!=null).length+(l.concorrentes||[]).length;
