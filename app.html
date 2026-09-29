@@ -380,7 +380,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29f";
+const VERSAO_APP = "2026-09-29g";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -1960,7 +1960,7 @@ function compartilharPedido(n){
    lugar, em vez do icone de imagem quebrada. */
 function fotoFalhou(img){
   const nome=img.getAttribute("alt")||"";
-  if(img.classList.contains("pifoto")){ const d=document.createElement("div"); d.className="semfoto"; d.textContent="sem foto"; img.replaceWith(d); }
+  if(img.classList.contains("pifoto")){ const d=document.createElement("div"); d.className="semfoto"; d.textContent="foto não carregou"; img.replaceWith(d); }
   else { const sp=document.createElement("span"); sp.textContent=nome; img.replaceWith(sp); }
 }
 window.fotoFalhou=fotoFalhou;   /* chamada direto pela imagem (onerror): precisa estar a vista da pagina */
@@ -1979,7 +1979,7 @@ function cardPedido(n,i){
         /* Com foto: as fotos dos produtos de maior valor, como no RTM. Sem
            nenhuma foto no pedido: os nomes, como antes. */
         const fotos=its.filter(x=>x.imagem).slice(0,4);
-        if(fotos.length) return fotos.map(x=>`<img class="pfoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" onerror="fotoFalhou(this)">`).join("")
+        if(fotos.length) return fotos.map(x=>`<img class="pfoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="fotoFalhou(this)">`).join("")
           + (its.length>fotos.length?`<span class="mais">+${its.length-fotos.length}</span>`:"");
         return its.slice(0,3).map(x=>`<span>${esc(x.nome)}</span>`).join("") + (its.length>3?`<span>+${its.length-3}</span>`:"");
       })()}
@@ -2052,7 +2052,7 @@ function telaPedido(n){ montar(()=>{ TELA="mod"; esconderTudo();
     <div class="tl">${(n.itens||[]).map(x=>{
       const vc=Number(x.caixas)>0?Number(x.valor)/Number(x.caixas):null;
       const vu=vc!=null&&Number(x.fator_cx)>0?vc/Number(x.fator_cx):null;
-      return `<div class="pi">${x.imagem?`<img class="pifoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" onerror="fotoFalhou(this)">`:`<div class="semfoto">sem foto</div>`}<div style="flex:1;min-width:0">
+      return `<div class="pi">${x.imagem?`<img class="pifoto" src="${esc(x.imagem)}" alt="${esc(x.nome)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="fotoFalhou(this)">`:`<div class="semfoto">sem foto</div>`}<div style="flex:1;min-width:0">
         <div class="n">${esc(x.sku)} • ${esc(x.nome)}</div>
         <div class="g">
           <div><small>Caixas</small><b>${cxTxt(x.caixas)}</b></div>
