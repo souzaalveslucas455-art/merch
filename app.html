@@ -383,7 +383,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-10-01b";
+const VERSAO_APP = "2026-10-01c";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -402,6 +402,14 @@ let URLB=guarda.ler("url")||CFG.url, CHAVE=guarda.ler("chave")||CFG.chave;
 let DIA=null, LOJA=null, TELA="carregando", DATA=null, FILTRO="", SEMANA=guarda.lerJ("semana")||[];
 let SEMANA_ERRO=null, PULOU_DE_HOJE=false, JA_TENTOU_PULAR=false;
 let OPORT=null;   // loja_id -> {total, itens, limite} do dia aberto
+/* O dia de cada lista que ja chegou (do banco ou guardada no aparelho). Sem
+   isto, "ainda nao chegou" e "nao tem nada" pareciam iguais, e o repositor
+   conseguia concluir um modulo sem os dados dele. */
+const CARREGADO={};
+/* Chegou: a lista e deste dia, ou ja tem os dados desta loja no aparelho. */
+const LISTAS={oport:()=>OPORT, venc:()=>VENC, estoque:()=>ESTOQUE};
+const chegou=k=>{ if(CARREGADO[k]===DATA) return true;
+  const m=LISTAS[k]&&LISTAS[k](); return !!(m&&LOJA&&LOJA.id&&m[LOJA.id]!==undefined); };
 
 const hojeIso=()=>{const d=new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
@@ -507,7 +515,14 @@ async function pintaFila(){
     : `${detalhe}${navigator.onLine?"":" · sem sinal"}`;
   el.classList.add("on");
 }
-addEventListener("online",escoar); setInterval(escoar,20000);
+/* Envio parado (falhou 5 vezes) ganha uma nova tentativa ao abrir o app e
+   quando a internet volta: muitas vezes a causa foi do lado do banco (um
+   arquivo SQL ainda nao rodado) e ja foi resolvida. Se falhar de novo, para. */
+function reanimarParados(){ const f=fila.itens(); let mudou=false;
+  f.forEach(x=>{ if(x.parado){ x.parado=false; x.tentativas=Math.min(x.tentativas||0,4); mudou=true; } });
+  if(mudou){ guarda.porJ("fila",f); pintaFila(); escoar(); } }
+addEventListener("online",()=>{ reanimarParados(); escoar(); }); setInterval(escoar,20000);
+setTimeout(reanimarParados, 3000);
 
 /* ======================= FOTOS =============================
    Foto nao cabe na fila de texto: uma so ja passa do limite do
@@ -636,7 +651,9 @@ function topo(titulo,voltar,acoes){
     :`<button class="avatar" id="bperfil">${esc(iniciais())}</button>`)+
     `<h1>${esc(titulo)}</h1>`+(acoes||`<button class="icone" id="bsinc">${IC.sinc}</button>`);
   if($("bperfil")) $("bperfil").onclick=abrirPerfil;
-  if($("bvolta")) $("bvolta").onclick=voltar;
+  /* sem argumento: o toque do dedo nao pode chegar a tela de destino como se
+     fosse uma loja (era o que deixava a loja sem nome e sem dados) */
+  if($("bvolta")) $("bvolta").onclick=()=>voltar();
   if($("bsinc")) $("bsinc").onclick=()=>carregarDia(DATA,true);
 }
 function rodape(h){ const r=$("rodape");
@@ -812,7 +829,7 @@ setInterval(()=>{ if(!document.hidden && navigator.onLine && (TELA==="home"||TEL
    o repositor trabalhar sem sinal dentro da loja. */
 async function buscarOportunidades(data){
   const guardado=guarda.lerJ("oport:"+data);
-  if(guardado) OPORT=guardado;
+  if(guardado){ OPORT=guardado; CARREGADO.oport=data; }
   if(!navigator.onLine) return;
   try{
     const o=await api("/rest/v1/rpc/minhas_oportunidades",{method:"POST",body:JSON.stringify({p_data:data})});
@@ -825,7 +842,7 @@ async function buscarOportunidades(data){
         const loc={}; (velho.itens||[]).forEach(x=>{ if(x.contagem) loc[x.produto_id]=x.contagem; });
         lj.itens.forEach(x=>{ if(loc[x.produto_id]&&!x.contagem) x.contagem=loc[x.produto_id]; }); }
     }
-    OPORT=novo; delete ERRO_BUSCA.oport; guarda.porJ("oport:"+data,OPORT); guarda.por("oport_em:"+data,new Date().toISOString());
+    OPORT=novo; CARREGADO.oport=data; delete ERRO_BUSCA.oport; guarda.porJ("oport:"+data,OPORT); guarda.por("oport_em:"+data,new Date().toISOString());
     if(TELA==="home") pintaLojas(); else if(TELA==="loja") telaLoja();
   }catch(e){ ERRO_BUSCA.oport=e.message; }
 }
@@ -926,13 +943,13 @@ function concluirModulo(k, resultado){
 let VENC=null;   // loja_id -> [lotes]
 async function buscarVencimentos(data){
   const guardado=guarda.lerJ("venc:"+data);
-  if(guardado) VENC=guardado;
+  if(guardado){ VENC=guardado; CARREGADO.venc=data; }
   if(!navigator.onLine) return;
   try{
     const r=await api("/rest/v1/rpc/meus_vencimentos",{method:"POST",body:JSON.stringify({p_data:data})});
     if(data!==DATA) return;
     /* O que foi contado aqui e ainda esta na fila vale mais que o servidor. */
-    const loc=guardado||{}; VENC=r||{};
+    const loc=guardado||{}; VENC=r||{}; CARREGADO.venc=data;
     for(const [id,lotes] of Object.entries(loc)){ const srv=VENC[id]||(VENC[id]=[]);
       lotes.forEach(lt=>{ const n=srv.find(x=>x.id===lt.id);
         if(!n&&lt.registrado_hoje) srv.push(lt);
@@ -1286,6 +1303,8 @@ const MODULOS_TODOS=[
 const modulosAtivos=()=>MODULOS_TODOS.filter(m=>regraDe(m.k)!=="desligado");
 let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
 function resumo(k){
+  const lista={contagem:"oport", validade:"venc", estoque:"estoque"}[k];
+  if(lista&&!chegou(lista)) return {txt:navigator.onLine?"buscando os dados…":"sem sinal: os dados aparecem quando a internet voltar", pronto:false, alerta:false};
   if(k==="estoque"){ const ps=estoqueDe(LOJA), n=ps.filter(contadoEstoque).length;
     return {txt: ps.length ? `${n} de ${ps.length} produtos contados hoje` : "nenhum produto comprado na base"}; }
   if(k==="entrega"){ const es=entregasDe(LOJA), h=es.filter(p=>p.hoje);
@@ -1366,7 +1385,7 @@ function cartaoTarefa(t,idx){
 const nomeDoModulo=mod=>{ const k=Object.keys(MOD_REGRA).find(x=>MOD_REGRA[x]===mod);
   const m=MODULOS_TODOS.find(x=>x.k===k); return m?m.nome:"Solicitação"; };
 
-function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
+function telaLoja(l){ montar(()=>{ TELA="loja"; if(l&&l.id&&l.nome) LOJA=l; esconderTudo();
   const v=LOJA.visita, fim=v&&v.hora_fim;
   topo(LOJA.nome, telaVisitas, "");
   const tarefas=tarefasDe(LOJA);
@@ -1637,7 +1656,24 @@ function resumoOport(l){
 }
 
 let VER_TODAS=false, FILTRO_OP="todos";
-function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
+/* Enquanto os dados do modulo nao chegaram: diz isso, busca, e volta sozinho
+   para o modulo quando chegarem. Sem botao de concluir. */
+function telaEsperando(k, titulo, oque, buscar, depois){ montar(()=>{ TELA="espera:"+k; esconderTudo();
+  topo(titulo, ()=>telaLoja(), "");
+  const erro=ERRO_BUSCA[k];
+  $("corpo").innerHTML = erro
+    ? `<div class="aviso err"><b>Não consegui buscar ${oque} desta loja.</b><br>${esc(traduz(erro))}</div><button class="bt" id="tentaEsp">Tentar de novo</button>`
+    : `<div class="vazio">${navigator.onLine?`Buscando ${oque} desta loja…`:`Sem sinal. ${oque[0].toUpperCase()+oque.slice(1)} aparecem quando a internet voltar.`}</div>`;
+  rodape(`<button class="bt sec" id="volEsp">Voltar</button>`); $("volEsp").onclick=()=>telaLoja();
+  /* uma tentativa por vez: se nao chegou, mostra o motivo e o botao, sem buscar de novo sozinha */
+  const vai=async()=>{ delete ERRO_BUSCA[k]; try{ await buscar(); }catch(e){ ERRO_BUSCA[k]=e.message; }
+    if(!chegou(k)) ERRO_BUSCA[k]=ERRO_BUSCA[k]||"O sistema não respondeu.";
+    if(TELA==="espera:"+k) (chegou(k)?depois():telaEsperando(k,titulo,oque,buscar,depois)); };
+  if($("tentaEsp")) $("tentaEsp").onclick=()=>{ $("corpo").innerHTML=`<div class="vazio">Buscando ${oque} desta loja…</div>`; vai(); };
+  else if(navigator.onLine) vai();
+});}
+function telaOportunidade(){ if(!chegou("oport")) return telaEsperando("oport","Oportunidade de Estoque","as oportunidades",()=>buscarOportunidades(DATA),telaOportunidade);
+  montar(()=>{ TELA="mod"; esconderTudo();
   const o=oportDe(LOJA), todas=o.itens||[], lim=o.limite||15;
   topo("Oportunidade de Estoque", ()=>{ VER_TODAS=false; FILTRO_OP="todos"; telaLoja(); }, "");
 
@@ -1837,7 +1873,8 @@ function cardLote(x,i){
   </div>`;
 }
 
-function telaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
+function telaValidade(){ if(!chegou("venc")) return telaEsperando("venc","Controle de Vencimentos","os lotes",()=>buscarVencimentos(DATA),telaValidade);
+  montar(()=>{ TELA="mod"; esconderTudo();
   topo("Controle de Vencimentos", ()=>telaLoja(), "");
   const lotes=lotesDe(LOJA).slice().sort((a,b)=>String(a.vence_em).localeCompare(String(b.vence_em)));
   const ativos=lotes.filter(x=>x.status!=="encerrado"), fechados=lotes.filter(x=>x.status==="encerrado");
@@ -2676,17 +2713,18 @@ let ESTOQUE=null, BUSCA_EST="";
 const estoqueDe=l=>(ESTOQUE&&ESTOQUE[l.id])||[];
 const contadoEstoque=x=>!!x.hoje&&(x.hoje.caixas!=null||x.hoje.unidades!=null);
 async function buscarEstoque(data){
-  const guardado=guarda.lerJ("estq:"+data); if(guardado&&!ESTOQUE) ESTOQUE=guardado;
+  const guardado=guarda.lerJ("estq:"+data); if(guardado){ ESTOQUE=guardado; CARREGADO.estoque=data; }
   if(!navigator.onLine) return;
   try{ const r=await api("/rest/v1/rpc/meu_estoque",{method:"POST",body:JSON.stringify({p_data:data})})||{};
     if(data!==DATA) return;
     /* o que foi contado hoje no aparelho continua valendo */
     for(const [lid,ps] of Object.entries(guardado||{})){ const novos=r[lid]; if(!novos) continue;
       const hj={}; ps.forEach(x=>{ if(x.hoje) hj[x.produto_id]=x.hoje; }); novos.forEach(x=>{ if(hj[x.produto_id]) x.hoje=hj[x.produto_id]; }); }
-    ESTOQUE=r; guarda.porJ("estq:"+data,ESTOQUE); delete ERRO_BUSCA.estoque;
+    ESTOQUE=r; CARREGADO.estoque=data; guarda.porJ("estq:"+data,ESTOQUE); delete ERRO_BUSCA.estoque;
   }catch(e){ ERRO_BUSCA.estoque=e.message; }
 }
-function telaEstoque(){ montar(()=>{ TELA="mod"; esconderTudo();
+function telaEstoque(){ if(!chegou("estoque")) return telaEsperando("estoque","Contagem de Estoque","os produtos",()=>buscarEstoque(DATA),telaEstoque);
+  montar(()=>{ TELA="mod"; esconderTudo();
   topo("Contagem de Estoque", telaLoja, "");
   const ps=estoqueDe(LOJA), n=ps.filter(contadoEstoque).length, feito=estadoModulo(LOJA,"estoque");
   const q=BUSCA_EST.trim().toLowerCase(), vis=q?ps.filter(x=>x.nome.toLowerCase().includes(q)):ps;
@@ -2780,7 +2818,7 @@ function telaEntrega(){ montar(()=>{ TELA="mod"; esconderTudo();
     (p.itens||[]).forEach(it=>grava("entrega_validade","nr_pedido,produto_id",{nr_pedido:p.nr_pedido, produto_id:it.produto_id,
       visita_id:LOJA.visita.id, loja_id:LOJA.id, pessoa_id:DIA.pessoa.id, vence_em:it.vence_em, lote:it.lote||null}));
     marca(p,"conferida"); ABERTA_ENT=null; alerta("Conferência salva."); telaEntrega(); });
-  rodape(`<button class="bt sec" id="volEnt">Voltar</button>`); $("volEnt").onclick=telaLoja;
+  rodape(`<button class="bt sec" id="volEnt">Voltar</button>`); $("volEnt").onclick=()=>telaLoja();
 });}
 
 /* ============================ DEMANDAS ============================
@@ -2858,7 +2896,7 @@ function telaDemandas(semBuscar){ montar(()=>{
   $("corpo").querySelectorAll("[data-nao]").forEach(b=>b.onclick=()=>{ $("mot"+b.dataset.nao).style.display="block"; $("motx"+b.dataset.nao).focus(); });
   $("corpo").querySelectorAll("[data-envnao]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.envnao, m=$("motx"+i).value.trim();
     if(!m) return alerta("Conte por que não conseguiu."); responder(i,"nao_feita",m); });
-  rodape(`<button class="bt sec" id="volDem">Voltar</button>`); $("volDem").onclick=volta;
+  rodape(`<button class="bt sec" id="volDem">Voltar</button>`); $("volDem").onclick=()=>volta();
   if(!semBuscar) buscarDemandas();
 });}
 
@@ -2873,7 +2911,7 @@ function telaNovaDemanda(o){ montar(()=>{
       <p class="mut" style="margin:10px 0 0">Vai para o seu líder. Quando ele responder, a resposta aparece em Demandas.</p>
     </div>`;
   rodape(`<button class="bt sec" id="demVolta">Cancelar</button><button class="bt" id="demEnvia">Mandar</button>`);
-  $("demVolta").onclick=volta;
+  $("demVolta").onclick=()=>volta();
   $("demEnvia").onclick=()=>{
     const texto=$("demTxt").value.trim(); if(!texto) return alerta("Escreva o que você precisa.");
     const loja=LOJA&&$("demLoja")&&$("demLoja").checked?LOJA:null;
