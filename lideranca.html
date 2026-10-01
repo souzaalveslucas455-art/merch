@@ -202,22 +202,34 @@ async function entrar(tel,senha){
 /* --------------------------- dados --------------------------- */
 let D={alertas:null, demandas:null, cumprimento:null, equipe:null}, ERRO=null;
 let MODO="lider", ABA=guarda.ler("aba")||"equipe", DIAS=Number(guarda.ler("dias")||7), FILTRO_LIDER=guarda.ler("filtro")||"";
+/* Administrador e gerente podem "ver como lider": a pagina fica igual a que o
+   lider escolhido ve, so com a equipe dele. COMO e o nome desse lider. */
+let COMO=guarda.ler("como")||"";
+const vendoComo=()=>MODO==="lider"&&EU&&EU.perfil!=="lider"&&!!COMO;
 
 async function abrir(){
   $("corpo").innerHTML=`<p class="mut">Carregando…</p>`;
   try{ EU=await rpc("eu_sou"); }
   catch(e){ return telaLogin(traduz(e.message)); }
   if(!EU) return telaLogin("Seu acesso não está ligado a nenhum líder ou gerente da base.");
-  MODO=EU.perfil==="lider"?"lider":"painel";
-  $("tit").innerHTML=`${MODO==="lider"?"Minha equipe":"Painel de merchandising"}<small>${esc(tit(EU.nome))}</small>`;
+  if(EU.perfil==="lider") MODO="lider";
+  else { MODO=guarda.ler("vista")==="lider"?"lider":"painel";
+    if(!(EU.lideres||[]).some(l=>l.nome===COMO)) COMO=((EU.lideres||[])[0]||{}).nome||""; }
+  pintaTitulo();
   $("acoes").innerHTML=`<button class="lnk" id="atual">Atualizar</button><button class="lnk" id="sai">Sair</button>`;
+  if(EU.perfil==="lider") ABA=ABA||"equipe";
   $("atual").onclick=()=>carregar(); $("sai").onclick=sair;
   await carregar();
+}
+function pintaTitulo(){
+  $("tit").innerHTML = EU.perfil==="lider" ? `Minha equipe<small>${esc(tit(EU.nome))}</small>`
+    : vendoComo() ? `Equipe de ${esc(tit(nomeCurto(COMO)))}<small>vendo como líder · ${esc(tit(nomeCurto(EU.nome)))}</small>`
+    : `Painel de merchandising<small>${esc(tit(EU.nome))}</small>`;
 }
 async function carregar(){
   ERRO=null;
   const pedidos=[rpc("alertas_da_equipe",{p_dias:DIAS}), rpc("demandas_da_equipe",{p_dias:30}), rpc("cumprimento_da_equipe",{p_dias:DIAS})];
-  if(MODO==="lider") pedidos.push(rpc("equipe_no_dia",{p_data:hoje()}));
+  if(MODO==="lider") pedidos.push(rpc("equipe_no_dia",{p_data:hoje()}));  /* tambem em "ver como lider" */
   const r=await Promise.allSettled(pedidos);
   const v=i=>r[i]&&r[i].status==="fulfilled"?r[i].value:null;
   D={alertas:v(0), demandas:v(1), cumprimento:v(2), equipe:v(3)};
@@ -227,7 +239,8 @@ async function carregar(){
 setInterval(()=>{ if(EU && !document.hidden && navigator.onLine && !document.querySelector("textarea:focus,input:focus,select:focus")) carregar(); }, 5*60*1000);
 
 /* filtro de lider do painel: vale para tudo que tem o campo lider */
-const doFiltro=lista=>!FILTRO_LIDER?(lista||[]):(lista||[]).filter(x=>x.lider===FILTRO_LIDER);
+const filtroAtual=()=>MODO==="lider"?(vendoComo()?COMO:""):FILTRO_LIDER;
+const doFiltro=lista=>!filtroAtual()?(lista||[]):(lista||[]).filter(x=>x.lider===filtroAtual());
 
 /* --------------------------- secoes --------------------------- */
 const plural=(n,um,varios)=>`${n} ${n===1?um:varios}`;
@@ -286,7 +299,7 @@ function cartaoEnviada(x){
   </div>`;
 }
 function secDemandas(max){
-  const rec=doFiltro(D.demandas&&D.demandas.recebidas), env=(D.demandas&&D.demandas.enviadas)||[];
+  const rec=doFiltro(D.demandas&&D.demandas.recebidas), env=((D.demandas&&D.demandas.enviadas)||[]).filter(x=>!filtroAtual()||x.de===filtroAtual());
   const abertas=rec.filter(x=>!x.resolvida_em), vencidas=env.filter(x=>x.vencida);
   const titulo=abertas.length||vencidas.length
     ? [abertas.length?`${plural(abertas.length,"demanda","demandas")} dos repositores em aberto`:"", vencidas.length?`${plural(vencidas.length,"demanda enviada","demandas enviadas")} com prazo vencido`:""].filter(Boolean).join(" e ")
@@ -317,7 +330,7 @@ function secCumprimento(){
 }
 
 function secMateriais(){
-  const ms=(D.alertas&&D.alertas.materiais)||[];
+  const ms=doFiltro(D.alertas&&D.alertas.materiais);
   const NOME={visivel:"não está visível",ko75:"menos de 75% KO",abastecida:"desabastecida",com_preco:"sem preço",planograma:"fora do planograma",sem_concorrente:"com concorrente"};
   return secao("var(--roxo)", ms.length?`${plural(ms.length,"geladeira ou material","geladeiras ou materiais")} com problema`:"Nenhuma geladeira ou material com problema", ms.length?`no censo dos últimos ${DIAS} dias`:"",
     lista(ms, x=>`<div class="lin"><div><b>${esc(TIPO_ATIVO[x.tipo]||tit(x.tipo))}${x.patrimonio?` · PTM ${esc(x.patrimonio)}`:""}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
@@ -326,7 +339,7 @@ function secMateriais(){
       "Nenhum problema no censo do período.", 8), "s-mat");
 }
 function secNaoTrabalha(){
-  const ns=(D.alertas&&D.alertas.nao_trabalha)||[];
+  const ns=doFiltro(D.alertas&&D.alertas.nao_trabalha);
   return secao("var(--ink3)", ns.length?`${plural(ns.length,"produto","produtos")} que a loja não trabalha`:"Nenhum produto marcado como não trabalha", ns.length?"para o comercial oferecer":"",
     lista(ns, x=>`<div class="lin"><div><b>${esc(x.produto)}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
       <span class="selo" style="background:var(--fundo);color:var(--ink2)">${dataBr(x.data)}</span><div class="det">${esc(nomeCurto(x.repositor))}</div></div>`,
@@ -334,7 +347,7 @@ function secNaoTrabalha(){
 }
 
 function secEquipeHoje(){
-  const eq=D.equipe||[];
+  const eq=doFiltro(D.equipe);
   const fazendo=eq.filter(r=>(r.lojas||[]).some(l=>l.inicio)).length;
   const titulo=eq.length?`${fazendo} de ${plural(eq.length,"repositor","repositores")} já começaram o dia`:"Nenhum repositor na equipe";
   return secao("var(--ink)", titulo, "", eq.length?eq.slice().sort((a,b)=>(a.lojas||[]).filter(l=>l.fim).length/((a.lojas||[]).length||1)-(b.lojas||[]).filter(l=>l.fim).length/((b.lojas||[]).length||1)).map(r=>{
@@ -350,18 +363,24 @@ function secEquipeHoje(){
 /* --------------------------- telas --------------------------- */
 function pintar(){
   const erro=ERRO?`<div class="aviso err"><b>Parte dos dados não carregou.</b> ${esc(ERRO)} Toque em Atualizar para tentar de novo.</div>`:"";
+  pintaTitulo();
+  const vista = EU.perfil==="lider" ? "" : `<div class="abas" role="tablist" style="margin-bottom:10px">
+      <button role="tab" aria-selected="${MODO==="painel"}" data-vista="painel">Painel</button>
+      <button role="tab" aria-selected="${MODO==="lider"}" data-vista="lider">Ver como líder</button></div>
+    ${MODO==="lider"?`<div class="barra" style="margin-bottom:12px"><label>Líder<select id="fComo">${(EU.lideres||[]).map(l=>`<option ${l.nome===COMO?"selected":""} value="${esc(l.nome)}">${esc(tit(l.nome))}</option>`).join("")}</select></label></div>
+      <div class="aviso inf">Você está vendo a página como ${esc(tit(nomeCurto(COMO)))} vê. O que você responder ou mandar aqui é de verdade: chega aos repositores com o seu nome.</div>`:""}`;
   if(MODO==="lider"){
-    const nDem=((D.demandas&&D.demandas.recebidas)||[]).filter(x=>!x.resolvida_em&&!x.resposta).length;
-    const nAl=((D.alertas&&D.alertas.vencimentos)||[]).length+((D.alertas&&D.alertas.nao_tem)||[]).length;
+    const nDem=doFiltro(D.demandas&&D.demandas.recebidas).filter(x=>!x.resolvida_em&&!x.resposta).length;
+    const nAl=doFiltro(D.alertas&&D.alertas.vencimentos).length+doFiltro(D.alertas&&D.alertas.nao_tem).length;
     const aba=(k,t,n)=>`<button role="tab" aria-selected="${ABA===k}" data-aba="${k}">${t}${n?`<span class="n">${n}</span>`:""}</button>`;
-    $("corpo").innerHTML=erro+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}</div>`
+    $("corpo").innerHTML=erro+vista+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}</div>`
       +(ABA==="equipe"?secEquipeHoje()+secCumprimento()
        :ABA==="dem"?secDemandas()
        :secVencimentos()+secNaoTem()+secMateriais()+secNaoTrabalha());
     $("corpo").querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA=b.dataset.aba; guarda.por("aba",ABA); pintar(); });
   } else {
     const lideres=(EU.lideres||[]).map(l=>l.nome);
-    $("corpo").innerHTML=erro+`<div class="barra">
+    $("corpo").innerHTML=erro+vista+`<div class="barra">
         <label>Líder<select id="fLid"><option value="">Todos os líderes (${lideres.length})</option>${lideres.map(n=>`<option ${n===FILTRO_LIDER?"selected":""} value="${esc(n)}">${esc(tit(n))}</option>`).join("")}</select></label>
         <label>Período<select id="fDias">${[7,15,30].map(d=>`<option ${d===DIAS?"selected":""} value="${d}">Últimos ${d} dias</option>`).join("")}</select></label>
         <button class="bt" data-nova>Nova demanda</button></div>`
@@ -370,6 +389,10 @@ function pintar(){
     $("fLid").onchange=e=>{ FILTRO_LIDER=e.target.value; guarda.por("filtro",FILTRO_LIDER); pintar(); };
     $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("dias",DIAS); carregar(); };
   }
+  $("corpo").querySelectorAll("[data-vista]").forEach(b=>b.onclick=()=>{ const v=b.dataset.vista; if((v==="lider")===(MODO==="lider")) return;
+    MODO=v; guarda.por("vista",v); if(v==="lider"){ ABA="equipe"; }
+    if(v==="lider"&&!D.equipe) carregar(); else pintar(); });
+  if($("fComo")) $("fComo").onchange=e=>{ COMO=e.target.value; guarda.por("como",COMO); pintar(); };
   ligar();
 }
 function ligar(){
@@ -389,10 +412,13 @@ function ligar(){
 }
 
 function telaNovaDemanda(){
-  const reps=EU.repositores||[];
+  const reps=doFiltro(EU.repositores);
+  /* "Equipe toda" so aparece quando ela e exatamente a de quem manda: no "ver
+     como", ela iria para todas as equipes de quem esta vendo, nao so a deste lider. */
+  const opTodos = vendoComo() ? "" : `<option value="">${EU.perfil==="lider"?"Toda a minha equipe":EU.perfil==="admin"?"Todos os repositores":"Todas as minhas equipes"} (${reps.length})</option>`;
   $("corpo").innerHTML=`<div class="sec form" style="padding:4px 18px 18px">
     <h2 style="padding:14px 0 6px;border:none">Nova demanda para os repositores</h2>
-    <label class="campo"><span>Para quem</span><select id="nPara"><option value="">${MODO==="lider"?"Toda a minha equipe":"Todas as equipes"} (${reps.length})</option>
+    <label class="campo"><span>Para quem</span><select id="nPara">${opTodos}
       ${reps.map(r=>`<option value="${r.id}">${esc(tit(r.nome))}${MODO==="painel"&&r.lider?` · ${esc(nomeCurto(r.lider))}`:""}</option>`).join("")}</select></label>
     <label class="campo"><span>Loja</span><select id="nLoja"></select></label>
     <div id="nSoLoja" style="display:none">
@@ -402,6 +428,7 @@ function telaNovaDemanda(){
     <label class="campo"><span>O que precisa ser feito</span><input id="nTit" maxlength="120" placeholder="Ex.: refazer o censo da geladeira da entrada"></label>
     <label class="campo"><span>Detalhes (opcional)</span><textarea id="nDesc" rows="3"></textarea></label>
     <label class="campo"><span>Prazo (opcional)</span><input id="nPrazo" type="date" min="${hoje()}"></label>
+    ${vendoComo()?`<p class="mut" style="font-size:13.5px;margin:10px 0 0">Para mandar para a equipe toda de ${esc(tit(nomeCurto(COMO)))}, use o acesso dele, ou mande do Painel para todas as suas equipes.</p>`:""}
     <p class="mut" id="nExplica" style="font-size:13.5px;margin:10px 0 0"></p>
     <div id="nErro"></div>
     <div style="display:flex;gap:10px;margin-top:14px"><button class="bt sec" id="nVolta">Cancelar</button><button class="bt" id="nManda">Mandar demanda</button></div></div>`;
@@ -418,6 +445,7 @@ function telaNovaDemanda(){
   $("nVolta").onclick=pintar;
   $("nManda").onclick=async()=>{
     const t=$("nTit").value.trim(); if(!t) return $("nErro").innerHTML=`<div class="aviso err">Escreva o que precisa ser feito.</div>`;
+    if(vendoComo()&&!$("nPara").value) return $("nErro").innerHTML=`<div class="aviso err">Escolha o repositor.</div>`;
     const loja=$("nLoja").value||null;
     $("nManda").disabled=true; $("nManda").textContent="Mandando…";
     try{ await rpc("criar_demanda_lider",{p_para:$("nPara").value||null, p_loja:loja, p_modulo:loja?$("nMod").value:null, p_titulo:t,
