@@ -383,7 +383,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-10-01c";
+const VERSAO_APP = "2026-10-01d";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -2083,7 +2083,7 @@ function telaPedidos(){ montar(()=>{ TELA="mod"; esconderTudo();
     $("corpo").innerHTML = ERRO_BUSCA.pedidos && !PEDIDOS
       ? `<div class="aviso err"><b>Não consegui buscar os pedidos.</b><br>${esc(traduz(ERRO_BUSCA.pedidos))}</div>
          <button class="bt" id="tentaPed">Tentar de novo</button>`
-      : `<div class="vazio">${PEDIDOS?"Nenhum pedido desta loja nos últimos 30 dias."
+      : `<div class="vazio">${PEDIDOS?"Nenhum pedido desta loja neste mês nem no anterior."
          :!navigator.onLine?"Sem sinal. Os pedidos aparecem quando a internet voltar."
          :"Buscando os pedidos…"}</div>`;
     if($("tentaPed")) $("tentaPed").onclick=()=>{ $("corpo").innerHTML=`<div class="vazio">Buscando os pedidos…</div>`; buscarPedidos(DATA); };
