@@ -380,7 +380,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-29h";
+const VERSAO_APP = "2026-09-30b";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -622,7 +622,7 @@ function ligaFoto(caixa, reg, alvo, depois){
 }
 
 function salvarCache(){ if(DIA) guarda.porJ("dia:"+DIA.data,DIA); }
-function grava(tabela,chave,corpo){ fila.poe({tabela,chave,corpo}); salvarCache(); escoar(); }
+function grava(tabela,chave,corpo){ fila.poe({tabela,chave,corpo}); salvarCache(); escoar(); return corpo; }
 const base=()=>({pessoa_id:DIA.pessoa.id, loja_id:LOJA.id, visita_id:LOJA.visita?LOJA.visita.id:null});
 
 /* --------------------------- chrome -------------------------- */
@@ -790,6 +790,8 @@ async function carregarDia(data,forcar){
 /* Nao lidas vem separado do meu_dia de proposito: o roteiro fica em cache o
    dia todo, e mensagem nova nao pode ficar congelada junto com ele. */
 async function buscarNaoLidas(){
+  /* A conversa com o comercial saiu: as demandas tomaram o lugar dela. */
+  if(regraDe("conversa")==="desligado") return;
   try{ NAOLIDAS=await api("/rest/v1/rpc/alertas_conversa",{method:"POST",body:"{}"})||{};
     if(TELA==="home") pintaLojas(); else if(TELA==="loja") telaLoja();
   }catch(e){}
@@ -848,9 +850,9 @@ const resumoVendasDe=l=>{ const x=PEDIDOS&&PEDIDOS[l.id]; return (x&&!Array.isAr
    muda sem atualizar o app. Estes sao os padroes, caso o banco nao responda.
 ------------------------------------------------------------------------ */
 const REGRA_PADRAO={oportunidade:"toda_visita", validade:"toda_visita", chegadas:"informativo",
-  exposicao:"semanal", preco:"semanal", pdv:"semanal", conversa:"ferramenta"};
+  exposicao:"desligado", preco:"desligado", pdv:"semanal", conversa:"desligado", demandas:"ferramenta"};
 const MOD_REGRA={contagem:"oportunidade", validade:"validade", chegadas:"chegadas",
-  exposicao:"exposicao", preco:"preco", pdv:"pdv", conversa:"conversa"};
+  exposicao:"exposicao", preco:"preco", pdv:"pdv", conversa:"conversa", demandas:"demandas"};
 let OBRIG=null;   // {regras, lojas:{loja_id:{semana, hoje, tarefas, ultima_visita_da_semana}}}
 async function buscarObrigacoes(data){
   const guardado=guarda.lerJ("obrig:"+data);
@@ -963,7 +965,7 @@ const censoDe=l=>(CENSO&&CENSO[l.id])||{};
    solicitacoes nem a regra da semana. Uma lista so nao deixa isso voltar. */
 function buscarTudoDoDia(data){
   buscarNaoLidas(); buscarOportunidades(data); buscarPedidos(data);
-  buscarCenso(data); buscarObrigacoes(data); buscarVencimentos(data);
+  buscarCenso(data); buscarObrigacoes(data); buscarVencimentos(data); buscarDemandas();
 }
 
 async function revalidarDia(data){
@@ -1076,12 +1078,14 @@ function prioridade(l){
 }
 function modulosFeitos(l){
   /* So conta modulo de tarefa. Informativo e ferramenta nao sao trabalho. */
-  return MODULOS.filter(m=>{ const e=estadoModulo(l,m.k); return e.k==="feito"; }).length;
+  return modulosAtivos().filter(m=>{ const e=estadoModulo(l,m.k); return e.k==="feito"; }).length;
 }
-function modulosDeTarefa(){ return MODULOS.filter(m=>{ const rg=regraDe(m.k); return rg==="toda_visita"||rg==="semanal"; }).length; }
+function modulosDeTarefa(){ return modulosAtivos().filter(m=>{ const rg=regraDe(m.k); return rg==="toda_visita"||rg==="semanal"; }).length; }
 function pintaLojas(){
-  const ls=lojasFiltradas();
-  $("corpo").innerHTML=ls.length?ls.map((l,i)=>{
+  const ls=lojasFiltradas(), dn=demandasParaResponder().length;
+  const avisoDem = dn ? `<button class="aviso amb" id="avDem" style="display:block;width:100%;text-align:left;border:none;font:inherit;cursor:pointer">
+      <b>${dn} ${dn===1?"demanda do líder":"demandas do líder"} para responder.</b> Toque para ver.</button>` : "";
+  $("corpo").innerHTML=avisoDem+(ls.length?ls.map((l,i)=>{
     const v=l.visita, fim=v&&v.hora_fim, pr=prioridade(l), k=modulosFeitos(l);
     const idx=(DIA.lojas||[]).indexOf(l);
     return `<div class="loja ${fim?"feita":pr==="Alta"?"alta":""}" data-i="${idx}">
@@ -1104,7 +1108,8 @@ function pintaLojas(){
           <div class="progresso"><div class="trilho"><i style="width:${Math.round(k/modulosDeTarefa()*100)}%"></i></div>
             <span class="fracao">${k}/${modulosDeTarefa()}</span></div>
         </div></div></div>`; }).join("")
-    : FILTRO ? `<div class="vazio">Nenhuma loja com esse nome.</div>` : diaVazio();
+    : FILTRO ? `<div class="vazio">Nenhuma loja com esse nome.</div>` : diaVazio());
+  if($("avDem")) $("avDem").onclick=()=>telaDemandas();
   $("corpo").querySelectorAll(".loja").forEach(c=>{
     const l=DIA.lojas[+c.dataset.i];
     /* Toque no cartao abre a loja; toque num botao faz so a acao dele. */
@@ -1247,17 +1252,23 @@ function telaMapa(){ montar(()=>{ TELA="mapa"; esconderTudo();
 });}
 
 /* ---------------------- entrada da loja ---------------------- */
-const MODULOS=[
+/* Todos os modulos que o app sabe mostrar. Os que estao com a regra
+   "desligado" (no banco, em regras_modulos) nao aparecem e nao contam no
+   encerramento. Religar e so mudar a regra no banco, sem mexer no app. */
+const MODULOS_TODOS=[
   {k:"contagem", ic:"1", nome:"Oportunidade de Estoque", tela:()=>telaOportunidade()},
   {k:"validade", ic:"2", nome:"Controle de Vencimentos", tela:()=>telaValidade()},
   {k:"chegadas", ic:"3", nome:"Informações de Vendas",   tela:()=>telaPedidos()},
   {k:"exposicao",ic:"4", nome:"Exposição e ponto extra", tela:()=>telaExposicao()},
   {k:"preco",    ic:"5", nome:"Preço e concorrência",    tela:()=>telaPreco()},
   {k:"pdv",      ic:"6", nome:"Materiais e Geladeiras",  tela:()=>telaAtivos()},
-  {k:"conversa", ic:"7", nome:"Conversa",                tela:()=>telaConversa()}
+  {k:"demandas", ic:"7", nome:"Demandas",                tela:()=>telaDemandas()}
 ];
+const modulosAtivos=()=>MODULOS_TODOS.filter(m=>regraDe(m.k)!=="desligado");
 let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
 function resumo(k){
+  if(k==="demandas"){ const n=demandasParaResponder().length, r=(DEMANDAS&&DEMANDAS.para_lider||[]).filter(d=>d.resposta&&!d.visto).length;
+    return {txt:[n?`${n} do líder para responder`:"", r?`${r} ${r===1?"resposta nova":"respostas novas"}`:""].filter(Boolean).join(" · ")||"Mande e receba demandas do líder", badge:n+r}; }
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
   if(k==="contagem"){ const r=resumoOport(l);
     if(!r.total) return {txt:"nenhuma oportunidade hoje", pronto:false, alerta:false};
@@ -1303,14 +1314,14 @@ function resumo(k){
 /* A entrada da loja e um roteiro, separado por tipo:
      solicitacoes da lideranca, o obrigatorio desta visita, o da semana,
      e o que e so consulta. */
-function botaoModulo(m,i){
+function botaoModulo(m,i,num){
   const e=estadoModulo(LOJA,m.k), r=resumo(m.k);
   const abertas=tarefasDe(LOJA,MOD_REGRA[m.k]).filter(tarefaAberta).length;
   const cls=e.k==="feito"?"pronto":e.k==="obrig"?"alerta":"";
   const cor=e.k==="feito"?"var(--verde)":e.k==="obrig"?"var(--verm)":e.k==="pend"?"var(--amb)":"var(--ink3)";
   return `<button class="mod ${cls}" data-m="${i}">
     ${abertas||r.badge?`<span class="sino">${abertas||r.badge}</span>`:""}
-    <span class="ic">${e.k==="feito"?"\u2713":m.ic}</span>
+    <span class="ic">${e.k==="feito"?"\u2713":(num||i+1)}</span>
     <span class="txt"><b>${m.nome}</b>
       ${e.txt?`<span style="color:${cor};font-weight:500">${esc(e.txt)}</span><br>`:""}
       <span>${esc(r.txt||"")}</span></span>
@@ -1329,18 +1340,21 @@ function cartaoTarefa(t,idx){
     <span style="color:var(--ink3);font-size:22px">\u203a</span></button>`;
 }
 const nomeDoModulo=mod=>{ const k=Object.keys(MOD_REGRA).find(x=>MOD_REGRA[x]===mod);
-  const m=MODULOS.find(x=>x.k===k); return m?m.nome:"Solicitação"; };
+  const m=MODULOS_TODOS.find(x=>x.k===k); return m?m.nome:"Solicitação"; };
 
 function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
   const v=LOJA.visita, fim=v&&v.hora_fim;
   topo(LOJA.nome, telaVisitas, "");
   const tarefas=tarefasDe(LOJA);
   const g={obrig:[], semana:[], consulta:[]};
-  MODULOS.forEach((m,i)=>{ const e=estadoModulo(LOJA,m.k), rg=regraDe(m.k);
+  const mods=modulosAtivos();
+  mods.forEach((m,i)=>{ const e=estadoModulo(LOJA,m.k), rg=regraDe(m.k);
     if(e.k==="info"||e.k==="tool") g.consulta.push([m,i]);
     else if(rg==="toda_visita"||e.k==="obrig") g.obrig.push([m,i]);
     else g.semana.push([m,i]); });
-  const bloco=(tit,lista)=>lista.length?`<h2 class="tit">${tit}</h2>`+lista.map(([m,i])=>botaoModulo(m,i)).join(""):"";
+  /* Numerados na ordem em que aparecem na tela, grupo apos grupo. */
+  let num=0;
+  const bloco=(tit,lista)=>lista.length?`<h2 class="tit">${tit}</h2>`+lista.map(([m,i])=>botaoModulo(m,i,++num)).join(""):"";
   $("corpo").innerHTML=`
     <div class="cartao"><div style="font-size:14.5px;color:var(--ink2)">${esc(LOJA.endereco||"")}</div>
       ${LOJA.cep?`<div style="font-size:14.5px;color:var(--ink2)">${esc(LOJA.cep)} · ${esc(LOJA.cidade||"")}</div>`:""}
@@ -1352,7 +1366,7 @@ function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
     ${bloco("OBRIGATÓRIAS NESTA VISITA", g.obrig)}
     ${bloco("DA SEMANA", g.semana)}
     ${bloco("CONSULTA", g.consulta)}`;
-  $("corpo").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>MODULOS[+b.dataset.m].tela());
+  $("corpo").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>mods[+b.dataset.m].tela());
   $("corpo").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>telaTarefa(tarefas[+b.dataset.t]));
   rodape(!editavel()?null
     :fim?`<button class="bt sec" disabled>Concluída às ${esc(String(v.hora_fim).slice(0,5))}</button>`
@@ -1389,7 +1403,7 @@ function telaTarefa(t){ montar(()=>{ TELA="mod"; esconderTudo();
     <label>Foto${t.exige_foto?" (obrigatória)":", se quiser"}</label>
     <button class="fotobox" id="tfoto">${f.fotoLocal?`<img src="${f.fotoLocal}" alt="">`:f.foto?`<span class="mais">\u2713</span>Foto anexada`:`<span class="mais">+</span>Foto`}</button>
     <input type="file" id="tfotoin" accept="image/*" capture="environment" hidden>`;
-  if($("abrirmod")) $("abrirmod").onclick=()=>MODULOS.find(x=>x.k===modK).tela();
+  if($("abrirmod")) $("abrirmod").onclick=()=>MODULOS_TODOS.find(x=>x.k===modK).tela();
   $("sit").querySelectorAll("button").forEach(b=>b.onclick=()=>{ f.situacao=b.dataset.s; f.comentario=$("com").value; telaTarefa(t); });
   $("com").oninput=e=>{ f.comentario=e.target.value; };
   $("tfoto").onclick=()=>{ if(!exigeVisita()) return; $("tfotoin").click(); };
@@ -2594,35 +2608,135 @@ function telaAnexar(){ montar(()=>{ TELA="mod"; esconderTudo();
 /* Atalho de avisar dentro do modulo. O momento de avisar e quando ele acabou
    de registrar, nao depois de navegar ate a conversa. */
 function botaoAvisar(tipo){
-  return `<button class="bt" id="avisar" data-t="${tipo}">Avisar sobre isto</button>`;
+  return `<button class="bt" id="avisar" data-t="${tipo}">Mandar para o líder</button>`;
 }
 function ligaAvisar(){
   const b=$("avisar"); if(!b) return;
   b.onclick=()=>{
     const tipo=b.dataset.t;
-    if(!quantos(tipo)) return alerta("Registre alguma coisa antes de avisar.");
-    $("corpo").scrollTop=0;
-    const cx=document.createElement("div");
-    cx.className="aviso inf";
-    cx.innerHTML=`Avisar quem?<div class="pilha">
-      <button data-p="interno">Meu líder</button>
-      <button data-p="consultor">Consultor</button>
-      <button data-p="x">Cancelar</button></div>`;
-    $("corpo").prepend(cx);
-    cx.querySelectorAll("button").forEach(x=>x.onclick=async()=>{
-      const p=x.dataset.p; cx.remove();
-      if(p==="x") return;
-      CANAL_TIPO=p;
-      try{
-        const c=await api("/rest/v1/rpc/abrir_canal",{method:"POST",
-          body:JSON.stringify({p_loja:LOJA.id, p_tipo:p})});
-        await api("/rest/v1/rpc/mandar_cartao",{method:"POST",
-          body:JSON.stringify({p_canal:c.canal_id, p_tipo:tipo})});
-        CANAL=c; telaConversa();
-      }catch(e){ alerta(traduz(e.message)); }
-    });
+    if(!quantos(tipo)) return alerta("Registre alguma coisa antes de mandar para o líder.");
+    const ctx=resumoParaLider(tipo), volta={ruptura:telaOportunidade, validade:telaValidade}[tipo]||telaLoja;
+    telaNovaDemanda({modulo:tipo==="ruptura"?"oportunidade":tipo, texto:ctx.texto, contexto:ctx.contexto, volta});
   };
 }
+/* O que o repositor marcou no modulo, ja escrito para o lider. Ele confere,
+   muda se quiser, e manda. */
+function resumoParaLider(tipo){
+  const itens=[];
+  if(tipo==="ruptura"){
+    const mot=Object.fromEntries(MOTIVOS);
+    (oportDe(LOJA).itens||[]).forEach(it=>{ const c=it.contagem||{};
+      if(c.naoTem) itens.push(`${it.nome}: ${it.classe==="nunca"?"a loja não trabalha":"não tem"+(c.motivo?` (${(mot[c.motivo]||c.motivo).toLowerCase()}${c.motivo==="outro"&&c.obs?`: ${c.obs}`:""})`:"")}`); });
+  } else if(tipo==="validade"){
+    lotesAtivos(LOJA).forEach(x=>{ const d=diasAte(x.vence_em), k=nivelLote(x).k;
+      if(k==="vencido"||k==="critico") itens.push(`${x.produto||x.nome}, lote ${x.lote||"sem lote"}: ${d<0?"vencido":`vence em ${dataBr(x.vence_em)}`}${x.quantidade_atual!=null?`, ${x.quantidade_atual} un`:""}`); });
+  }
+  const tit={ruptura:"Produtos que não encontrei", validade:"Lotes vencendo"}[tipo]||"Registro da visita";
+  return {texto: itens.length?`${tit} em ${LOJA.nome}:\n- ${itens.join("\n- ")}`:"", contexto:{tipo, itens}};
+}
+
+/* ============================ DEMANDAS ============================
+   No lugar da conversa. Nao e bate-papo: cada demanda tem um pedido, uma
+   resposta e uma situacao.
+   - Do lider para mim: respondo "Feito" ou "Nao consegui" (com motivo). As de
+     uma loja tambem aparecem na loja, e com prazo vencido travam o
+     encerramento, como sempre.
+   - Minhas para o lider: mando, e vejo a resposta quando ele responder. */
+let DEMANDAS=null;
+async function buscarDemandas(){
+  if(!navigator.onLine) return;
+  try{ const d=await api("/rest/v1/rpc/minhas_demandas",{method:"POST",body:"{}"});
+    /* o que mandei e ainda nao subiu continua na lista */
+    const locais=(DEMANDAS&&DEMANDAS.para_lider||[]).filter(x=>x.local&&!(d.para_lider||[]).some(y=>y.id===x.id));
+    const vistas=new Set(JSON.parse(guarda.ler("dem_vistas")||"[]"));
+    (d.para_lider||[]).forEach(x=>{ if(vistas.has(x.id+":"+(x.respondido_em||""))) x.visto=true; });
+    d.para_lider=[...locais,...(d.para_lider||[])];
+    const resp=new Set(JSON.parse(guarda.ler("dem_respondidas")||"[]"));
+    (d.do_lider||[]).forEach(t=>{ if(!t.resposta&&resp.has(t.id)) t.resposta={situacao:"enviando"}; });
+    DEMANDAS=d; guarda.porJ("demandas",d);
+    /* redesenha sem buscar de novo: senao a tela e a busca se chamariam para sempre */
+    if(TELA==="home") pintaLojas(); else if(TELA==="dem") telaDemandas(true); else if(TELA==="loja") telaLoja();
+  }catch(e){ ERRO_BUSCA.demandas=e.message; }
+}
+const demandasParaResponder=()=>(DEMANDAS&&DEMANDAS.do_lider||[]).filter(t=>!t.resposta);
+
+function telaDemandas(semBuscar){ montar(()=>{
+  const dentroDaLoja=!!LOJA, volta=dentroDaLoja?()=>telaLoja():()=>telaVisitas();
+  TELA="dem"; esconderTudo(); topo("Demandas", volta, "");
+  if(!DEMANDAS) DEMANDAS=guarda.lerJ("demandas");
+  const D=DEMANDAS||{do_lider:[],para_lider:[]};
+  const doLider=D.do_lider||[], minhas=D.para_lider||[];
+  /* marca como vistas as respostas que estao aparecendo agora */
+  const vistas=new Set(JSON.parse(guarda.ler("dem_vistas")||"[]"));
+  minhas.forEach(x=>{ if(x.resposta) vistas.add(x.id+":"+(x.respondido_em||"")); });
+  guarda.por("dem_vistas", JSON.stringify([...vistas].slice(-200)));
+  const quando=t=>t?new Date(t).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
+  const cartaoDoLider=(t,i)=>{
+    const r=t.resposta, venceu=t.prazo&&t.prazo<DATA&&!r;
+    return `<div class="cartao" style="margin-bottom:10px;${!r?"border-left:4px solid var(--verm)":""}">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(t.titulo)}</b>
+        ${r?`<span class="selo" style="background:${r.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"};color:${r.situacao==="nao_feita"?"var(--amb)":"var(--verde)"}">${r.situacao==="nao_feita"?"Não consegui":r.situacao==="enviando"?"Enviando…":"Feito"}</span>`
+           :`<span class="selo" style="background:var(--verm-bg);color:var(--verm)">${venceu?"Prazo vencido":"Responder"}</span>`}</div>
+      ${t.descricao?`<div style="margin-top:6px;color:var(--ink2)">${esc(t.descricao)}</div>`:""}
+      <div class="mut" style="margin-top:6px;font-size:13px">De ${esc(t.de||"liderança")} · ${quando(t.criado_em)}${t.loja?` · ${esc(t.loja)}`:""}${t.prazo?` · prazo ${dataBr(t.prazo)}`:""}</div>
+      ${!r?(t.exige_foto&&t.loja_id
+          ?`<div class="aviso inf" style="margin-top:8px">Esta pede foto: responda dentro da loja ${esc(t.loja)}.</div>`
+          :`<div class="pilha" style="margin-top:10px"><button class="bt" data-feito="${i}">Feito</button><button class="bt sec" data-nao="${i}">Não consegui</button></div>
+            <div id="mot${i}" style="display:none;margin-top:8px"><textarea id="motx${i}" rows="2" placeholder="Por que não conseguiu?" style="width:100%;box-sizing:border-box"></textarea>
+            <button class="bt" data-envnao="${i}" style="margin-top:6px">Enviar</button></div>`):""}
+      ${r&&r.comentario?`<div class="mut" style="margin-top:6px">Você: ${esc(r.comentario)}</div>`:""}
+    </div>`; };
+  const cartaoMinha=d=>`<div class="cartao" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><span style="white-space:pre-line">${esc(d.texto)}</span>
+        <span class="selo" style="flex:none;background:${d.resolvida_em?"var(--verde-bg)":d.resposta?"var(--azul-bg)":"var(--fundo)"};color:${d.resolvida_em?"var(--verde)":d.resposta?"var(--azul)":"var(--ink2)"}">${d.resolvida_em?"Resolvida":d.resposta?"Respondida":d.local?"Enviando…":"Aguardando"}</span></div>
+      <div class="mut" style="margin-top:6px;font-size:13px">${quando(d.criado_em)}${d.loja?` · ${esc(d.loja)}`:""}</div>
+      ${d.resposta?`<div style="margin-top:8px;background:var(--azul-bg);border-radius:10px;padding:8px 10px"><b>${esc(d.respondido_por||"Líder")}:</b> ${esc(d.resposta)}</div>`:""}
+    </div>`;
+  $("corpo").innerHTML=`
+    <button class="bt" id="novaDem">Nova demanda para o líder</button>
+    ${ERRO_BUSCA.demandas&&!DEMANDAS?`<div class="aviso err" style="margin-top:10px">Não consegui buscar as demandas. ${esc(traduz(ERRO_BUSCA.demandas))}</div>`:""}
+    <h2 class="tit">DO LÍDER · ${doLider.filter(t=>!t.resposta).length} para responder</h2>
+    ${doLider.length?doLider.map(cartaoDoLider).join(""):`<div class="vazio">Nenhuma demanda do líder nos últimos 30 dias.</div>`}
+    <h2 class="tit">PARA O LÍDER</h2>
+    ${minhas.length?minhas.map(cartaoMinha).join(""):`<div class="vazio">Você ainda não mandou nenhuma demanda.</div>`}`;
+  $("novaDem").onclick=()=>telaNovaDemanda({volta:telaDemandas});
+  const responder=(i,situacao,comentario)=>{ const t=doLider[i];
+    grava("tarefa_resposta","id",{id:uid(), tarefa_id:t.id, visita_id:(LOJA&&LOJA.visita&&LOJA.visita.id)||null,
+      pessoa_id:DIA.pessoa.id, situacao:situacao, comentario:comentario||null});
+    t.resposta={situacao, comentario, criado_em:new Date().toISOString()};
+    const resp=new Set(JSON.parse(guarda.ler("dem_respondidas")||"[]")); resp.add(t.id); guarda.por("dem_respondidas",JSON.stringify([...resp].slice(-200)));
+    guarda.porJ("demandas",DEMANDAS); telaDemandas(true); };
+  $("corpo").querySelectorAll("[data-feito]").forEach(b=>b.onclick=()=>responder(+b.dataset.feito,"feita",null));
+  $("corpo").querySelectorAll("[data-nao]").forEach(b=>b.onclick=()=>{ $("mot"+b.dataset.nao).style.display="block"; $("motx"+b.dataset.nao).focus(); });
+  $("corpo").querySelectorAll("[data-envnao]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.envnao, m=$("motx"+i).value.trim();
+    if(!m) return alerta("Conte por que não conseguiu."); responder(i,"nao_feita",m); });
+  rodape(`<button class="bt sec" id="volDem">Voltar</button>`); $("volDem").onclick=volta;
+  if(!semBuscar) buscarDemandas();
+});}
+
+function telaNovaDemanda(o){ montar(()=>{
+  TELA="novadem"; esconderTudo(); const volta=o.volta||telaDemandas;
+  topo("Demanda para o líder", volta, "");
+  $("corpo").innerHTML=`
+    <div class="cartao">
+      <label style="font-weight:600">O que você precisa do seu líder?</label>
+      <textarea id="demTxt" rows="7" style="width:100%;box-sizing:border-box;margin-top:8px;font:inherit">${esc(o.texto||"")}</textarea>
+      ${LOJA?`<label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="demLoja" checked> Sobre a loja ${esc(LOJA.nome)}</label>`:""}
+      <p class="mut" style="margin:10px 0 0">Vai para o seu líder. Quando ele responder, a resposta aparece em Demandas.</p>
+    </div>`;
+  rodape(`<button class="bt sec" id="demVolta">Cancelar</button><button class="bt" id="demEnvia">Mandar</button>`);
+  $("demVolta").onclick=volta;
+  $("demEnvia").onclick=()=>{
+    const texto=$("demTxt").value.trim(); if(!texto) return alerta("Escreva o que você precisa.");
+    const loja=LOJA&&$("demLoja")&&$("demLoja").checked?LOJA:null;
+    const d=grava("demanda","id",{id:uid(), de_pessoa:DIA.pessoa.id, loja_id:loja?loja.id:null, modulo:o.modulo||null,
+      texto:texto, contexto:o.contexto||null});
+    DEMANDAS=DEMANDAS||{do_lider:[],para_lider:[]};
+    DEMANDAS.para_lider=[{...d, loja:loja?loja.nome:null, criado_em:new Date().toISOString(), local:true}, ...(DEMANDAS.para_lider||[])];
+    guarda.porJ("demandas",DEMANDAS);
+    alerta("Mandado para o seu líder."); volta();
+  };
+});}
 
 async function mandarCartao(tipo){
   if(!navigator.onLine) return alerta("Sem sinal. Cartão não é fila: mande quando voltar.");
@@ -2702,7 +2816,7 @@ function encerrarVisita(){
     alerta(`${r.semMotivo} ${r.semMotivo===1?"produto zerado está":"produtos zerados estão"} sem motivo. Abra a Oportunidade de Estoque e informe.`);
     return telaOportunidade();
   }
-  const falta=MODULOS.filter(m=>estadoModulo(LOJA,m.k).k==="obrig");
+  const falta=modulosAtivos().filter(m=>estadoModulo(LOJA,m.k).k==="obrig");
   if(falta.length){
     alerta(`Falta concluir: ${falta.map(m=>m.nome).join(", ")}.`);
     return falta[0].tela();

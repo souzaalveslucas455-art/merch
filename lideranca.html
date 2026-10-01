@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<title>Liderança · Merchandising</title>
+<style>
+:root{
+  --verm:#E4002B; --verm-bg:#FDE7EC; --verm-esc:#B80022;
+  --azul:#1E6FD9; --azul-bg:#E9F1FC;
+  --ink:#1A1D21; --ink2:#5B6270; --ink3:#9CA3AF;
+  --linha:#E5E7EB; --papel:#FFF; --fundo:#F2F3F5;
+  --verde:#0F7A52; --verde-bg:#E6F4EE;
+  --amb:#96620F; --amb-bg:#FDF2DC;
+  --roxo:#6D4BC4; --roxo-bg:#F0EBFB;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --sombra:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--fundo);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+.topo{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--papel);border-bottom:1px solid var(--linha)}
+.topo .in{max-width:1120px;margin:0 auto;padding:12px 18px;display:flex;align-items:center;gap:12px}
+.topo h1{font-size:18px;margin:0;flex:1;min-width:0}
+.topo h1 small{display:block;font-size:13px;font-weight:400;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lnk{background:none;border:none;color:var(--ink2);cursor:pointer;padding:6px 4px;font-size:14px}
+main{max-width:1120px;margin:0 auto;padding:16px 18px 40px}
+
+.bt{border:none;border-radius:12px;background:var(--verm);color:#fff;font-weight:700;padding:12px 16px;cursor:pointer}
+.bt:disabled{opacity:.5;cursor:default}
+.bt.sec{background:var(--papel);color:var(--ink);border:1px solid var(--linha);font-weight:600}
+.bt.peq{padding:8px 12px;font-size:14px;border-radius:10px}
+.campo{display:block;margin-top:12px}
+.campo span{display:block;font-size:13px;color:var(--ink2);margin-bottom:4px}
+.campo input,.campo select,.campo textarea{width:100%;border:1px solid #D1D5DB;border-radius:10px;padding:11px 12px;background:var(--papel)}
+.aviso{border-radius:12px;padding:11px 13px;margin:10px 0;font-size:14px}
+.aviso.err{background:var(--verm-bg);color:var(--verm-esc)}
+.aviso.ok{background:var(--verde-bg);color:var(--verde)}
+.aviso.inf{background:var(--azul-bg);color:#14519E}
+.mut{color:var(--ink2)}
+
+/* abas do lider */
+.abas{display:flex;gap:6px;background:var(--papel);border:1px solid var(--linha);border-radius:12px;padding:4px;margin-bottom:16px}
+.abas button{flex:1;border:none;background:none;border-radius:9px;padding:10px 6px;font-weight:600;color:var(--ink2);cursor:pointer;position:relative}
+.abas button[aria-selected="true"]{background:var(--ink);color:#fff}
+.abas .n{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--verm);color:#fff;font-size:12px;margin-left:6px}
+
+/* barra do painel */
+.barra{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:18px}
+.barra label{font-size:13px;color:var(--ink2)}
+.barra select{display:block;margin-top:4px;border:1px solid #D1D5DB;border-radius:10px;padding:9px 10px;background:var(--papel);min-width:180px}
+.barra .bt{margin-left:auto}
+
+/* secoes: o titulo e uma frase que ja diz o tamanho do problema */
+.sec{background:var(--papel);border-radius:16px;box-shadow:var(--sombra);margin-bottom:16px;overflow:hidden}
+.sec>h2{margin:0;padding:14px 16px 12px;font-size:16px;line-height:1.3;border-bottom:1px solid var(--linha);display:flex;gap:10px;align-items:baseline}
+.sec>h2 .marca{width:10px;height:10px;border-radius:50%;flex:none;transform:translateY(-1px)}
+.sec>h2 em{font-style:normal;font-weight:400;color:var(--ink2);font-size:14px}
+.vazio{padding:16px;color:var(--ink2)}
+.lin{padding:12px 16px;border-bottom:1px solid var(--linha);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px}
+.lin:last-child{border-bottom:none}
+.lin b{font-weight:600}
+.lin .det{grid-column:1/-1;font-size:13.5px;color:var(--ink2)}
+.selo{display:inline-block;font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;align-self:start}
+.mais{display:block;width:100%;border:none;border-top:1px solid var(--linha);background:none;padding:11px;color:var(--azul);font-weight:600;cursor:pointer}
+
+/* cumprimento: barra por lider */
+.cum{padding:12px 16px;border-bottom:1px solid var(--linha)}
+.cum:last-child{border-bottom:none}
+.cum .cab{display:flex;justify-content:space-between;gap:10px}
+.cum .tr{height:8px;border-radius:8px;background:var(--linha);overflow:hidden;margin:8px 0 4px}
+.cum .tr span{display:block;height:100%}
+.cum details{margin-top:6px} .cum summary{cursor:pointer;color:var(--azul);font-size:14px}
+.cum .rep{display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-bottom:1px dashed var(--linha)}
+
+/* equipe do dia */
+.rep-c{padding:12px 16px;border-bottom:1px solid var(--linha)}
+.rep-c:last-child{border-bottom:none}
+.rep-c .cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.loj{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:6px 0 6px 12px;border-left:3px solid var(--linha);margin-top:6px}
+.loj.ok{border-color:var(--verde)} .loj.and{border-color:var(--amb)} .loj.nao{border-color:var(--ink3)}
+
+/* demandas */
+.dem{padding:13px 16px;border-bottom:1px solid var(--linha)}
+.dem:last-child{border-bottom:none}
+.dem .txt{white-space:pre-line;margin:6px 0}
+.dem textarea{width:100%;border:1px solid #D1D5DB;border-radius:10px;padding:9px 11px;margin-top:8px;min-height:62px}
+.dem .acoes{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.resp{background:var(--azul-bg);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:14px}
+
+/* login e formulario */
+.cx{max-width:420px;margin:40px auto;background:var(--papel);border-radius:18px;box-shadow:var(--sombra);padding:22px}
+.cx h2{margin:0 0 4px;font-size:20px}
+.form{max-width:620px}
+@media (min-width:900px){ main{padding-top:22px} .grade{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grade .sec{margin-bottom:0} }
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><h1 id="tit">Liderança</h1><span id="acoes"></span></div></header>
+<main id="corpo"></main>
+<script>
+"use strict";
+/* ======================= LIDERANCA =======================
+   Uma pagina so para o lider (no celular) e para o gerente (no computador).
+   Quem entra decide o que aparece: o lider ve a equipe dele em tres abas; o
+   gerente ve o painel dos lideres dele, na ordem combinada: vencimentos,
+   "nao tem", demandas e cumprimento das visitas.
+   Acesso: telefone da base + senha criada no primeiro acesso. */
+const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const guarda={ler:k=>{try{return localStorage.getItem("lid_"+k);}catch(e){return null;}},
+              por:(k,v)=>{try{localStorage.setItem("lid_"+k,v);}catch(e){}},
+              tira:k=>{try{localStorage.removeItem("lid_"+k);}catch(e){}}};
+/* Mesma limpeza do banco (_so_tel): sem zero da frente, sem 55, e com o 9 do
+   celular quando faltar. O telefone vira o login, entao tem que dar sempre igual. */
+const soTel=t=>{ let x=String(t||"").replace(/\D/g,"").replace(/^0+/,"");
+  let d=x.length>11&&x.startsWith("55")?x.slice(2).slice(-11):x.slice(-11);
+  return d.length===10&&"6789".includes(d[2])?d.slice(0,2)+"9"+d.slice(2):d; };
+const hoje=()=>{ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const dataBr=d=>d?String(d).slice(8,10)+"/"+String(d).slice(5,7):"";
+const quando=t=>t?new Date(t).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
+const nomeCurto=n=>{ const p=String(n||"").split(/\s+/).filter(Boolean); return p.length>1?p[0]+" "+p[p.length-1]:(p[0]||""); };
+const tit=n=>String(n||"").toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
+const MOTIVO={sem_pedido:"Não pediu",pedido_nao_chegou:"Pedido não chegou",sem_espaco:"Sem espaço",
+  concorrente_ocupou:"Concorrente ocupou",deposito_cheio:"Tem no depósito",outro:"Outro"};
+const ACAO={girar:"Mudou de lugar para girar",troca:"Acionou troca",retirar:"Retirou da gôndola",outro:"Outro",registrar:"Só registrou",remarcar:"Remarcou"};
+const MODULO={oportunidade:"Oportunidade de Estoque",validade:"Controle de Vencimentos",pdv:"Materiais e Geladeiras",livre:"Geral"};
+const TIPO_ATIVO={geladeira:"Geladeira",gondola:"Gôndola",display:"Display",ilha:"Ilha",checkout:"Checkout",material:"Material",outro:"Outro"};
+
+/* --------------------------- acesso --------------------------- */
+let TOKEN=guarda.ler("token"), EU=null;
+async function api(caminho, opc={}, comToken=true, tentou=false){
+  let r;
+  try{ r=await fetch(CFG.url+caminho,{...opc, headers:{"Content-Type":"application/json","apikey":CFG.chave,
+          ...(comToken&&TOKEN?{"Authorization":"Bearer "+TOKEN}:{}), ...(opc.headers||{})}}); }
+  catch(e){ throw new Error("Sem conexão com o sistema agora. Confira a internet."); }
+  const t=await r.text(); let j=null; try{ j=t?JSON.parse(t):null; }catch(e){}
+  if(r.status===401 && comToken && !tentou && guarda.ler("refresh")){
+    try{ const d=await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:guarda.ler("refresh")})},false,true);
+      TOKEN=d.access_token; guarda.por("token",TOKEN); guarda.por("refresh",d.refresh_token); return api(caminho,opc,comToken,true); }
+    catch(e){ sair(); throw new Error("Sua sessão terminou. Entre de novo."); }
+  }
+  if(!r.ok) throw new Error((j&&(j.message||j.error_description||j.msg||j.error))||("Erro "+r.status));
+  return j;
+}
+const rpc=(fn,args)=>api("/rest/v1/rpc/"+fn,{method:"POST",body:JSON.stringify(args||{})});
+function traduz(m){ const s=String(m||"").toLowerCase();
+  if(s.includes("invalid login")||s.includes("credentials")) return "Telefone ou senha não conferem.";
+  if(s.includes("already registered")) return "Este telefone já tem senha. Confira a senha.";
+  if(s.includes("password should be")||s.includes("at least 6")) return "A senha precisa ter pelo menos 6 caracteres.";
+  if(s.includes("nao e de nenhum lider")) return "Este telefone não é de nenhum líder ou gerente da base. Confira o número.";
+  if(s.includes("ja foi ativado")) return "Este telefone já foi ativado em outro acesso. Fale com o administrador para liberar.";
+  if(s.includes("mais de uma pessoa")) return "Este telefone está em mais de uma pessoa da base. Fale com o administrador.";
+  if(s.includes("nao e da sua equipe")) return "Isso não é da sua equipe.";
+  return m; }
+
+function sair(){ guarda.tira("token"); guarda.tira("refresh"); TOKEN=null; EU=null; telaLogin(); }
+
+function telaLogin(msg){
+  $("tit").innerHTML="Liderança"; $("acoes").innerHTML="";
+  $("corpo").innerHTML=`<div class="cx">
+    <h2>Entrar</h2>
+    <p class="mut" style="margin:0">Para líderes e gerentes de merchandising.</p>
+    <label class="campo"><span>Seu telefone, com DDD</span><input id="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="(62) 99999-9999"></label>
+    <label class="campo"><span>Senha</span><input id="sen" type="password" autocomplete="current-password"></label>
+    <p class="mut" style="font-size:13.5px;margin:8px 0 0">No primeiro acesso, a senha que você digitar passa a ser a sua senha. Use pelo menos 6 caracteres.</p>
+    <div id="erro">${msg?`<div class="aviso err">${esc(msg)}</div>`:""}</div>
+    <button class="bt" id="entrar" style="width:100%;margin-top:14px">Entrar</button></div>`;
+  const vai=async()=>{
+    const tel=soTel($("tel").value), sen=$("sen").value;
+    if(tel.length<10) return $("erro").innerHTML=`<div class="aviso err">Digite o telefone com DDD.</div>`;
+    if(sen.length<6) return $("erro").innerHTML=`<div class="aviso err">A senha precisa ter pelo menos 6 caracteres.</div>`;
+    $("entrar").disabled=true; $("entrar").textContent="Entrando…";
+    try{ await entrar(tel,sen); await abrir(); }
+    catch(e){ $("erro").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`; }
+    finally{ if($("entrar")){ $("entrar").disabled=false; $("entrar").textContent="Entrar"; } }
+  };
+  $("entrar").onclick=vai; $("sen").onkeydown=e=>{ if(e.key==="Enter") vai(); };
+}
+async function entrar(tel,senha){
+  const email=`tel-${tel}@${CFG.dominio}`;
+  const logar=()=>api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password:senha})},false);
+  let d;
+  try{ d=await logar(); }
+  catch(e){ if(!/invalid login|credentials/i.test(e.message)) throw e;
+    try{ await api("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password:senha})},false); }
+    catch(e2){ if(/already registered/i.test(e2.message)) throw new Error("Invalid login credentials"); throw e2; }
+    d=await logar(); }
+  TOKEN=d.access_token; guarda.por("token",TOKEN); guarda.por("refresh",d.refresh_token);
+  /* telefone que nao e de lider ou gerente: a sessao nao fica guardada */
+  try{ await rpc("vincular_por_telefone",{p_telefone:tel}); }
+  catch(e){ guarda.tira("token"); guarda.tira("refresh"); TOKEN=null; throw e; }
+}
+
+/* --------------------------- dados --------------------------- */
+let D={alertas:null, demandas:null, cumprimento:null, equipe:null}, ERRO=null;
+let MODO="lider", ABA=guarda.ler("aba")||"equipe", DIAS=Number(guarda.ler("dias")||7), FILTRO_LIDER=guarda.ler("filtro")||"";
+
+async function abrir(){
+  $("corpo").innerHTML=`<p class="mut">Carregando…</p>`;
+  try{ EU=await rpc("eu_sou"); }
+  catch(e){ return telaLogin(traduz(e.message)); }
+  if(!EU) return telaLogin("Seu acesso não está ligado a nenhum líder ou gerente da base.");
+  MODO=EU.perfil==="lider"?"lider":"painel";
+  $("tit").innerHTML=`${MODO==="lider"?"Minha equipe":"Painel de merchandising"}<small>${esc(tit(EU.nome))}</small>`;
+  $("acoes").innerHTML=`<button class="lnk" id="atual">Atualizar</button><button class="lnk" id="sai">Sair</button>`;
+  $("atual").onclick=()=>carregar(); $("sai").onclick=sair;
+  await carregar();
+}
+async function carregar(){
+  ERRO=null;
+  const pedidos=[rpc("alertas_da_equipe",{p_dias:DIAS}), rpc("demandas_da_equipe",{p_dias:30}), rpc("cumprimento_da_equipe",{p_dias:DIAS})];
+  if(MODO==="lider") pedidos.push(rpc("equipe_no_dia",{p_data:hoje()}));
+  const r=await Promise.allSettled(pedidos);
+  const v=i=>r[i]&&r[i].status==="fulfilled"?r[i].value:null;
+  D={alertas:v(0), demandas:v(1), cumprimento:v(2), equipe:v(3)};
+  const falhou=r.find(x=>x.status==="rejected"); if(falhou) ERRO=traduz(falhou.reason.message);
+  pintar();
+}
+setInterval(()=>{ if(EU && !document.hidden && navigator.onLine && !document.querySelector("textarea:focus,input:focus,select:focus")) carregar(); }, 5*60*1000);
+
+/* filtro de lider do painel: vale para tudo que tem o campo lider */
+const doFiltro=lista=>!FILTRO_LIDER?(lista||[]):(lista||[]).filter(x=>x.lider===FILTRO_LIDER);
+
+/* --------------------------- secoes --------------------------- */
+const plural=(n,um,varios)=>`${n} ${n===1?um:varios}`;
+function secao(cor, titulo, sub, corpo, id){
+  return `<section class="sec" ${id?`id="${id}"`:""}><h2><span class="marca" style="background:${cor}"></span><span>${titulo}${sub?` <em>${sub}</em>`:""}</span></h2>${corpo}</section>`;
+}
+function lista(itens, render, vazio, max){
+  if(!itens.length) return `<div class="vazio">${vazio}</div>`;
+  const mostra=itens.slice(0,max||itens.length);
+  return mostra.map(render).join("")+(itens.length>mostra.length?`<button class="mais" data-mais>Ver os outros ${itens.length-mostra.length}</button>`:"");
+}
+
+function secVencimentos(max){
+  const vs=doFiltro(D.alertas&&D.alertas.vencimentos), venc=vs.filter(x=>x.nivel==="vencido").length;
+  const titulo=vs.length?`${plural(vs.length,"lote","lotes")} ${venc?`com ${venc} já ${venc===1?"vencido":"vencidos"}`:"vencendo em até 7 dias"}`:"Nenhum lote vencido ou vencendo em até 7 dias";
+  return secao("var(--verm)", titulo, vs.length&&venc&&venc<vs.length?`e ${vs.length-venc} vencendo em até 7 dias`:"", lista(vs, x=>{
+    const d=Number(x.dias), ven=x.nivel==="vencido";
+    return `<div class="lin"><div><b>${esc(x.produto)}</b><div class="mut" style="font-size:14px">${esc(x.loja)} · lote ${esc(x.lote||"sem lote")}${x.quantidade!=null?` · ${esc(x.quantidade)} un na loja`:""}</div></div>
+      <span class="selo" style="background:${ven?"var(--verm-bg)":"var(--amb-bg)"};color:${ven?"var(--verm-esc)":"var(--amb)"}">${ven?`Vencido há ${Math.abs(d)} ${Math.abs(d)===1?"dia":"dias"}`:d===0?"Vence hoje":`Vence em ${d} ${d===1?"dia":"dias"}`}</span>
+      <div class="det">${x.acao?`${esc(ACAO[x.acao]||x.acao)} · `:"Sem ação registrada · "}${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}${Number(x.sem_atualizar)>7?` · <span style="color:var(--verm-esc)">sem contagem há ${x.sem_atualizar} dias</span>`:""}</div></div>`;
+  }, "Nenhum lote vencido ou vencendo nas lojas da equipe.", max), "s-venc");
+}
+
+function secNaoTem(max){
+  const ns=doFiltro(D.alertas&&D.alertas.nao_tem);
+  const lojas=new Set(ns.map(x=>x.codigo)).size;
+  const titulo=ns.length?`${plural(ns.length,"produto marcado","produtos marcados")} como não tem`:"Nenhum produto marcado como não tem";
+  return secao("var(--amb)", titulo, ns.length?`em ${plural(lojas,"loja","lojas")}, nos últimos ${DIAS} dias`:"", lista(ns, x=>`<div class="lin">
+      <div><b>${esc(x.produto)}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
+      <span class="selo" style="background:var(--amb-bg);color:var(--amb)">${esc(MOTIVO[x.motivo]||"Sem motivo")}</span>
+      <div class="det">${x.obs?`"${esc(x.obs)}" · `:""}desde ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div></div>`,
+    "Nenhum produto em falta registrado na última contagem das lojas.", max), "s-naotem");
+}
+
+function cartaoRecebida(x,i){
+  const aberta=!x.resolvida_em;
+  return `<div class="dem">
+    <div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(tit(x.de))}${x.loja?` <span class="mut" style="font-weight:400">· ${esc(x.loja)}</span>`:""}</b>
+      <span class="selo" style="background:${aberta?(x.resposta?"var(--azul-bg)":"var(--verm-bg)"):"var(--verde-bg)"};color:${aberta?(x.resposta?"var(--azul)":"var(--verm-esc)"):"var(--verde)"}">${aberta?(x.resposta?"Respondida":Number(x.dias)>0?`Aberta há ${x.dias} ${Number(x.dias)===1?"dia":"dias"}`:"Aberta hoje"):"Resolvida"}</span></div>
+    <div class="txt">${esc(x.texto)}</div>
+    <div class="mut" style="font-size:13px">${quando(x.criado_em)}${x.modulo?` · ${esc(MODULO[x.modulo]||x.modulo)}`:""}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div>
+    ${x.resposta?`<div class="resp"><b>${esc(nomeCurto(x.respondido_por))}:</b> ${esc(x.resposta)}</div>`:""}
+    ${aberta?`<textarea id="r${i}" placeholder="Responder para ${esc(nomeCurto(x.de))}"></textarea>
+      <div class="acoes"><button class="bt peq sec" data-resp="${i}">Responder</button><button class="bt peq" data-resolve="${i}">Resolver</button></div>
+      <div id="re${i}"></div>`:""}
+  </div>`;
+}
+function cartaoEnviada(x){
+  const rs=x.respostas||[], venc=x.vencida;
+  return `<div class="dem">
+    <div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(x.titulo)}</b>
+      <span class="selo" style="background:${venc?"var(--verm-bg)":rs.length?"var(--verde-bg)":"var(--fundo)"};color:${venc?"var(--verm-esc)":rs.length?"var(--verde)":"var(--ink2)"}">${venc?"Prazo vencido sem resposta":rs.length?plural(rs.length,"resposta","respostas"):"Sem resposta"}</span></div>
+    ${x.descricao?`<div class="txt mut">${esc(x.descricao)}</div>`:""}
+    <div class="mut" style="font-size:13px">Para ${esc(x.para==="toda a equipe"||x.para==="quem visitar a loja"?x.para:tit(x.para))}${x.loja?` · ${esc(x.loja)}`:""}${x.prazo?` · prazo ${dataBr(x.prazo)}`:""} · ${quando(x.criado_em)}${MODO==="painel"?` · de ${esc(nomeCurto(x.de))}`:""}</div>
+    ${rs.map(r=>`<div class="resp" style="background:${r.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"}"><b>${esc(nomeCurto(r.repositor))}:</b> ${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}${r.comentario?` · ${esc(r.comentario)}`:""} <span class="mut">· ${quando(r.criado_em)}</span></div>`).join("")}
+  </div>`;
+}
+function secDemandas(max){
+  const rec=doFiltro(D.demandas&&D.demandas.recebidas), env=(D.demandas&&D.demandas.enviadas)||[];
+  const abertas=rec.filter(x=>!x.resolvida_em), vencidas=env.filter(x=>x.vencida);
+  const titulo=abertas.length||vencidas.length
+    ? [abertas.length?`${plural(abertas.length,"demanda","demandas")} dos repositores em aberto`:"", vencidas.length?`${plural(vencidas.length,"demanda enviada","demandas enviadas")} com prazo vencido`:""].filter(Boolean).join(" e ")
+    : "Nenhuma demanda esperando";
+  const corpo=`<div style="padding:12px 16px;border-bottom:1px solid var(--linha);display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span class="mut" style="font-size:14px">Dos repositores para a liderança</span><button class="bt peq" data-nova>Nova demanda</button></div>
+    ${lista(rec, cartaoRecebida, "Nenhuma demanda dos repositores nos últimos 30 dias.", max)}
+    <div style="padding:12px 16px;border-top:1px solid var(--linha);border-bottom:1px solid var(--linha)" class="mut">Da liderança para os repositores</div>
+    ${lista(env, cartaoEnviada, "Nenhuma demanda enviada nos últimos 30 dias.", max)}`;
+  return secao("var(--azul)", titulo, "", corpo, "s-dem");
+}
+
+function secCumprimento(){
+  const cs=doFiltro(D.cumprimento);
+  const por={}; cs.forEach(x=>{ const k=x.lider||"Sem líder"; (por[k]=por[k]||[]).push(x); });
+  const tot=cs.reduce((a,x)=>({p:a.p+x.previstas, v:a.v+x.visitadas, e:a.e+x.encerradas}),{p:0,v:0,e:0});
+  const pct=(v,p)=>p?Math.round(100*v/p):0;
+  const cor=p=>p>=90?"var(--verde)":p>=70?"var(--amb)":"var(--verm)";
+  const titulo=tot.p?`${pct(tot.v,tot.p)}% das visitas feitas nos últimos ${DIAS} dias`:"Nenhuma visita prevista no período";
+  const corpo=Object.keys(por).length?Object.entries(por).sort((a,b)=>a[0].localeCompare(b[0])).map(([lider,reps])=>{
+    const t=reps.reduce((a,x)=>({p:a.p+x.previstas, v:a.v+x.visitadas, e:a.e+x.encerradas}),{p:0,v:0,e:0}), p=pct(t.v,t.p);
+    return `<div class="cum"><div class="cab"><b>${esc(MODO==="painel"?tit(lider):"Minha equipe")}</b><span><b style="color:${cor(p)}">${p}%</b> <span class="mut">· ${t.v} de ${t.p} visitas · ${t.e} encerradas</span></span></div>
+      <div class="tr"><span style="width:${p}%;background:${cor(p)}"></span></div>
+      <details><summary>${plural(reps.length,"repositor","repositores")}, do que menos visitou ao que mais visitou</summary>
+        ${reps.slice().sort((a,b)=>(a.pct??-1)-(b.pct??-1)).map(r=>`<div class="rep"><span>${esc(tit(r.nome))}</span><span><b style="color:${cor(r.pct||0)}">${r.pct??0}%</b> <span class="mut">${r.visitadas}/${r.previstas}</span></span></div>`).join("")}
+      </details></div>`; }).join(""):`<div class="vazio">Nenhum repositor com roteiro no período.</div>`;
+  return secao("var(--verde)", titulo, "", corpo, "s-cum");
+}
+
+function secMateriais(){
+  const ms=(D.alertas&&D.alertas.materiais)||[];
+  const NOME={visivel:"não está visível",ko75:"menos de 75% KO",abastecida:"desabastecida",com_preco:"sem preço",planograma:"fora do planograma",sem_concorrente:"com concorrente"};
+  return secao("var(--roxo)", ms.length?`${plural(ms.length,"geladeira ou material","geladeiras ou materiais")} com problema`:"Nenhuma geladeira ou material com problema", ms.length?`no censo dos últimos ${DIAS} dias`:"",
+    lista(ms, x=>`<div class="lin"><div><b>${esc(TIPO_ATIVO[x.tipo]||tit(x.tipo))}${x.patrimonio?` · PTM ${esc(x.patrimonio)}`:""}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
+      <span class="selo" style="background:var(--roxo-bg);color:var(--roxo)">${dataBr(x.data)}</span>
+      <div class="det">${(x.problemas||[]).map(p=>esc(NOME[p]||p)).join(", ")}${x.observacao?` · "${esc(x.observacao)}"`:""} · ${esc(nomeCurto(x.repositor))}</div></div>`,
+      "Nenhum problema no censo do período.", 8), "s-mat");
+}
+function secNaoTrabalha(){
+  const ns=(D.alertas&&D.alertas.nao_trabalha)||[];
+  return secao("var(--ink3)", ns.length?`${plural(ns.length,"produto","produtos")} que a loja não trabalha`:"Nenhum produto marcado como não trabalha", ns.length?"para o comercial oferecer":"",
+    lista(ns, x=>`<div class="lin"><div><b>${esc(x.produto)}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
+      <span class="selo" style="background:var(--fundo);color:var(--ink2)">${dataBr(x.data)}</span><div class="det">${esc(nomeCurto(x.repositor))}</div></div>`,
+      "Nenhuma loja marcou produto que não trabalha no período.", 8), "s-ntrab");
+}
+
+function secEquipeHoje(){
+  const eq=D.equipe||[];
+  const fazendo=eq.filter(r=>(r.lojas||[]).some(l=>l.inicio)).length;
+  const titulo=eq.length?`${fazendo} de ${plural(eq.length,"repositor","repositores")} já começaram o dia`:"Nenhum repositor na equipe";
+  return secao("var(--ink)", titulo, "", eq.length?eq.slice().sort((a,b)=>(a.lojas||[]).filter(l=>l.fim).length/((a.lojas||[]).length||1)-(b.lojas||[]).filter(l=>l.fim).length/((b.lojas||[]).length||1)).map(r=>{
+    const ls=r.lojas||[], enc=ls.filter(l=>l.fim).length;
+    return `<div class="rep-c"><div class="cab"><b>${esc(tit(r.nome))}</b><span class="mut" style="font-size:14px">rota ${esc(r.rota||"?")} · ${enc} de ${ls.length} ${ls.length===1?"loja":"lojas"}</span></div>
+      ${r.usa_app===false?`<div class="aviso err" style="margin:8px 0 0;padding:7px 10px;font-size:13px">Esta rota nunca entrou no app.</div>`:""}
+      ${ls.length?ls.map(l=>{ const k=l.fim?"ok":l.inicio?"and":"nao", fe=(l.feitos||[]).map(m=>MODULO[m]||m);
+        return `<div class="loj ${k}"><span>${esc(l.loja)}${fe.length?`<br><span class="mut" style="font-size:12.5px">${esc(fe.join(", "))}</span>`:""}</span>
+          <span class="mut" style="white-space:nowrap">${l.fim?`${l.inicio}–${l.fim}`:l.inicio?`desde ${l.inicio}`:"não iniciada"}</span></div>`; }).join("")
+        :`<div class="mut" style="font-size:14px;margin-top:6px">Sem loja no roteiro hoje.</div>`}</div>`; }).join(""):`<div class="vazio">Ninguém na equipe.</div>`);
+}
+
+/* --------------------------- telas --------------------------- */
+function pintar(){
+  const erro=ERRO?`<div class="aviso err"><b>Parte dos dados não carregou.</b> ${esc(ERRO)} Toque em Atualizar para tentar de novo.</div>`:"";
+  if(MODO==="lider"){
+    const nDem=((D.demandas&&D.demandas.recebidas)||[]).filter(x=>!x.resolvida_em&&!x.resposta).length;
+    const nAl=((D.alertas&&D.alertas.vencimentos)||[]).length+((D.alertas&&D.alertas.nao_tem)||[]).length;
+    const aba=(k,t,n)=>`<button role="tab" aria-selected="${ABA===k}" data-aba="${k}">${t}${n?`<span class="n">${n}</span>`:""}</button>`;
+    $("corpo").innerHTML=erro+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}</div>`
+      +(ABA==="equipe"?secEquipeHoje()+secCumprimento()
+       :ABA==="dem"?secDemandas()
+       :secVencimentos()+secNaoTem()+secMateriais()+secNaoTrabalha());
+    $("corpo").querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA=b.dataset.aba; guarda.por("aba",ABA); pintar(); });
+  } else {
+    const lideres=(EU.lideres||[]).map(l=>l.nome);
+    $("corpo").innerHTML=erro+`<div class="barra">
+        <label>Líder<select id="fLid"><option value="">Todos os líderes (${lideres.length})</option>${lideres.map(n=>`<option ${n===FILTRO_LIDER?"selected":""} value="${esc(n)}">${esc(tit(n))}</option>`).join("")}</select></label>
+        <label>Período<select id="fDias">${[7,15,30].map(d=>`<option ${d===DIAS?"selected":""} value="${d}">Últimos ${d} dias</option>`).join("")}</select></label>
+        <button class="bt" data-nova>Nova demanda</button></div>`
+      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCumprimento()
+      +`<div class="grade">${secMateriais()}${secNaoTrabalha()}</div>`;
+    $("fLid").onchange=e=>{ FILTRO_LIDER=e.target.value; guarda.por("filtro",FILTRO_LIDER); pintar(); };
+    $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("dias",DIAS); carregar(); };
+  }
+  ligar();
+}
+function ligar(){
+  $("corpo").querySelectorAll("[data-mais]").forEach(b=>b.onclick=()=>{ const s=b.closest(".sec").id;
+    const ref={"s-venc":()=>secVencimentos(),"s-naotem":()=>secNaoTem(),"s-dem":()=>secDemandas(),"s-mat":()=>secMateriais(),"s-ntrab":()=>secNaoTrabalha()}[s];
+    if(ref){ b.closest(".sec").outerHTML=ref(); ligar(); } });
+  $("corpo").querySelectorAll("[data-nova]").forEach(b=>b.onclick=()=>telaNovaDemanda());
+  const rec=doFiltro(D.demandas&&D.demandas.recebidas);
+  const responder=async(i,resolver)=>{
+    const x=rec[i], t=$("r"+i).value.trim();
+    if(!t&&!resolver) return $("re"+i).innerHTML=`<div class="aviso err">Escreva a resposta.</div>`;
+    try{ await rpc("responder_demanda",{p_id:x.id, p_resposta:t||null, p_resolver:resolver}); await carregar(); }
+    catch(e){ $("re"+i).innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`; }
+  };
+  $("corpo").querySelectorAll("[data-resp]").forEach(b=>b.onclick=()=>responder(+b.dataset.resp,false));
+  $("corpo").querySelectorAll("[data-resolve]").forEach(b=>b.onclick=()=>responder(+b.dataset.resolve,true));
+}
+
+function telaNovaDemanda(){
+  const reps=EU.repositores||[];
+  $("corpo").innerHTML=`<div class="sec form" style="padding:4px 18px 18px">
+    <h2 style="padding:14px 0 6px;border:none">Nova demanda para os repositores</h2>
+    <label class="campo"><span>Para quem</span><select id="nPara"><option value="">${MODO==="lider"?"Toda a minha equipe":"Todas as equipes"} (${reps.length})</option>
+      ${reps.map(r=>`<option value="${r.id}">${esc(tit(r.nome))}${MODO==="painel"&&r.lider?` · ${esc(nomeCurto(r.lider))}`:""}</option>`).join("")}</select></label>
+    <label class="campo"><span>Loja</span><select id="nLoja"></select></label>
+    <div id="nSoLoja" style="display:none">
+      <label class="campo"><span>Módulo</span><select id="nMod"><option value="livre">Geral</option><option value="oportunidade">Oportunidade de Estoque</option><option value="validade">Controle de Vencimentos</option><option value="pdv">Materiais e Geladeiras</option></select></label>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="nFoto"> Pedir foto na resposta</label>
+    </div>
+    <label class="campo"><span>O que precisa ser feito</span><input id="nTit" maxlength="120" placeholder="Ex.: refazer o censo da geladeira da entrada"></label>
+    <label class="campo"><span>Detalhes (opcional)</span><textarea id="nDesc" rows="3"></textarea></label>
+    <label class="campo"><span>Prazo (opcional)</span><input id="nPrazo" type="date" min="${hoje()}"></label>
+    <p class="mut" id="nExplica" style="font-size:13.5px;margin:10px 0 0"></p>
+    <div id="nErro"></div>
+    <div style="display:flex;gap:10px;margin-top:14px"><button class="bt sec" id="nVolta">Cancelar</button><button class="bt" id="nManda">Mandar demanda</button></div></div>`;
+  const pintaLojas=()=>{ const id=$("nPara").value, r=reps.find(x=>x.id===id);
+    const lojas=r?(r.lojas||[]):[...new Map(reps.flatMap(x=>x.lojas||[]).map(l=>[l.id,l])).values()];
+    $("nLoja").innerHTML=`<option value="">Sem loja: demanda geral</option>`+lojas.sort((a,b)=>a.nome.localeCompare(b.nome)).map(l=>`<option value="${l.id}">${esc(l.nome)} (${esc(l.codigo)})</option>`).join("");
+    explica(); };
+  const explica=()=>{ const p=$("nPara").value, l=$("nLoja").value;
+    $("nSoLoja").style.display=l?"block":"none";
+    $("nExplica").textContent = l
+      ? `Aparece dentro da loja${p?"":", para quem visitar"}. Com prazo, se vencer sem resposta, trava o encerramento da visita.`
+      : `Aparece em Demandas no app ${p?"desse repositor":"de cada repositor"}, e no aviso da tela do dia.`; };
+  $("nPara").onchange=pintaLojas; $("nLoja").onchange=explica; pintaLojas();
+  $("nVolta").onclick=pintar;
+  $("nManda").onclick=async()=>{
+    const t=$("nTit").value.trim(); if(!t) return $("nErro").innerHTML=`<div class="aviso err">Escreva o que precisa ser feito.</div>`;
+    const loja=$("nLoja").value||null;
+    $("nManda").disabled=true; $("nManda").textContent="Mandando…";
+    try{ await rpc("criar_demanda_lider",{p_para:$("nPara").value||null, p_loja:loja, p_modulo:loja?$("nMod").value:null, p_titulo:t,
+           p_descricao:$("nDesc").value.trim()||null, p_prazo:$("nPrazo").value||null, p_exige_foto:!!(loja&&$("nFoto").checked)});
+      ABA="dem"; guarda.por("aba",ABA); await carregar();
+      $("corpo").insertAdjacentHTML("afterbegin",`<div class="aviso ok">Demanda mandada.</div>`); }
+    catch(e){ $("nErro").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`; $("nManda").disabled=false; $("nManda").textContent="Mandar demanda"; }
+  };
+}
+
+if(TOKEN) abrir(); else telaLogin();
+</script>
+</body>
+</html>
