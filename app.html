@@ -360,6 +360,9 @@ h2.tit:first-child{margin-top:2px}
 .pi .pifoto{flex:none;width:68px;height:68px;object-fit:contain;border-radius:11px;background:#fff;border:1px solid var(--linha);padding:3px}
 .pi .semfoto{flex:none;width:68px;height:68px;border-radius:11px;background:var(--fundo);border:1px solid var(--linha);
   display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:11px;text-align:center;line-height:1.2}
+.qt2{display:flex;gap:10px;margin-top:4px}
+.qt2 span{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.qt2 small{font-size:12px;color:var(--ink3)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -380,7 +383,7 @@ h2.tit:first-child{margin-top:2px}
    e baixados de novo. Sem isto, uma correcao feita no banco (como as
    coordenadas) so chegava ao celular depois que alguem lembrasse de
    sincronizar CADA dia, um por um. */
-const VERSAO_APP = "2026-09-30b";
+const VERSAO_APP = "2026-10-01b";
 /* ===================== CONFIGURACAO ===================== */
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 /* ======================================================== */
@@ -850,9 +853,9 @@ const resumoVendasDe=l=>{ const x=PEDIDOS&&PEDIDOS[l.id]; return (x&&!Array.isAr
    muda sem atualizar o app. Estes sao os padroes, caso o banco nao responda.
 ------------------------------------------------------------------------ */
 const REGRA_PADRAO={oportunidade:"toda_visita", validade:"toda_visita", chegadas:"informativo",
-  exposicao:"desligado", preco:"desligado", pdv:"semanal", conversa:"desligado", demandas:"ferramenta"};
+  exposicao:"desligado", preco:"desligado", pdv:"semanal", conversa:"desligado", demandas:"ferramenta", estoque:"semana_inicio", entrega:"entrega"};
 const MOD_REGRA={contagem:"oportunidade", validade:"validade", chegadas:"chegadas",
-  exposicao:"exposicao", preco:"preco", pdv:"pdv", conversa:"conversa", demandas:"demandas"};
+  exposicao:"exposicao", preco:"preco", pdv:"pdv", conversa:"conversa", demandas:"demandas", estoque:"estoque", entrega:"entrega"};
 let OBRIG=null;   // {regras, lojas:{loja_id:{semana, hoje, tarefas, ultima_visita_da_semana}}}
 async function buscarObrigacoes(data){
   const guardado=guarda.lerJ("obrig:"+data);
@@ -883,6 +886,18 @@ function estadoModulo(l,k){
   const rg=regraDe(k), mod=MOD_REGRA[k], o=obrigDe(l);
   if(rg==="informativo") return {k:"info"};
   if(rg==="ferramenta")  return {k:"tool"};
+  /* Contagem de estoque: obrigatoria a partir da primeira visita da semana, ate ser feita. */
+  if(rg==="semana_inicio"){
+    const fe=((o.semana||{})[mod]||{}).feito_em||((o.hoje||{})[mod]&&DATA);
+    return fe ? {k:"feito", txt:`feito esta semana em ${dataBr(fe).slice(0,5)}`} : {k:"obrig", txt:"obrigatório: contagem da semana"};
+  }
+  /* Validade na entrega: obrigatoria quando ha entrega prevista hoje. */
+  if(rg==="entrega"){
+    const es=entregasDe(l).filter(p=>p.hoje);
+    if(!es.length) return {k:"info", txt:"nenhuma entrega prevista hoje"};
+    const falta=es.filter(p=>!p.conferencia).length;
+    return falta ? {k:"obrig", txt:`${falta} ${falta===1?"entrega para conferir":"entregas para conferir"}`} : {k:"feito", txt:"entregas de hoje conferidas"};
+  }
   if(rg==="toda_visita"){
     return (o.hoje||{})[mod] ? {k:"feito", txt:"concluído nesta visita"} : {k:"obrig", txt:"obrigatório nesta visita"};
   }
@@ -903,7 +918,7 @@ function concluirModulo(k, resultado){
   OBRIG=OBRIG||{regras:{},lojas:{}}; OBRIG.lojas=OBRIG.lojas||{};
   const o=OBRIG.lojas[LOJA.id]=OBRIG.lojas[LOJA.id]||{semana:{},hoje:{},tarefas:[]};
   o.hoje=o.hoje||{}; o.hoje[mod]=resultado||"feito";
-  if(regraDe(k)==="semanal"){ o.semana=o.semana||{}; o.semana[mod]={feito_em:DATA}; }
+  if(regraDe(k)==="semanal"||regraDe(k)==="semana_inicio"){ o.semana=o.semana||{}; o.semana[mod]={feito_em:DATA}; }
   salvaObrig();
 }
 
@@ -930,7 +945,7 @@ const lotesDe=l=>(VENC&&VENC[l.id])||[];
 const lotesAtivos=l=>lotesDe(l).filter(x=>x.status!=="encerrado");
 const salvaVenc=()=>{ if(VENC) guarda.porJ("venc:"+DATA,VENC); };
 function nivelLote(x){
-  const d=diasAte(x.vence_em), crit=DIA.dias_critico_validade||7, lim=DIA.dias_alerta_validade||30;
+  const d=diasAte(x.vence_em), crit=DIA.dias_critico_validade||20, lim=DIA.dias_alerta_validade||30;
   if(d<0) return {k:"vencido", t:`vencido há ${-d} ${-d===1?"dia":"dias"}`, cor:"var(--verm)", bg:"var(--verm-bg)"};
   if(d<=crit) return {k:"critico", t:`vence em ${d} ${d===1?"dia":"dias"}`, cor:"var(--verm)", bg:"var(--verm-bg)"};
   if(d<=lim) return {k:"atencao", t:`vence em ${d} dias`, cor:"var(--amb)", bg:"var(--amb-bg)"};
@@ -965,7 +980,7 @@ const censoDe=l=>(CENSO&&CENSO[l.id])||{};
    solicitacoes nem a regra da semana. Uma lista so nao deixa isso voltar. */
 function buscarTudoDoDia(data){
   buscarNaoLidas(); buscarOportunidades(data); buscarPedidos(data);
-  buscarCenso(data); buscarObrigacoes(data); buscarVencimentos(data); buscarDemandas();
+  buscarCenso(data); buscarObrigacoes(data); buscarVencimentos(data); buscarDemandas(); buscarEstoque(data); buscarEntregas(data);
 }
 
 async function revalidarDia(data){
@@ -1108,7 +1123,9 @@ function pintaLojas(){
           <div class="progresso"><div class="trilho"><i style="width:${Math.round(k/modulosDeTarefa()*100)}%"></i></div>
             <span class="fracao">${k}/${modulosDeTarefa()}</span></div>
         </div></div></div>`; }).join("")
-    : FILTRO ? `<div class="vazio">Nenhuma loja com esse nome.</div>` : diaVazio());
+    : FILTRO ? `<div class="vazio">Nenhuma loja com esse nome.</div>` : diaVazio())
+    /* a versao a vista: quando algo nao bate com o esperado, a primeira pergunta e se o aparelho esta com o app novo */
+    +`<div class="mut" style="text-align:center;font-size:12px;margin:18px 0 6px">Versão do app ${VERSAO_APP}</div>`;
   if($("avDem")) $("avDem").onclick=()=>telaDemandas();
   $("corpo").querySelectorAll(".loja").forEach(c=>{
     const l=DIA.lojas[+c.dataset.i];
@@ -1262,11 +1279,18 @@ const MODULOS_TODOS=[
   {k:"exposicao",ic:"4", nome:"Exposição e ponto extra", tela:()=>telaExposicao()},
   {k:"preco",    ic:"5", nome:"Preço e concorrência",    tela:()=>telaPreco()},
   {k:"pdv",      ic:"6", nome:"Materiais e Geladeiras",  tela:()=>telaAtivos()},
-  {k:"demandas", ic:"7", nome:"Demandas",                tela:()=>telaDemandas()}
+  {k:"demandas", ic:"7", nome:"Demandas",                tela:()=>telaDemandas()},
+  {k:"entrega",  ic:"8", nome:"Validade na Entrega",     tela:()=>telaEntrega()},
+  {k:"estoque",  ic:"9", nome:"Contagem de Estoque",     tela:()=>telaEstoque()}
 ];
 const modulosAtivos=()=>MODULOS_TODOS.filter(m=>regraDe(m.k)!=="desligado");
 let NAOLIDAS={};   // loja_id -> {nao_lidas, consultor_nao_viu, ...}
 function resumo(k){
+  if(k==="estoque"){ const ps=estoqueDe(LOJA), n=ps.filter(contadoEstoque).length;
+    return {txt: ps.length ? `${n} de ${ps.length} produtos contados hoje` : "nenhum produto comprado na base"}; }
+  if(k==="entrega"){ const es=entregasDe(LOJA), h=es.filter(p=>p.hoje);
+    return {txt: h.length ? `${h.length} ${h.length===1?"pedido com entrega prevista hoje":"pedidos com entrega prevista hoje"}`
+                 : es.length ? `${es.length} ${es.length===1?"entrega":"entregas"} dos últimos dias` : "nenhuma entrega prevista hoje"}; }
   if(k==="demandas"){ const n=demandasParaResponder().length, r=(DEMANDAS&&DEMANDAS.para_lider||[]).filter(d=>d.resposta&&!d.visto).length;
     return {txt:[n?`${n} do líder para responder`:"", r?`${r} ${r===1?"resposta nova":"respostas novas"}`:""].filter(Boolean).join(" · ")||"Mande e receba demandas do líder", badge:n+r}; }
   const l=LOJA, cat=l.catalogo||[], lim=DIA.dias_alerta_validade||30;
@@ -1350,7 +1374,7 @@ function telaLoja(l){ montar(()=>{ TELA="loja"; if(l) LOJA=l; esconderTudo();
   const mods=modulosAtivos();
   mods.forEach((m,i)=>{ const e=estadoModulo(LOJA,m.k), rg=regraDe(m.k);
     if(e.k==="info"||e.k==="tool") g.consulta.push([m,i]);
-    else if(rg==="toda_visita"||e.k==="obrig") g.obrig.push([m,i]);
+    else if(rg==="toda_visita"||e.k==="obrig"||(rg==="entrega"&&e.k==="feito")) g.obrig.push([m,i]);
     else g.semana.push([m,i]); });
   /* Numerados na ordem em que aparecem na tela, grupo apos grupo. */
   let num=0;
@@ -1680,8 +1704,11 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
           <button data-k="x" class="nt ${c.naoTem?"on":""}">${nunca?"Não trabalha":"Não tem"}</button>
         </div>
         ${ativos.length?`<div class="qtds">${ativos.map(k=>`
-          <div><label>${LOCAIS.find(x=>x[0]===k)[1]} (${rot})</label>
-            <input type="number" inputmode="decimal" min="0" step="${u==="cx"?"0.5":"1"}" data-q="${k}" value="${valor(k)??""}"></div>`).join("")}
+          <div style="grid-column:1/-1"><label>${LOCAIS.find(x=>x[0]===k)[1]}</label>
+            <div class="qt2">${fator(it)>1?`
+              <span><input type="number" inputmode="decimal" min="0" step="0.5" data-q="${k}" data-u="cx" value="${c[k+"cx"]??""}" placeholder="0"><small>caixas</small></span>`:""}
+              <span><input type="number" inputmode="numeric" min="0" step="1" data-q="${k}" data-u="un" value="${c[k+"un"]??""}" placeholder="0"><small>unidades</small></span>
+            </div></div>`).join("")}
         </div>`:""}
         ${t.tocou&&!c.naoTem?`<div class="tot">Total contado <b>${u==="cx"?fmt(t.cx)+" cx":Math.round(t.un).toLocaleString("pt-BR")+" un"}</b>${fator(it)>1?` · ${u==="cx"?Math.round(t.un).toLocaleString("pt-BR")+" un":fmt(t.cx)+" cx"}`:""}</div>`:""}
         ${rupturaOport(it)?`<div class="onde">Por que não tem?</div><div class="pilha" data-mo="${i}" style="margin-top:0">
@@ -1717,11 +1744,8 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   $("unid").querySelectorAll("button").forEach(b=>b.onclick=()=>{
     const novo=b.dataset.u, velho=unidAtual(); if(novo===velho) return;
     if(!exigeVisita()) return;
-    todas.forEach(it=>{ const c=it.contagem; if(!c) return; const f=fator(it);
-      LOCAIS.forEach(([k])=>{
-        if(velho==="cx"&&c[k+"cx"]!=null){ c[k+"un"]=Math.round(c[k+"cx"]*f); c[k+"cx"]=null; }
-        else if(velho==="un"&&c[k+"un"]!=null){ c[k+"cx"]=Math.round((c[k+"un"]/f)*100)/100; c[k+"un"]=null; }
-      }); if(totalOport(it).tocou) enviaOportunidade(it); });
+    /* So muda como os numeros aparecem: o que foi digitado em caixas e em
+       unidades fica como esta. */
     guarda.por("unid",novo); salvarCache(); telaOportunidade();
   });
   if($("vertodas")) $("vertodas").onclick=()=>{ VER_TODAS=!VER_TODAS; telaOportunidade(); };
@@ -1743,9 +1767,9 @@ function telaOportunidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   $("corpo").querySelectorAll("input[data-q]").forEach(inp=>inp.onchange=()=>{
     if(!exigeVisita()){ inp.value=""; return; }
     const it=todas[+inp.closest("[data-o]").dataset.o]; it.contagem=it.contagem||{};
-    const k=inp.dataset.q, v=inp.value===""?null:Number(inp.value);
-    if(unidAtual()==="cx"){ it.contagem[k+"cx"]=v; it.contagem[k+"un"]=null; }
-    else { it.contagem[k+"un"]=v; it.contagem[k+"cx"]=null; }
+    /* cada caixinha guarda o seu: caixas e unidades somam no total */
+    const k=inp.dataset.q, un=inp.dataset.u||unidAtual(), v=inp.value===""?null:Number(inp.value);
+    it.contagem[k+un]=v;
     if(rupturaOport(it)&&!it.contagem.motivo) alerta("Zerado. Informe por que não tem.");
     salva(it); telaOportunidade(); });
   $("corpo").querySelectorAll("[data-mo]").forEach(g=>{ const it=todas[+g.dataset.mo];
@@ -1894,21 +1918,27 @@ function telaNovaValidade(){ montar(()=>{ TELA="mod"; esconderTudo();
   [...(LOJA.catalogo||[]), ...(oportDe(LOJA).itens||[])].forEach(x=>{ if(!vistos.has(x.produto_id)){ vistos.add(x.produto_id); cat.push(x); } });
   cat.sort((a,b)=>String(a.nome).localeCompare(String(b.nome)));
   topo("Registrar lote", telaValidade, "");
+  const novo={id:uid()};
   $("corpo").innerHTML=`
     <div class="aviso inf">O lote fica em acompanhamento: em cada visita o app pede quanto sobrou, até acabar.</div>
     <div class="campo"><label for="p">Produto</label><select id="p"><option value="">Escolha…</option>
       ${cat.map(x=>`<option value="${x.produto_id}">${esc(x.nome)}</option>`).join("")}</select></div>
     <div class="campo"><label for="d">Vence em</label><input id="d" type="date"></div>
     <div class="campo"><label for="l">Lote, se tiver</label><input id="l" autocapitalize="characters"></div>
-    <div class="campo"><label for="q">Quantidade na loja agora (un)</label><input id="q" type="number" inputmode="numeric" min="1"></div><div id="e"></div>`;
+    <div class="campo"><label for="q">Quantidade na loja agora (un)</label><input id="q" type="number" inputmode="numeric" min="1"></div>
+    <div class="campo" id="fotoLote"><label>Foto do lote, se puder</label>${blocoFoto(novo)}</div><div id="e"></div>`;
+  /* A foto vai direto para o armazenamento e o lote aponta para ela ao salvar. */
+  const ligaFotoLote=()=>{ $("fotoLote").innerHTML=`<label>Foto do lote, se puder</label>${blocoFoto(novo)}`;
+    ligaFoto($("fotoLote"), novo, {tabela:"validade", semRegistro:true}, ligaFotoLote); };
+  ligaFotoLote();
   rodape(`<button class="bt" id="ok">Salvar</button>`);
   $("ok").onclick=()=>{ if(!exigeVisita()) return;
     const pid=$("p").value, d=$("d").value, q=$("q").value===""?null:Math.round(Number($("q").value));
     /* sem quantidade nao ha o que acompanhar */
     if(!pid||!d||!q||q<1){ $("e").innerHTML=`<div class="aviso err">Escolha o produto, a data de vencimento e a quantidade.</div>`; return; }
     const prod=cat.find(x=>x.produto_id===pid)||{};
-    const reg={id:uid(), ...base(), produto_id:pid, vence_em:d, lote:$("l").value.trim()||null,
-      quantidade:q, quantidade_inicial:q, quantidade_atual:q, status:"ativo", acao:null};
+    const reg={id:novo.id, ...base(), produto_id:pid, vence_em:d, lote:$("l").value.trim()||null,
+      quantidade:q, quantidade_inicial:q, quantidade_atual:q, status:"ativo", acao:null, foto_url:novo.foto_url||null};
     grava("validade","id",reg);
     VENC=VENC||{}; (VENC[LOJA.id]=VENC[LOJA.id]||[]).push({id:reg.id, produto_id:pid, nome:prod.nome, embalagem:prod.embalagem,
       lote:reg.lote, vence_em:d, quantidade_inicial:q, quantidade_atual:q, status:"ativo",
@@ -2634,6 +2664,124 @@ function resumoParaLider(tipo){
   const tit={ruptura:"Produtos que não encontrei", validade:"Lotes vencendo"}[tipo]||"Registro da visita";
   return {texto: itens.length?`${tit} em ${LOJA.nome}:\n- ${itens.join("\n- ")}`:"", contexto:{tipo, itens}};
 }
+
+/* Numero com no maximo uma casa, do jeito brasileiro. */
+const fmt1=n=>Number(n||0).toLocaleString("pt-BR",{maximumFractionDigits:1});
+/* ===================== CONTAGEM DE ESTOQUE =====================
+   Todos os produtos que a loja comprou nos meses da base, do mais vendido ao
+   menos vendido. Conta a loja inteira (gondola, deposito, ilha e checkout
+   juntos), em caixas e unidades. Obrigatoria a partir da primeira visita da
+   semana ate ser feita; feita uma vez, a loja fica em dia ate a semana seguinte. */
+let ESTOQUE=null, BUSCA_EST="";
+const estoqueDe=l=>(ESTOQUE&&ESTOQUE[l.id])||[];
+const contadoEstoque=x=>!!x.hoje&&(x.hoje.caixas!=null||x.hoje.unidades!=null);
+async function buscarEstoque(data){
+  const guardado=guarda.lerJ("estq:"+data); if(guardado&&!ESTOQUE) ESTOQUE=guardado;
+  if(!navigator.onLine) return;
+  try{ const r=await api("/rest/v1/rpc/meu_estoque",{method:"POST",body:JSON.stringify({p_data:data})})||{};
+    if(data!==DATA) return;
+    /* o que foi contado hoje no aparelho continua valendo */
+    for(const [lid,ps] of Object.entries(guardado||{})){ const novos=r[lid]; if(!novos) continue;
+      const hj={}; ps.forEach(x=>{ if(x.hoje) hj[x.produto_id]=x.hoje; }); novos.forEach(x=>{ if(hj[x.produto_id]) x.hoje=hj[x.produto_id]; }); }
+    ESTOQUE=r; guarda.porJ("estq:"+data,ESTOQUE); delete ERRO_BUSCA.estoque;
+  }catch(e){ ERRO_BUSCA.estoque=e.message; }
+}
+function telaEstoque(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Contagem de Estoque", telaLoja, "");
+  const ps=estoqueDe(LOJA), n=ps.filter(contadoEstoque).length, feito=estadoModulo(LOJA,"estoque");
+  const q=BUSCA_EST.trim().toLowerCase(), vis=q?ps.filter(x=>x.nome.toLowerCase().includes(q)):ps;
+  const ult=x=>x.ultima?`Última: ${x.ultima.caixas!=null?fmt1(x.ultima.caixas)+" cx":""}${x.ultima.caixas!=null&&x.ultima.unidades!=null?" + ":""}${x.ultima.unidades!=null?Math.round(x.ultima.unidades)+" un":""} em ${dataBr(x.ultima.data).slice(0,5)}`:"Nunca contado";
+  $("corpo").innerHTML=`
+    ${feito.k==="feito"&&!n?`<div class="aviso ok">A contagem desta loja já foi feita esta semana (${esc(feito.txt.replace("feito esta semana em ",""))}). Pode contar de novo se quiser.</div>`
+      :`<div class="aviso inf">Conte a loja inteira: gôndola, depósito, ilha e checkout juntos. Em caixas, em unidades, ou nos dois.</div>`}
+    ${ERRO_BUSCA.estoque&&!ESTOQUE?`<div class="aviso err">Não consegui buscar os produtos. ${esc(traduz(ERRO_BUSCA.estoque))}</div>`:""}
+    <div class="cartao" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <b>${n} de ${ps.length} contados</b><span class="mut" style="font-size:13px">${ps.length-n?`faltam ${ps.length-n}`:"todos contados"}</span></div>
+    <input id="bEst" placeholder="Procurar produto" value="${esc(BUSCA_EST)}" style="width:100%;box-sizing:border-box;margin:10px 0;padding:11px 12px;border:1px solid var(--linha);border-radius:12px;font:inherit">
+    ${vis.length?vis.map(x=>{ const i=ps.indexOf(x), h=x.hoje||{}, f=Number(x.fator_cx||1), zero=contadoEstoque(x)&&!Number(h.caixas)&&!Number(h.unidades);
+      return `<div class="cartao" data-e="${i}" style="margin-bottom:8px;${contadoEstoque(x)?"border-left:4px solid var(--verde)":""}">
+        <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:14.5px">${esc(x.nome)}</b>
+          <button class="bt sec" data-zero="${i}" style="flex:none;width:auto;padding:6px 10px;font-size:13px;${zero?"background:var(--verm-bg);color:var(--verm);border-color:var(--verm)":""}">Não tem</button></div>
+        <div class="mut" style="font-size:12.5px">${esc(x.embalagem||"")}${f>1?` · 1 cx = ${f} un`:""} · ${ult(x)}</div>
+        <div class="qt2" style="margin-top:8px">${f>1?`<span><input type="number" inputmode="decimal" min="0" step="0.5" data-ec="${i}" value="${h.caixas??""}" placeholder="0"><small>caixas</small></span>`:""}
+          <span><input type="number" inputmode="numeric" min="0" step="1" data-eu="${i}" value="${h.unidades??""}" placeholder="0"><small>unidades</small></span></div>
+      </div>`; }).join(""):`<div class="vazio">${ps.length?"Nenhum produto com esse nome.":"Esta loja não tem produto comprado nos meses da base."}</div>`}`;
+  const grava1=i=>{ if(!exigeVisita()) return false; const x=ps[i], h=x.hoje||{};
+    grava("estoque_contagem","visita_id,produto_id",{visita_id:LOJA.visita.id, loja_id:LOJA.id, produto_id:x.produto_id,
+      pessoa_id:DIA.pessoa.id, data:DIA.data, caixas:h.caixas??null, unidades:h.unidades??null});
+    guarda.porJ("estq:"+DATA,ESTOQUE); return true; };
+  $("bEst").oninput=e=>{ BUSCA_EST=e.target.value; const pos=e.target.selectionStart; telaEstoque(); const b=$("bEst"); b.focus(); b.setSelectionRange(pos,pos); };
+  $("corpo").querySelectorAll("[data-ec],[data-eu]").forEach(inp=>inp.onchange=()=>{
+    const i=+(inp.dataset.ec??inp.dataset.eu), x=ps[i]; x.hoje=x.hoje||{};
+    const v=inp.value===""?null:Number(inp.value); if(inp.dataset.ec!=null) x.hoje.caixas=v; else x.hoje.unidades=v;
+    if(!grava1(i)){ inp.value=""; return; } telaEstoque(); });
+  $("corpo").querySelectorAll("[data-zero]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.zero, x=ps[i];
+    x.hoje={caixas:0, unidades:0}; if(grava1(i)) telaEstoque(); });
+  rodape(botaoConcluir("estoque"));
+  ligaConcluir(()=>{ const falta=ps.filter(x=>!contadoEstoque(x)).length;
+    if(!ps.length) return {ok:true, resultado:"nada_a_registrar"};
+    if(falta) return {ok:false, msg:`Faltam ${falta} ${falta===1?"produto":"produtos"}. Conte, ou marque Não tem nos que a loja não tem.`};
+    return {ok:true}; });
+});}
+
+/* ===================== VALIDADE NA ENTREGA =====================
+   Os pedidos com entrega prevista para hoje (e nos dois dias antes). Para
+   cada pedido, o repositor diz se chegou; se chegou, anota o vencimento de
+   cada produto. "Ainda nao chegou" tambem resolve: nao trava o encerramento. */
+let ENTREGAS=null, ABERTA_ENT=null;
+const entregasDe=l=>(ENTREGAS&&ENTREGAS[l.id])||[];
+async function buscarEntregas(data){
+  const guardado=guarda.lerJ("entr:"+data); if(guardado&&!ENTREGAS) ENTREGAS=guardado;
+  if(!navigator.onLine) return;
+  try{ const r=await api("/rest/v1/rpc/minhas_entregas",{method:"POST",body:JSON.stringify({p_data:data})})||{};
+    if(data!==DATA) return;
+    for(const [lid,ps] of Object.entries(guardado||{})){ const novos=r[lid]; if(!novos) continue;
+      ps.forEach(p=>{ const n=novos.find(x=>x.nr_pedido===p.nr_pedido); if(!n) return;
+        if(p.conferencia&&!n.conferencia) n.conferencia=p.conferencia;
+        (p.itens||[]).forEach(it=>{ const ni=(n.itens||[]).find(y=>y.produto_id===it.produto_id); if(ni&&it.vence_em&&!ni.vence_em){ ni.vence_em=it.vence_em; ni.lote=it.lote; } }); }); }
+    ENTREGAS=r; guarda.porJ("entr:"+data,ENTREGAS); delete ERRO_BUSCA.entregas;
+  }catch(e){ ERRO_BUSCA.entregas=e.message; }
+}
+function telaEntrega(){ montar(()=>{ TELA="mod"; esconderTudo();
+  topo("Validade na Entrega", telaLoja, "");
+  const es=entregasDe(LOJA);
+  const dias=d=>Math.round((new Date(d+"T12:00")-new Date(DATA+"T12:00"))/864e5);
+  const card=(p,i)=>{ const c=p.conferencia, aberta=ABERTA_ENT===p.nr_pedido, its=p.itens||[];
+    return `<div class="cartao" style="margin-bottom:10px;${p.hoje&&!c?"border-left:4px solid var(--verm)":""}">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b>Pedido ${esc(p.nr_pedido)}</b>
+        <span class="selo" style="background:${c?(c.situacao==="conferida"?"var(--verde-bg)":"var(--amb-bg)"):"var(--verm-bg)"};color:${c?(c.situacao==="conferida"?"var(--verde)":"var(--amb)"):"var(--verm)"}">${c?(c.situacao==="conferida"?"Conferida":"Não chegou"):p.hoje?"Chega hoje":"Previsto "+dataBr(p.previsao).slice(0,5)}</span></div>
+      <div class="mut" style="font-size:13px;margin-top:4px">${esc(p.origem||"")}${p.origem?" · ":""}${its.length} ${its.length===1?"produto":"produtos"} · ${fmt1(p.caixas)} cx${c&&c.por?` · ${c.situacao==="conferida"?"conferida":"marcada"} por ${esc(c.por)}`:""}</div>
+      ${aberta?`<div style="margin-top:10px">${its.map((it,j)=>{ const d=it.vence_em?dias(it.vence_em):null;
+          return `<div style="padding:8px 0;border-top:1px solid var(--linha)"><div style="font-size:14px"><b>${esc(it.nome)}</b> <span class="mut">· ${fmt1(it.caixas)} cx</span></div>
+            <div class="qt2"><span><input type="date" data-dv="${i}:${j}" value="${it.vence_em||""}"><small>vence em</small></span>
+              <span><input data-dl="${i}:${j}" value="${esc(it.lote||"")}" placeholder="opcional" autocapitalize="characters"><small>lote</small></span></div>
+            ${d!=null&&d<=30?`<div style="font-size:12.5px;color:${d<=20?"var(--verm)":"var(--amb)"};margin-top:3px">Validade curta: ${d<0?"já vencido":`vence em ${d} dias`}</div>`:""}</div>`; }).join("")}
+          <button class="bt" data-salva="${i}" style="margin-top:8px">Salvar conferência</button></div>`
+        : c&&c.situacao==="conferida" ? `<button class="bt sec" data-abre="${i}" style="margin-top:8px">Ver as datas</button>`
+        : `<div class="pilha" style="margin-top:10px"><button class="bt" data-abre="${i}">Chegou: anotar as datas</button>${c?"":`<button class="bt sec" data-nchegou="${i}">Ainda não chegou</button>`}</div>`}
+    </div>`; };
+  const hoje=es.filter(p=>p.hoje), antes=es.filter(p=>!p.hoje);
+  $("corpo").innerHTML=`
+    ${ERRO_BUSCA.entregas&&!ENTREGAS?`<div class="aviso err">Não consegui buscar as entregas. ${esc(traduz(ERRO_BUSCA.entregas))}</div>`:""}
+    <div class="aviso inf">Quando o pedido chegar, anote o vencimento de cada produto. Isso vai para o seu líder e o gerente.</div>
+    <h2 class="tit">ENTREGA PREVISTA HOJE · ${hoje.length}</h2>
+    ${hoje.length?hoje.map(p=>card(p,es.indexOf(p))).join(""):`<div class="vazio">Nenhuma entrega prevista para hoje nesta loja.</div>`}
+    ${antes.length?`<h2 class="tit">PREVISTAS NOS ÚLTIMOS DIAS · ${antes.length}</h2>${antes.map(p=>card(p,es.indexOf(p))).join("")}`:""}`;
+  const marca=(p,situacao)=>{ grava("entrega_conferencia","nr_pedido",{nr_pedido:p.nr_pedido, visita_id:LOJA.visita.id, loja_id:LOJA.id,
+      pessoa_id:DIA.pessoa.id, situacao:situacao}); p.conferencia={situacao, por:DIA.pessoa.nome, em:new Date().toISOString()};
+    guarda.porJ("entr:"+DATA,ENTREGAS); };
+  $("corpo").querySelectorAll("[data-abre]").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return; ABERTA_ENT=es[+b.dataset.abre].nr_pedido; telaEntrega(); });
+  $("corpo").querySelectorAll("[data-nchegou]").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return; marca(es[+b.dataset.nchegou],"nao_chegou"); telaEntrega(); });
+  $("corpo").querySelectorAll("[data-dv]").forEach(inp=>inp.onchange=()=>{ const [i,j]=inp.dataset.dv.split(":").map(Number); es[i].itens[j].vence_em=inp.value||null; guarda.porJ("entr:"+DATA,ENTREGAS); telaEntrega(); });
+  $("corpo").querySelectorAll("[data-dl]").forEach(inp=>inp.onchange=()=>{ const [i,j]=inp.dataset.dl.split(":").map(Number); es[i].itens[j].lote=inp.value.trim()||null; guarda.porJ("entr:"+DATA,ENTREGAS); });
+  $("corpo").querySelectorAll("[data-salva]").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return; const p=es[+b.dataset.salva];
+    const falta=(p.itens||[]).filter(it=>!it.vence_em).length;
+    if(falta) return alerta(`Falta a data de ${falta} ${falta===1?"produto":"produtos"}.`);
+    (p.itens||[]).forEach(it=>grava("entrega_validade","nr_pedido,produto_id",{nr_pedido:p.nr_pedido, produto_id:it.produto_id,
+      visita_id:LOJA.visita.id, loja_id:LOJA.id, pessoa_id:DIA.pessoa.id, vence_em:it.vence_em, lote:it.lote||null}));
+    marca(p,"conferida"); ABERTA_ENT=null; alerta("Conferência salva."); telaEntrega(); });
+  rodape(`<button class="bt sec" id="volEnt">Voltar</button>`); $("volEnt").onclick=telaLoja;
+});}
 
 /* ============================ DEMANDAS ============================
    No lugar da conversa. Nao e bate-papo: cada demanda tem um pedido, uma

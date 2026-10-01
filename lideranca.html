@@ -228,11 +228,12 @@ function pintaTitulo(){
 }
 async function carregar(){
   ERRO=null;
-  const pedidos=[rpc("alertas_da_equipe",{p_dias:DIAS}), rpc("demandas_da_equipe",{p_dias:30}), rpc("cumprimento_da_equipe",{p_dias:DIAS})];
+  const pedidos=[rpc("alertas_da_equipe",{p_dias:DIAS}), rpc("demandas_da_equipe",{p_dias:30}), rpc("cumprimento_da_equipe",{p_dias:DIAS}),
+                 rpc("estoque_da_equipe",{p_dias:DIAS}), rpc("entregas_da_equipe",{p_dias:DIAS})];
   if(MODO==="lider") pedidos.push(rpc("equipe_no_dia",{p_data:hoje()}));  /* tambem em "ver como lider" */
   const r=await Promise.allSettled(pedidos);
   const v=i=>r[i]&&r[i].status==="fulfilled"?r[i].value:null;
-  D={alertas:v(0), demandas:v(1), cumprimento:v(2), equipe:v(3)};
+  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), equipe:v(5)};
   const falhou=r.find(x=>x.status==="rejected"); if(falhou) ERRO=traduz(falhou.reason.message);
   pintar();
 }
@@ -255,8 +256,9 @@ function lista(itens, render, vazio, max){
 
 function secVencimentos(max){
   const vs=doFiltro(D.alertas&&D.alertas.vencimentos), venc=vs.filter(x=>x.nivel==="vencido").length;
-  const titulo=vs.length?`${plural(vs.length,"lote","lotes")} ${venc?`com ${venc} já ${venc===1?"vencido":"vencidos"}`:"vencendo em até 7 dias"}`:"Nenhum lote vencido ou vencendo em até 7 dias";
-  return secao("var(--verm)", titulo, vs.length&&venc&&venc<vs.length?`e ${vs.length-venc} vencendo em até 7 dias`:"", lista(vs, x=>{
+  const dc=(D.alertas&&D.alertas.dias_critico)||20;
+  const titulo=vs.length?`${plural(vs.length,"lote","lotes")} ${venc?`com ${venc} já ${venc===1?"vencido":"vencidos"}`:`vencendo em até ${dc} dias`}`:`Nenhum lote vencido ou vencendo em até ${dc} dias`;
+  return secao("var(--verm)", titulo, vs.length&&venc&&venc<vs.length?`e ${vs.length-venc} vencendo em até ${dc} dias`:"", lista(vs, x=>{
     const d=Number(x.dias), ven=x.nivel==="vencido";
     return `<div class="lin"><div><b>${esc(x.produto)}</b><div class="mut" style="font-size:14px">${esc(x.loja)} · lote ${esc(x.lote||"sem lote")}${x.quantidade!=null?` · ${esc(x.quantidade)} un na loja`:""}</div></div>
       <span class="selo" style="background:${ven?"var(--verm-bg)":"var(--amb-bg)"};color:${ven?"var(--verm-esc)":"var(--amb)"}">${ven?`Vencido há ${Math.abs(d)} ${Math.abs(d)===1?"dia":"dias"}`:d===0?"Vence hoje":`Vence em ${d} ${d===1?"dia":"dias"}`}</span>
@@ -329,9 +331,46 @@ function secCumprimento(){
   return secao("var(--verde)", titulo, "", corpo, "s-cum");
 }
 
+/* Contagem de estoque: quais lojas contaram, quem contou, quantos produtos, e
+   os produtos com a quantidade. E as lojas que ainda nao contaram na semana. */
+function secEstoque(max){
+  const E=D.estoque||{}, cs=doFiltro(E.contagens), sem=doFiltro(E.sem_contagem_na_semana);
+  const fmtq=i=>[i.caixas!=null?`${Number(i.caixas).toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:"", i.unidades!=null?`${Math.round(i.unidades)} un`:""].filter(Boolean).join(" + ")||"0";
+  const titulo=cs.length?`${plural(cs.length,"loja com contagem","lojas com contagem")} de estoque`:"Nenhuma contagem de estoque no período";
+  const corpo=lista(cs, x=>`<div class="lin"><div><b>${esc(x.loja)}</b><div class="mut" style="font-size:14px">${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div></div>
+      <span class="selo" style="background:${x.produtos>=x.total_produtos?"var(--verde-bg)":"var(--amb-bg)"};color:${x.produtos>=x.total_produtos?"var(--verde)":"var(--amb)"}">${dataBr(x.data)} · ${x.produtos} de ${x.total_produtos}</span>
+      <details class="det"><summary style="cursor:pointer;color:var(--azul)">Ver os ${x.produtos} produtos contados</summary>
+        ${(x.itens||[]).map(i=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--linha)"><span>${esc(i.produto)}</span><b style="white-space:nowrap;font-weight:600">${fmtq(i)}</b></div>`).join("")}</details></div>`,
+    "Nenhuma loja contou o estoque no período.", max)
+    + (sem.length?`<div style="padding:12px 16px;border-top:1px solid var(--linha)"><b style="color:var(--verm-esc)">${plural(sem.length,"loja ainda não contou","lojas ainda não contaram")} esta semana</b>
+        <div class="mut" style="font-size:14px;margin-top:4px">${sem.slice(0,max||sem.length).map(x=>`${esc(x.loja)} <span style="color:var(--ink3)">(${esc(nomeCurto(x.repositor))})</span>`).join(" · ")}${max&&sem.length>max?` · e mais ${sem.length-max}`:""}</div></div>`:"");
+  return secao("var(--azul)", titulo, `nos últimos ${DIAS} dias${sem.length?` · ${sem.length} sem contagem esta semana`:""}`, corpo, "s-est");
+}
+/* Validade na entrega: o vencimento dos produtos que chegaram, da menor
+   validade para a maior; e as entregas previstas que ninguem conferiu. */
+function secEntregas(max){
+  const E=D.entregas||{}, cs=doFiltro(E.conferidas), sem=doFiltro(E.sem_conferencia);
+  const conf=cs.filter(x=>x.situacao==="conferida"), curtas=conf.filter(x=>x.menor_validade_dias!=null&&x.menor_validade_dias<=30).length;
+  const corV=d=>d==null?"var(--ink2)":d<=20?"var(--verm-esc)":d<=30?"var(--amb)":"var(--verde)";
+  const bgV=d=>d==null?"var(--fundo)":d<=20?"var(--verm-bg)":d<=30?"var(--amb-bg)":"var(--verde-bg)";
+  const titulo=conf.length?`${plural(conf.length,"entrega conferida","entregas conferidas")}${curtas?`, ${curtas} com validade curta`:""}`:"Nenhuma entrega conferida no período";
+  const corpo=lista(cs, x=>`<div class="lin"><div><b>${esc(x.loja)}</b><div class="mut" style="font-size:14px">Pedido ${esc(x.nr_pedido)} · ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div></div>
+      ${x.situacao==="nao_chegou"?`<span class="selo" style="background:var(--amb-bg);color:var(--amb)">Não chegou</span>`
+        :`<span class="selo" style="background:${bgV(x.menor_validade_dias)};color:${corV(x.menor_validade_dias)}">Menor validade: ${x.menor_validade_dias} ${Math.abs(x.menor_validade_dias)===1?"dia":"dias"}</span>
+      <details class="det"><summary style="cursor:pointer;color:var(--azul)">Ver as datas dos ${(x.itens||[]).length} produtos</summary>
+        ${(x.itens||[]).map(i=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--linha)"><span>${esc(i.produto)}${i.lote?` <span style="color:var(--ink3)">· lote ${esc(i.lote)}</span>`:""}</span>
+          <b style="white-space:nowrap;font-weight:600;color:${corV(i.dias)}">${i.vence_em?`${dataBr(i.vence_em)}/${String(i.vence_em).slice(0,4)} · ${i.dias} dias`:"sem data"}</b></div>`).join("")}</details>`}</div>`,
+    "Nenhuma entrega conferida no período.", max)
+    + (sem.length?`<div style="padding:12px 16px;border-top:1px solid var(--linha)"><b style="color:var(--verm-esc)">${plural(sem.length,"entrega prevista sem conferência","entregas previstas sem conferência")}</b>
+        <div class="mut" style="font-size:14px;margin-top:4px">${sem.slice(0,max||sem.length).map(x=>`${esc(x.loja)} <span style="color:var(--ink3)">(pedido ${esc(x.nr_pedido)}, ${dataBr(x.previsao)}${x.repositor?`, ${esc(nomeCurto(x.repositor))}`:""})</span>`).join(" · ")}${max&&sem.length>max?` · e mais ${sem.length-max}`:""}</div></div>`:"");
+  return secao("var(--amb)", titulo, `nos últimos ${DIAS} dias`, corpo, "s-ent");
+}
 function secMateriais(){
   const ms=doFiltro(D.alertas&&D.alertas.materiais);
-  const NOME={visivel:"não está visível",ko75:"menos de 75% KO",abastecida:"desabastecida",com_preco:"sem preço",planograma:"fora do planograma",sem_concorrente:"com concorrente"};
+  const NOME={visivel:"não está visível",ocupacao_ko_75:"menos de 75% Coca-Cola",abastecida:"desabastecida",abastecido:"desabastecido",
+    precificada:"sem preço",precificado:"sem preço",planograma:"fora do planograma",sem_concorrente:"com concorrente no espaço",
+    comunicacao:"sem material de comunicação",conservado:"em mau estado",instalado:"não instalado",montada:"não montada",montado:"não montado",
+    posicao:"fora do fluxo de clientes",vigente:"campanha vencida"};
   return secao("var(--roxo)", ms.length?`${plural(ms.length,"geladeira ou material","geladeiras ou materiais")} com problema`:"Nenhuma geladeira ou material com problema", ms.length?`no censo dos últimos ${DIAS} dias`:"",
     lista(ms, x=>`<div class="lin"><div><b>${esc(TIPO_ATIVO[x.tipo]||tit(x.tipo))}${x.patrimonio?` · PTM ${esc(x.patrimonio)}`:""}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
       <span class="selo" style="background:var(--roxo-bg);color:var(--roxo)">${dataBr(x.data)}</span>
@@ -376,7 +415,7 @@ function pintar(){
     $("corpo").innerHTML=erro+vista+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}</div>`
       +(ABA==="equipe"?secEquipeHoje()+secCumprimento()
        :ABA==="dem"?secDemandas()
-       :secVencimentos()+secNaoTem()+secMateriais()+secNaoTrabalha());
+       :secVencimentos()+secNaoTem()+secEntregas(8)+secEstoque(8)+secMateriais()+secNaoTrabalha());
     $("corpo").querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA=b.dataset.aba; guarda.por("aba",ABA); pintar(); });
   } else {
     const lideres=(EU.lideres||[]).map(l=>l.nome);
@@ -384,7 +423,7 @@ function pintar(){
         <label>Líder<select id="fLid"><option value="">Todos os líderes (${lideres.length})</option>${lideres.map(n=>`<option ${n===FILTRO_LIDER?"selected":""} value="${esc(n)}">${esc(tit(n))}</option>`).join("")}</select></label>
         <label>Período<select id="fDias">${[7,15,30].map(d=>`<option ${d===DIAS?"selected":""} value="${d}">Últimos ${d} dias</option>`).join("")}</select></label>
         <button class="bt" data-nova>Nova demanda</button></div>`
-      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCumprimento()
+      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCumprimento()+secEstoque(10)+secEntregas(10)
       +`<div class="grade">${secMateriais()}${secNaoTrabalha()}</div>`;
     $("fLid").onchange=e=>{ FILTRO_LIDER=e.target.value; guarda.por("filtro",FILTRO_LIDER); pintar(); };
     $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("dias",DIAS); carregar(); };
@@ -397,7 +436,8 @@ function pintar(){
 }
 function ligar(){
   $("corpo").querySelectorAll("[data-mais]").forEach(b=>b.onclick=()=>{ const s=b.closest(".sec").id;
-    const ref={"s-venc":()=>secVencimentos(),"s-naotem":()=>secNaoTem(),"s-dem":()=>secDemandas(),"s-mat":()=>secMateriais(),"s-ntrab":()=>secNaoTrabalha()}[s];
+    const ref={"s-venc":()=>secVencimentos(),"s-naotem":()=>secNaoTem(),"s-dem":()=>secDemandas(),"s-mat":()=>secMateriais(),"s-ntrab":()=>secNaoTrabalha(),
+      "s-est":()=>secEstoque(),"s-ent":()=>secEntregas()}[s];
     if(ref){ b.closest(".sec").outerHTML=ref(); ligar(); } });
   $("corpo").querySelectorAll("[data-nova]").forEach(b=>b.onclick=()=>telaNovaDemanda());
   const rec=doFiltro(D.demandas&&D.demandas.recebidas);

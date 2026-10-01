@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vendas do dia · Merchandising</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--verm:#E4002B;--verm-bg:#FDE7EC;--ink:#1A1D21;--ink2:#6B7280;--ink3:#9CA3AF;--linha:#E5E7EB;
+  --papel:#fff;--fundo:#F2F3F5;--verde:#0F7A52;--verde-bg:#E6F4EE;--amb:#96620F;--amb-bg:#FDF2DC;
+  --sombra:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--sans);background:var(--fundo);color:var(--ink)}
+main{max-width:720px;margin:0 auto;padding:22px 16px 60px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--ink2);font-size:14px;margin:0 0 18px}
+.passos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.passo{background:var(--papel);border-radius:14px;padding:12px;box-shadow:var(--sombra);font-size:13px;color:var(--ink2)}
+.passo b{display:block;color:var(--ink);font-size:14px;margin-bottom:3px}
+.passo .n{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--verm);color:#fff;
+  align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-bottom:6px}
+.soltar{display:block;border:2px dashed #C9CDD3;border-radius:16px;background:var(--papel);padding:34px 16px;text-align:center;
+  cursor:pointer;color:var(--ink2)}
+.soltar.on{border-color:var(--verm);background:var(--verm-bg)}
+.soltar b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+.cartao{background:var(--papel);border-radius:16px;box-shadow:var(--sombra);padding:16px;margin-top:14px}
+.aviso{border-radius:12px;padding:11px 13px;font-size:14px;margin-top:12px}
+.aviso.ok{background:var(--verde-bg);color:var(--verde)} .aviso.err{background:var(--verm-bg);color:var(--verm)}
+.aviso.amb{background:var(--amb-bg);color:var(--amb)}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+th{text-align:left;color:var(--ink3);font-weight:600;font-size:12px;padding:6px 4px;border-bottom:1px solid var(--linha)}
+td{padding:8px 4px;border-bottom:1px solid var(--linha)} td.r,th.r{text-align:right}
+.bt{display:block;width:100%;border:none;border-radius:12px;background:var(--verm);color:#fff;font:inherit;
+  font-weight:700;font-size:15px;padding:14px;cursor:pointer;margin-top:14px}
+.bt:disabled{opacity:.4;cursor:default}
+code{background:var(--fundo);border-radius:8px;padding:10px 12px;display:block;font-size:14px;margin-top:8px}
+.copiar{border:1px solid var(--linha);background:var(--papel);border-radius:10px;padding:8px 12px;font:inherit;
+  font-size:13px;cursor:pointer;margin-top:8px}
+.mut{color:var(--ink2);font-size:13px}
+@media (max-width:560px){.passos{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Vendas do dia</h1>
+  <p class="sub">Atualiza os pedidos e o faturamento do mês no sistema, sem passar pela carga mensal.
+    Aceita a base de movimento de venda (AM_FAT_BND_MOV_VENDA) e a base de produtos e vendas.</p>
+
+  <div class="passos">
+    <div class="passo"><span class="n">1</span><b>Conecte, uma vez só</b>Cole a chave de carga no quadro abaixo. Ela fica guardada neste computador.</div>
+    <div class="passo"><span class="n">2</span><b>Solte a planilha</b>O movimento de venda do dia, do jeito que sai do relatório.</div>
+    <div class="passo"><span class="n">3</span><b>Clique em Enviar</b>A página manda para o sistema e já roda a carga.</div>
+  </div>
+
+  <div class="cartao" id="conexao" style="margin:0 0 14px"></div>
+
+  <label class="soltar" id="soltar">
+    <b>Solte aqui a planilha de vendas</b>
+    ou toque para escolher o arquivo
+    <input type="file" id="arq" accept=".xlsx,.xls,.xlsb,.csv" hidden>
+  </label>
+
+  <div id="saida"></div>
+</main>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------------------
+   Estas quatro funcoes sao COPIA EXATA das do importador.html. Uma bateria de
+   teste confere que as duas paginas geram o mesmo CSV para a mesma planilha.
+   Se mudar uma, mude a outra.
+--------------------------------------------------------------------------- */
+const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toUpperCase().replace(/\s+/g," ").trim();
+const txt = s => { const v = String(s ?? "").replace(/\s+/g," ").trim(); return v === "" ? null : v; };
+function num(v){
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  let s = String(v).trim().replace(/\s/g,"");
+  if (!s) return null;
+  if (s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  else if ((s.match(/\./g)||[]).length > 1) s = s.replace(/\./g,"");
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+function codigo(v){
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return String(Math.round(v));
+  return String(v).trim().replace(/\.0+$/,"") || null;
+}
+const escHtml = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = id => document.getElementById(id);
+/* Duas bases possiveis. A de movimento vem primeiro na checagem, porque ela
+   tambem tem Calendar Month. */
+const TIPOS = [
+  {k:"movimento", exige:["COD. CLIENTE","COD. PRODUTO","NR. PEDIDO","ORIGEM","DATA EMISSAO"],
+   tabela:"stg_movimento", arquivo:"movimento.csv", sql:"select carregar_vendas_do_dia();",
+   nome:"movimento de venda"},
+  {k:"vendas", exige:["COD. CLIENTE","COD. PRODUTO","CALENDAR MONTH"],
+   tabela:"stg_venda_mensal", arquivo:"venda_mensal.csv", sql:"select carregar_vendas_do_dia();",
+   nome:"produtos e vendas"}];
+
+/* A base vem com o cabecalho quebrado em duas linhas: os nomes das medidas,
+   como Caixa Fisica, ficam na linha de cima. Acha a linha do cabecalho e
+   completa as celulas vazias com a de cima, igual ao importador. */
+function lerAba(matriz){
+  for (let i = 0; i < Math.min(matriz.length, 15); i++){
+    const cab = (matriz[i]||[]).map(norm);
+    const tipo = TIPOS.find(t => t.exige.every(e => cab.includes(e)));
+    if (!tipo) continue;
+    const linha = matriz[i].slice(), cima = matriz[i-1] || [];
+    for (let j = 0; j < Math.max(cima.length, linha.length); j++)
+      if ((linha[j] == null || linha[j] === "") && cima[j] != null) linha[j] = cima[j];
+    const nomes = linha.map(norm);
+    const linhas = matriz.slice(i+1).map(r => { const o = {}; nomes.forEach((n,k) => { if (n) o[n] = r[k]; }); return o; });
+    return Object.assign(linhas, {tipo});
+  }
+  return null;
+}
+
+/* Data da base de movimento vem como texto "set. 17, 2026". Aceita tambem
+   data do Excel, dd/mm/aaaa e aaaa-mm-dd, caso o relatorio mude de formato. */
+const MESES_ABR = {jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+function dataIso(v){
+  if (v == null || v === "") return null;
+  const p2 = n => String(n).padStart(2,"0");
+  if (typeof v === "number"){ const d = new Date(Math.round((v - 25569) * 86400000));
+    return `${d.getUTCFullYear()}-${p2(d.getUTCMonth()+1)}-${p2(d.getUTCDate())}`; }
+  const t = String(v).trim().toLowerCase();
+  let m = t.match(/^([a-zç]{3})\.?\s*(\d{1,2}),?\s*(\d{4})$/);
+  if (m && MESES_ABR[m[1]]) return `${m[3]}-${p2(MESES_ABR[m[1]])}-${p2(m[2])}`;
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
+  m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+/* Hora vem como texto "11:46:11" ou como fracao de dia do Excel. */
+function horaTxt(v){
+  if (v == null || v === "") return null;
+  const p2 = n => String(n).padStart(2,"0");
+  if (typeof v === "number"){ const seg = Math.round((v % 1) * 86400);
+    return `${p2(Math.floor(seg/3600))}:${p2(Math.floor(seg%3600/60))}:${p2(seg%60)}`; }
+  const m = String(v).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return m ? `${p2(m[1])}:${m[2]}:${m[3]||"00"}` : null;
+}
+
+/* Base de movimento: uma linha por pedido e produto, com o que o banco precisa
+   para montar o pedido e a venda do mes. */
+function agregarMovimento(linhas){
+  const agg = new Map();
+  for (const r of linhas){
+    const cli = codigo(r["COD. CLIENTE"]), prod = codigo(r["COD. PRODUTO"]), ped = codigo(r["NR. PEDIDO"]);
+    const data = dataIso(r["DATA EMISSAO"]);
+    const mes = String(codigo(r["CALENDAR MONTH"]) || (data ? data.slice(0,4)+data.slice(5,7) : "")).slice(0,6);
+    if (!cli || !prod || !ped || !data || !/^\d{6}$/.test(mes)) continue;
+    const k = ped+"|"+prod;
+    const a = agg.get(k) || {codigo_cliente:cli, codigo_produto:prod, descricao:txt(r["DESCRICAO PRODUTO"]),
+      rota_venda:txt(r["ROTA ATUAL"]), supervisao:txt(r["SUPERVISAO ATUAL"]), gerencia:txt(r["GERENCIA COMERCIAL ATUAL"]),
+      dia_visita:txt(r["DIA VISITA"]), data_emissao:data, hora_pedido:horaTxt(r["HORA PEDIDO"]),
+      hora_expedicao:horaTxt(r["HORA EXPEDICAO"]), origem:txt(r["ORIGEM"]), pedido:ped, status:txt(r["STATUS"]),
+      entrega:txt(r["ENTREGA"]), mes, nr_pedido:ped, caixas:0, caixa_unitaria:0, faturado:0, receita_liquida:0, custo:0, meta_neg:0};
+    a.caixas += num(r["CAIXA FISICA"]) || 0;
+    a.caixa_unitaria += num(r["CAIXA UNITARIA"]) || 0;
+    a.faturado += num(r["VALOR FATURADO"]) || 0;
+    a.receita_liquida += num(r["RECEITA LIQUIDA"]) || 0;
+    a.custo += num(r["CUSTO PRODUTO"]) || 0;
+    a.meta_neg += num(r["META NEG"]) || 0;
+    agg.set(k, a);
+  }
+  return [...agg.values()];
+}
+
+function agregar(linhas){
+  const agg = new Map();
+  for (const r of linhas){
+    const cli = codigo(r["COD. CLIENTE"]), prod = codigo(r["COD. PRODUTO"]);
+    const mes = String(codigo(r["CALENDAR MONTH"])||"").slice(0,6);
+    if (!cli || !prod || !/^\d{6}$/.test(mes)) continue;
+    const k = cli+"|"+prod+"|"+mes;
+    const a = agg.get(k) || {codigo_cliente:cli, codigo_produto:prod, mes, caixas:0, faturado:0,
+                             descricao:txt(r["DESCRICAO PRODUTO"])};
+    a.caixas += num(r["CAIXA FISICA"]) || 0;
+    a.faturado += num(r["VALOR FATURADO"]) || 0;
+    agg.set(k, a);
+  }
+  return [...agg.values()];
+}
+
+const COLS = {
+  /* Os nomes batem com as colunas das caixas de entrada no banco. */
+  vendas:    ["codigo_cliente","codigo_produto","mes","caixas","faturado","descricao"],
+  movimento: ["codigo_cliente","nr_pedido","codigo_produto","descricao","data_emissao","hora_pedido","hora_expedicao",
+              "origem","status","entrega","mes","caixas","caixa_unitaria","faturado","receita_liquida",
+              "custo","meta_neg","rota_venda","dia_visita"]};
+function csv(linhas, tipo){
+  const cols = COLS[tipo||"vendas"];
+  const e = v => { if (v == null) return ""; const t = String(v); return /[",\n\r]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
+  return [cols.join(",")].concat(linhas.map(o => cols.map(c => e(o[c])).join(","))).join("\n") + "\n";
+}
+
+const reais = v => "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+const inteiro = v => Math.round(Number(v||0)).toLocaleString("pt-BR");
+const mesTxt = m => m.slice(4)+"/"+m.slice(0,4);
+
+async function processar(f){
+  $("saida").innerHTML = `<div class="cartao mut">Lendo ${escHtml(f.name)}…</div>`;
+  let linhas = null;
+  try{
+    const wb = XLSX.read(await f.arrayBuffer(), {type:"array", cellDates:false});
+    for (const aba of wb.SheetNames){
+      const m = XLSX.utils.sheet_to_json(wb.Sheets[aba], {header:1, raw:true, defval:null, blankrows:false});
+      linhas = lerAba(m); if (linhas) break;
+    }
+  }catch(e){ return $("saida").innerHTML = `<div class="aviso err">Não consegui abrir o arquivo: ${escHtml(e.message)}</div>`; }
+  if (!linhas) return $("saida").innerHTML = `<div class="aviso err"><b>Esta não parece a base de vendas.</b><br>
+    Procurei as colunas de cliente, produto e pedido e não achei. Confira se é o relatório de movimento de venda ou o de produtos e vendas.</div>`;
+
+  const tipo = linhas.tipo;
+  const v = tipo.k==="movimento" ? agregarMovimento(linhas) : agregar(linhas);
+  if (!v.length) return $("saida").innerHTML = `<div class="aviso err">A planilha não tem nenhuma linha de venda válida.</div>`;
+  const meses = [...new Set(v.map(x=>x.mes))].sort();
+  const porMes = meses.map(m => { const d = v.filter(x=>x.mes===m);
+    return {m, lojas:new Set(d.map(x=>x.codigo_cliente)).size, caixas:d.reduce((a,x)=>a+x.caixas,0), fat:d.reduce((a,x)=>a+x.faturado,0),
+            pedidos:new Set(d.map(x=>x.pedido)).size}; });
+  const semCaixa = !v.some(x=>x.caixas>0);
+  const h = new Date(), atual = String(h.getFullYear()) + String(h.getMonth()+1).padStart(2,"0");
+  const temAtual = meses.includes(atual);
+  const conta = campo => { const m = new Map(); const vistos = new Set();
+    v.forEach(x => { if (vistos.has(x.pedido)) return; vistos.add(x.pedido); m.set(x[campo]||"—", (m.get(x[campo]||"—")||0)+1); });
+    return [...m.entries()].sort((a,b)=>b[1]-a[1]); };
+  const ultimaData = tipo.k==="movimento" ? v.reduce((a,x)=>x.data_emissao>a?x.data_emissao:a,"") : null;
+
+  const avisos = [];
+  if (semCaixa) avisos.push(`<div class="aviso err"><b>A coluna Caixa Física veio vazia.</b> Confira se o relatório trouxe as medidas. Não suba este arquivo.</div>`);
+  else {
+  /* Planilha sem o mes atual: nos primeiros dias do mes, se ela e do mes
+     passado, e o fechamento dele (o que foi recomendado fazer); fora disso,
+     provavelmente o relatorio saiu com a data errada. So avisa, nao impede. */
+  if (!temAtual){
+    const hojeD=new Date(), ant=new Date(hojeD.getFullYear(), hojeD.getMonth()-1, 1);
+    const mesAnt=`${ant.getFullYear()}${String(ant.getMonth()+1).padStart(2,"0")}`;
+    if (hojeD.getDate()<=7 && meses.includes(mesAnt) && tipo.k==="movimento")
+      avisos.push(`<div class="aviso inf"><b>Fechamento de ${mesTxt(mesAnt)}.</b> Pode subir: os últimos dias do mês passado entram, e o resto continua como está.
+        Depois, a primeira carga de ${mesTxt(atual)} precisa vir desde o dia 1.</div>`);
+    else avisos.push(`<div class="aviso amb"><b>Esta base não tem o mês atual, ${mesTxt(atual)}.</b><br>
+      Subir assim não atualiza o faturamento de hoje. Confira se o relatório foi tirado com a data certa.</div>`);
+  }
+  if (tipo.k==="movimento"){
+    /* O movimento manda so no periodo que ele cobre: do primeiro ao ultimo
+       dia do arquivo. O resto do mes continua como esta no sistema. */
+    const datas=[...new Set(v.map(x=>x.data_emissao))].sort(), ini=datas[0], fim=datas[datas.length-1];
+    const br=d=>d.slice(8,10)+"/"+d.slice(5,7), dias=Math.round((new Date(fim)-new Date(ini))/864e5)+1;
+    avisos.push(`<div class="aviso ok"><b>Pode subir.</b> Os pedidos de <b>${br(ini)} a ${br(fim)}</b> vão ser substituídos
+      pelo que está nesta planilha. Os outros dias do mês continuam como estão no sistema.</div>`);
+    if (ini.slice(8,10)!=="01" && dias<28) avisos.push(`<div class="aviso amb">Se for a <b>primeira carga deste mês</b>, o sistema vai recusar:
+      a primeira precisa vir desde o dia 1. Depois dela, dá para subir só os últimos dias.</div>`);
+    if (dias>12) avisos.push(`<div class="mut" style="margin-top:10px">Para subir mais rápido nos próximos dias, tire só <b>os últimos 10 dias</b>.
+      É menos da metade deste arquivo, e ainda atualiza o status dos pedidos que estavam em aberto.</div>`);
+  }
+  else if (temAtual) avisos.push(`<div class="aviso ok"><b>Pode subir.</b> ${meses.length===1?"O mês":"Os meses"} ${meses.map(mesTxt).join(", ")}
+    ${meses.length===1?"vai ser substituído":"vão ser substituídos"} inteiros pelo que está nesta planilha. Os meses que não vieram continuam como estão.</div>`);
+  }
+
+  $("saida").innerHTML = `
+    <div class="cartao">
+      <b>${escHtml(f.name)}</b> <span class="mut">· base de ${tipo.nome}</span>
+      <table><tr><th>Mês</th><th class="r">Lojas</th>${tipo.k==="movimento"?`<th class="r">Pedidos</th>`:""}<th class="r">Caixas</th><th class="r">Faturado</th></tr>
+        ${porMes.map(x=>`<tr><td>${mesTxt(x.m)}${x.m===atual?" · atual":""}</td><td class="r">${inteiro(x.lojas)}</td>
+          ${tipo.k==="movimento"?`<td class="r">${inteiro(x.pedidos)}</td>`:""}
+          <td class="r">${inteiro(x.caixas)}</td><td class="r">${reais(x.fat)}</td></tr>`).join("")}
+      </table>
+      ${tipo.k==="movimento"?`
+        <p class="mut" style="margin:10px 0 0">Pedidos até <b>${ultimaData.split("-").reverse().join("/")}</b>
+          · por origem: ${conta("origem").map(([k,n])=>`${escHtml(k)} ${inteiro(n)}`).join(" · ")}
+          · ${conta("status").map(([k,n])=>`${escHtml(k)} ${inteiro(n)}`).join(" · ")}</p>`:""}
+      <p class="mut" style="margin:6px 0 0">${inteiro(v.length)} linhas no CSV · ${inteiro(new Set(v.map(x=>x.codigo_produto)).size)} produtos</p>
+      ${avisos.join("")}
+      <div id="envio"></div>
+    </div>
+    <details class="cartao"><summary><b>Caminho reserva: pelo CSV</b></summary>
+      <button class="bt" id="baixar" ${semCaixa?"disabled":""} style="background:#fff;color:#1A1D21;border:1px solid #E5E7EB">Baixar ${tipo.arquivo}</button>
+      <p class="mut" style="margin:10px 0 0">Suba o CSV na ${tipo.tabela} pelo Table Editor.</p>
+      <b style="display:block;margin-top:10px">Depois de subir o CSV na ${tipo.tabela}</b>
+      <p class="mut" style="margin:4px 0 0">Rode esta linha no SQL Editor. Ela substitui ${tipo.k==="movimento"?"os pedidos do período":"o mês"}, recalcula as vendas e o ritmo, e esvazia a caixa de entrada.</p>
+      <code id="sql">${tipo.sql}</code>
+      <button class="copiar" id="copiar">Copiar</button>
+    </details>`;
+  /* Envio direto: as duas caixas diarias sao esvaziadas antes, para nenhuma
+     sobra de outro dia entrar junto. */
+  if (!semCaixa) envioCartao($("envio"), {[tipo.tabela]: v.map(o => { const x = {}; COLS[tipo.k].forEach(c => x[c] = o[c]); return x; })},
+    "diaria", ["stg_movimento","stg_venda_mensal"], resumirDiaria);
+  $("baixar").onclick = () => {
+    const b = new Blob([csv(v, tipo.k)], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = tipo.arquivo; a.click();
+  };
+  $("copiar").onclick = () => navigator.clipboard && navigator.clipboard.writeText($("sql").textContent)
+    .then(()=>{ $("copiar").textContent = "Copiado"; });
+}
+
+/* =========================== ENVIO DIRETO AO SISTEMA ===========================
+   COPIA EXATA nas duas paginas: importador.html e vendas-diaria.html. Um teste
+   confere que as duas estao iguais. Se mudar numa, mude na outra.
+
+   A pagina manda as linhas para as caixas de entrada em pedacos de 1.500 e
+   depois pede a carga. Quem autoriza e a chave de carga, gerada no
+   34-carga-pela-pagina.sql e guardada so neste navegador.
+============================================================================== */
+const ENVIO_PADRAO = {url:"https://kqpdledhaghuzuwjkvrf.supabase.co",
+                      anon:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid"};
+const ENVIO_LOTE = 1500;
+/* A chave fica guardada no navegador. Se o navegador nao deixar gravar (pagina
+   aberta direto do computador, em alguns navegadores), ela fica ao menos na
+   memoria enquanto a pagina estiver aberta, em vez de sumir sem aviso. */
+let ENVIO_MEM = null;
+function envioCfg(){ let g = {}; try{ g = JSON.parse(localStorage.getItem("merch_carga")||"{}"); }catch(e){}
+                     return Object.assign({}, ENVIO_PADRAO, g, ENVIO_MEM || {}); }
+function envioSalvar(c){ ENVIO_MEM = c; try{ localStorage.setItem("merch_carga", JSON.stringify(c)); }catch(e){} }
+async function envioRpc(cfg, fn, corpo){
+  let r;
+  try{ r = await fetch(cfg.url.replace(/\/+$/,"") + "/rest/v1/rpc/" + fn, {method:"POST",
+         headers:{"Content-Type":"application/json", "apikey":cfg.anon, "Authorization":"Bearer "+cfg.anon},
+         body:JSON.stringify(corpo)}); }
+  catch(e){ throw new Error("Sem conexão com o sistema. Confira a internet e tente de novo."); }
+  const t = await r.text(); let j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){}
+  if (!r.ok){
+    const cod = j && j.code, msg = (j && (j.message || j.hint)) || t || ("HTTP " + r.status);
+    if (cod === "57014" || /statement timeout|canceling statement/i.test(msg))
+      throw Object.assign(new Error("A carga passou do limite de tempo e o sistema desfez tudo, sem deixar nada pela metade. Tente de novo em alguns minutos. Se repetir, use o caminho pelo SQL Editor, com os arquivos CSV."), {tempo:true});
+    if (cod === "42501" || /chave de carga invalida/i.test(msg))
+      throw Object.assign(new Error("A chave de carga não confere. Cole a chave de novo em Conectar ao sistema."), {chave:true});
+    if (r.status === 404 || /could not find the function/i.test(msg))
+      throw new Error("O sistema ainda não recebe pela página. Rode o 34-carga-pela-pagina.sql no SQL Editor.");
+    throw new Error(msg);
+  }
+  return j;
+}
+/* tabelas: {stg_x: [linhas]}. esvaziar: caixas a esvaziar antes, alem das enviadas. */
+async function enviarAoSistema(tabelas, tipo, esvaziar, progresso){
+  const cfg = envioCfg();
+  if (!cfg.chave) throw Object.assign(new Error("Conecte ao sistema primeiro: cole a chave de carga."), {chave:true});
+  const nomes = Object.keys(tabelas).filter(k => tabelas[k].length);
+  const total = nomes.reduce((a,k) => a + tabelas[k].length, 0); let feito = 0;
+  progresso({fase:"esvaziar", feito, total});
+  await envioRpc(cfg, "esvaziar_caixas", {p_chave:cfg.chave, p_tabelas:[...new Set([...(esvaziar||[]), ...nomes])]});
+  for (const k of nomes){ const rs = tabelas[k];
+    for (let i = 0; i < rs.length; i += ENVIO_LOTE){
+      await envioRpc(cfg, "receber_lote", {p_chave:cfg.chave, p_tabela:k, p_linhas:rs.slice(i, i+ENVIO_LOTE)});
+      feito += Math.min(ENVIO_LOTE, rs.length - i); progresso({fase:"enviar", tabela:k, feito, total});
+    } }
+  progresso({fase:"carga", feito, total});
+  return await envioRpc(cfg, "rodar_carga", {p_chave:cfg.chave, p_tipo:tipo});
+}
+/* O cartao de envio: conectar (uma vez so), o botao, o progresso e o resultado.
+   resumir(json) devolve o HTML do resultado, que cada pagina escreve do seu jeito. */
+function envioCartao(alvo, tabelas, tipo, esvaziar, resumir){
+  const e = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const bt = "display:block;width:100%;border:none;border-radius:12px;background:#E4002B;color:#fff;font:inherit;font-weight:700;font-size:15px;padding:14px;cursor:pointer;margin-top:12px";
+  const cx = "width:100%;box-sizing:border-box;border:1px solid #D1D5DB;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-top:4px";
+  const cfg = envioCfg(), total = Object.values(tabelas).reduce((a,x) => a + x.length, 0);
+  const conectar = () => {
+    alvo.innerHTML = `<div style="border:1px solid #E5E7EB;border-radius:14px;padding:14px;margin-top:12px">
+      <b>Conectar ao sistema</b>
+      <p style="margin:4px 0 10px;color:#6B7280;font-size:13.5px">Cole a chave de carga que apareceu no fim do 34-carga-pela-pagina.sql. Ela fica guardada só neste navegador.</p>
+      <label style="font-size:12.5px;color:#6B7280">Chave de carga</label>
+      <input id="envChave" type="password" autocomplete="off" placeholder="carga_..." style="${cx}">
+      <details style="margin-top:10px;font-size:13px;color:#6B7280"><summary>Endereço e chave pública</summary>
+        <label style="font-size:12.5px">Endereço</label><input id="envUrl" value="${e(cfg.url)}" style="${cx}">
+        <label style="font-size:12.5px;display:block;margin-top:8px">Chave pública</label><input id="envAnon" value="${e(cfg.anon)}" style="${cx}">
+      </details>
+      <button id="envSalva" style="${bt}">Conectar</button><div id="envErr" style="color:#B80022;font-size:13.5px;margin-top:8px"></div></div>`;
+    alvo.querySelector("#envSalva").onclick = () => {
+      const k = alvo.querySelector("#envChave").value.trim();
+      if (!/^carga_[0-9a-f]{64}$/.test(k)) { alvo.querySelector("#envErr").textContent = "Essa não parece a chave de carga: ela começa com carga_ e tem 70 caracteres."; return; }
+      envioSalvar({url:alvo.querySelector("#envUrl").value.trim(), anon:alvo.querySelector("#envAnon").value.trim(), chave:k});
+      envioCartao(alvo, tabelas, tipo, esvaziar, resumir);
+    };
+  };
+  if (!cfg.chave) return conectar();
+  alvo.innerHTML = `<button id="envBt" style="${bt}">Enviar para o sistema · ${total.toLocaleString("pt-BR")} linhas</button>
+    <div id="envSt" style="margin-top:10px"></div>
+    <a href="#" id="envTroca" style="display:inline-block;margin-top:8px;font-size:12.5px;color:#6B7280">trocar a chave de carga</a>`;
+  alvo.querySelector("#envTroca").onclick = ev => { ev.preventDefault(); conectar(); };
+  alvo.querySelector("#envBt").onclick = async () => {
+    const b = alvo.querySelector("#envBt"), st = alvo.querySelector("#envSt");
+    b.disabled = true; b.style.opacity = ".5";
+    const barra = (p, txt) => st.innerHTML = `<div style="height:8px;background:#E5E7EB;border-radius:8px;overflow:hidden">
+        <span style="display:block;height:100%;width:${p}%;background:#E4002B;transition:width .2s"></span></div>
+      <div style="font-size:13px;color:#6B7280;margin-top:6px">${txt}</div>`;
+    try{
+      const r = await enviarAoSistema(tabelas, tipo, esvaziar, p => {
+        if (p.fase === "esvaziar") barra(2, "Preparando as caixas de entrada…");
+        else if (p.fase === "enviar") barra(Math.max(3, Math.round(p.feito/p.total*90)), `Enviando ${p.feito.toLocaleString("pt-BR")} de ${p.total.toLocaleString("pt-BR")} linhas…`);
+        else barra(94, "Rodando a carga no sistema. Pode levar até um minuto…");
+      });
+      barra(100, "Pronto.");
+      st.insertAdjacentHTML("beforeend", `<div style="background:#E6F4EE;color:#0F7A52;border-radius:12px;padding:11px 13px;margin-top:10px;font-size:14px">${resumir(r)}</div>`);
+      b.textContent = "Enviado"; 
+    }catch(err){
+      st.innerHTML = `<div style="background:#FDE7EC;color:#B80022;border-radius:12px;padding:11px 13px;margin-top:6px;font-size:14px"><b>Não foi.</b> ${e(err.message)}</div>`;
+      b.disabled = false; b.style.opacity = "";
+      if (err.chave) setTimeout(conectar, 1800);
+    }
+  };
+}
+/* ========================= fim do ENVIO DIRETO AO SISTEMA ========================= */
+
+/* O que a pagina de vendas do dia mostra depois da carga. */
+function resumirDiaria(r){
+  const m = r && r.movimento, fmt = n => Number(n||0).toLocaleString("pt-BR");
+  if (!m) return `<b>Carregado.</b> Vendas atualizadas em ${escHtml(r && r.atualizado_em)}.`;
+  const lac = m.AVISO_dias_uteis_sem_carga;
+  return `<b>Carregado.</b> Pedidos de ${escHtml(m.periodo)} · ${fmt(m.pedidos)} pedidos · ${fmt(m.itens_de_pedido)} itens.
+    Vendas atualizadas em ${escHtml(r.atualizado_em)}.`
+    + (lac ? `<br><span style="color:#96620F"><b>Atenção:</b> ficou dia útil sem carga: ${escHtml(lac.join(", "))}. Suba um arquivo que cubra esses dias.</span>` : "")
+    + (m.linhas_sem_loja_cadastrada ? `<br><span style="color:#6B7280">${fmt(m.linhas_sem_loja_cadastrada)} linhas de loja fora do cadastro ficaram de fora.</span>` : "");
+}
+
+/* Quadro de conexao no topo: aparece antes de soltar qualquer planilha.
+   Conectado, vira uma linha discreta com a opcao de trocar a chave. */
+function pintaConexao(){
+  const c = envioCfg(), q = $("conexao");
+  if (c.chave){
+    q.innerHTML = `<span style="color:var(--verde);font-weight:600">&#10003; Conectado ao sistema</span>
+      <a href="#" id="conTroca" style="margin-left:10px;font-size:13px;color:var(--ink2)">trocar a chave</a>`;
+    $("conTroca").onclick = ev => { ev.preventDefault(); envioSalvar(Object.assign(c, {chave:""})); pintaConexao(); };
+    return;
+  }
+  q.innerHTML = `<b>Conectar ao sistema</b>
+    <p class="mut" style="margin:4px 0 10px">Cole a chave de carga que apareceu no último resultado do 34-carga-pela-pagina.sql. Começa com carga_.</p>
+    <input id="conChave" type="password" autocomplete="off" placeholder="carga_..."
+      style="width:100%;box-sizing:border-box;border:1px solid #D1D5DB;border-radius:10px;padding:11px 12px;font:inherit;font-size:14px">
+    <button class="bt" id="conSalva">Conectar</button><div id="conErr" style="color:var(--verm);font-size:13.5px;margin-top:8px"></div>`;
+  $("conSalva").onclick = () => {
+    const k = $("conChave").value.trim();
+    if (!/^carga_[0-9a-f]{64}$/.test(k)) { $("conErr").textContent = "Essa não parece a chave de carga: ela começa com carga_ e tem 70 caracteres. Confira se copiou inteira."; return; }
+    envioSalvar(Object.assign(envioCfg(), {chave:k})); pintaConexao();
+  };
+}
+pintaConexao();
+
+const z = $("soltar");
+$("arq").onchange = e => e.target.files[0] && processar(e.target.files[0]);
+z.ondragover = e => { e.preventDefault(); z.classList.add("on"); };
+z.ondragleave = () => z.classList.remove("on");
+z.ondrop = e => { e.preventDefault(); z.classList.remove("on"); const f = e.dataTransfer.files[0]; if (f) processar(f); };
+</script>
+</body>
+</html>
