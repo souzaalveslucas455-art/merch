@@ -97,6 +97,24 @@ main{max-width:1120px;margin:0 auto;padding:16px 18px 40px}
 .cx{max-width:420px;margin:40px auto;background:var(--papel);border-radius:18px;box-shadow:var(--sombra);padding:22px}
 .cx h2{margin:0 0 4px;font-size:20px}
 .form{max-width:620px}
+/* desempenho */
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:14px 16px}
+.kpi{background:var(--fundo);border-radius:12px;padding:11px 12px}
+.kpi b{display:block;font-size:24px;line-height:1.1}
+.kpi span{font-size:13px;color:var(--ink2)}
+.kpi small{display:block;font-size:12px;color:var(--ink3);margin-top:3px}
+.rk{padding:10px 16px;border-bottom:1px solid var(--linha)}
+.rk:last-child{border-bottom:none}
+.rk .cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.rk .pos{display:inline-block;width:22px;color:var(--ink3);font-weight:700}
+.rk .tr{height:6px;border-radius:6px;background:var(--linha);overflow:hidden;margin:6px 0 2px}
+.rk .tr span{display:block;height:100%}
+.rk .det{font-size:13px;color:var(--ink2)}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:12px;margin:4px 4px 0 0;background:var(--amb-bg);color:var(--amb)}
+.periodo{display:flex;gap:6px;margin:0 0 12px}
+.periodo button{flex:1;border:1px solid var(--linha);background:var(--papel);border-radius:10px;padding:8px;font-weight:600;color:var(--ink2);cursor:pointer}
+.periodo button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+@media (min-width:640px){ .kpis{grid-template-columns:repeat(4,minmax(0,1fr))} }
 @media (min-width:900px){ main{padding-top:22px} .grade{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grade .sec{margin-bottom:0} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -230,10 +248,11 @@ async function carregar(){
   ERRO=null;
   const pedidos=[rpc("alertas_da_equipe",{p_dias:DIAS}), rpc("demandas_da_equipe",{p_dias:30}), rpc("cumprimento_da_equipe",{p_dias:DIAS}),
                  rpc("estoque_da_equipe",{p_dias:DIAS}), rpc("entregas_da_equipe",{p_dias:DIAS})];
+  pedidos.push(rpc("desempenho_da_equipe",{p_dias:DIAS}));
   if(MODO==="lider") pedidos.push(rpc("equipe_no_dia",{p_data:hoje()}));  /* tambem em "ver como lider" */
   const r=await Promise.allSettled(pedidos);
   const v=i=>r[i]&&r[i].status==="fulfilled"?r[i].value:null;
-  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), equipe:v(5)};
+  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), desempenho:v(5), equipe:v(6)};
   const falhou=r.find(x=>x.status==="rejected"); if(falhou) ERRO=traduz(falhou.reason.message);
   pintar();
 }
@@ -399,6 +418,74 @@ function secEquipeHoje(){
         :`<div class="mut" style="font-size:14px;margin-top:6px">Sem loja no roteiro hoje.</div>`}</div>`; }).join(""):`<div class="vazio">Ninguém na equipe.</div>`);
 }
 
+
+/* --------------------------- desempenho ---------------------------
+   As quatro perguntas sobre a equipe: estao indo as lojas, fazem o trabalho
+   completo, respondem ao lider, e o que encontram nas lojas. */
+const pct=(a,b)=>b?Math.round(100*a/b):null;
+const corPct=p=>p==null?"var(--ink3)":p>=90?"var(--verde)":p>=70?"var(--amb)":"var(--verm)";
+function somaDesemp(rs){
+  const t=rs.reduce((a,x)=>({prev:a.prev+x.previstas, vis:a.vis+x.visitadas, enc:a.enc+x.encerradas, tot:a.tot+x.visitas,
+    comp:a.comp+x.completas, encTot:a.encTot+x.encerradas_total, dem:a.dem+x.demandas, resp:a.resp+x.respondidas, venc:a.venc+x.vencidas,
+    min:a.min+(x.tempo_medio_min||0)*x.encerradas, encMin:a.encMin+(x.tempo_medio_min!=null?x.encerradas:0)}),
+    {prev:0,vis:0,enc:0,tot:0,comp:0,encTot:0,dem:0,resp:0,venc:0,min:0,encMin:0});
+  /* completa so pode ser visita encerrada: a que esta em andamento ainda nao terminou */
+  return {...t, efet:pct(t.vis,t.prev), completas:pct(t.comp,t.encTot), resposta:pct(t.resp,t.dem), tempo:t.encMin?Math.round(t.min/t.encMin):null};
+}
+const registros=x=>x.nao_tem+x.lotes+x.censos+x.contagens_estoque+x.entregas;
+function linhaRank(i, nome, valor, p, det){
+  return `<div class="rk"><div class="cab"><span><span class="pos">${i+1}</span><b>${esc(tit(nome))}</b></span><b style="color:${corPct(p)}">${valor}</b></div>
+    ${p!=null?`<div class="tr"><span style="width:${Math.min(100,p)}%;background:${corPct(p)}"></span></div>`:""}
+    <div class="det">${det}</div></div>`;
+}
+function secDesempenho(){
+  const d=D.desempenho||{}, rs=doFiltro(d.repositores);
+  const t=somaDesemp(rs), dias=d.dias||DIAS;
+  const periodo=`<div class="periodo">${[7,15,30].map(n=>`<button data-dias="${n}" aria-pressed="${n===DIAS}">${n} dias</button>`).join("")}</div>`;
+  if(!rs.length) return periodo+secao("var(--ink)","Desempenho da equipe","",`<div class="vazio">Nenhum repositor com roteiro no período.</div>`,"s-desemp");
+  const h=n=>n==null?"—":n<1?`${Math.round(n*60)} min`:`${String(n).replace(".",",")} h`;
+  const kpis=`<div class="kpis">
+    <div class="kpi"><span>Efetividade</span><b style="color:${corPct(t.efet)}">${t.efet??"—"}${t.efet!=null?"%":""}</b><small>${t.vis} de ${t.prev} visitas do roteiro</small></div>
+    <div class="kpi"><span>Visitas completas</span><b style="color:${corPct(t.completas)}">${t.completas??"—"}${t.completas!=null?"%":""}</b><small>${t.comp} de ${t.encTot} encerradas, com Oportunidade e Vencimentos</small></div>
+    <div class="kpi"><span>Resposta ao líder</span><b style="color:${corPct(t.resposta)}">${t.resposta??"—"}${t.resposta!=null?"%":""}</b><small>${t.resp} de ${t.dem} demandas${t.venc?` · ${plural(t.venc,"vencida","vencidas")}`:""}</small></div>
+    <div class="kpi"><span>Tempo médio na loja</span><b>${t.tempo!=null?t.tempo+" min":"—"}</b><small>nas visitas encerradas</small></div></div>`;
+  const comRoteiro=rs.filter(x=>x.previstas>0);
+  const visitou=comRoteiro.slice().sort((a,b)=>b.visitadas-a.visitadas||pct(b.visitadas,b.previstas)-pct(a.visitadas,a.previstas)).slice(0,5);
+  const respondeu=rs.filter(x=>x.demandas>0).sort((a,b)=>pct(b.respondidas,b.demandas)-pct(a.respondidas,a.demandas)||(a.horas_ate_responder??99)-(b.horas_ate_responder??99)).slice(0,5);
+  const registrou=rs.filter(x=>registros(x)>0).sort((a,b)=>registros(b)-registros(a)).slice(0,5);
+  const atencao=rs.map(x=>({x, motivos:[
+      x.usa_app===false?"nunca entrou no app":"",
+      x.previstas&&pct(x.visitadas,x.previstas)<70?`visitou ${pct(x.visitadas,x.previstas)}% do roteiro`:"",
+      x.vencidas?`${x.vencidas} ${x.vencidas===1?"demanda vencida":"demandas vencidas"}`:"",
+      x.encerradas_total&&x.completas<x.encerradas_total*0.7?`${x.completas} de ${x.encerradas_total} visitas completas`:""].filter(Boolean)}))
+    .filter(z=>z.motivos.length).sort((a,b)=>b.motivos.length-a.motivos.length||(pct(a.x.visitadas,a.x.previstas)??0)-(pct(b.x.visitadas,b.x.previstas)??0)).slice(0,8);
+  const detReg=x=>[x.nao_tem?`${x.nao_tem} não tem`:"",x.lotes?plural(x.lotes,"lote","lotes"):"",x.censos?plural(x.censos,"censo","censos"):"",x.contagens_estoque?plural(x.contagens_estoque,"contagem","contagens"):"",x.entregas?plural(x.entregas,"entrega","entregas"):""].filter(Boolean).join(" · ");
+  return periodo
+    +secao("var(--ink)", `Desempenho da equipe nos últimos ${dias} dias`, `${plural(rs.length,"repositor","repositores")}`, kpis, "s-desemp")
+    +secao("var(--verde)", "Quem mais visitou", "visitas feitas do roteiro",
+        visitou.map((x,i)=>linhaRank(i,x.nome,`${x.visitadas} de ${x.previstas}`,pct(x.visitadas,x.previstas),
+          `${pct(x.visitadas,x.previstas)}% do roteiro · ${x.encerradas} encerradas${x.tempo_medio_min!=null?` · ${x.tempo_medio_min} min por loja`:""}${x.inicio_medio?` · começa ${x.inicio_medio}`:""}`)).join("")||`<div class="vazio">Ninguém visitou no período.</div>`, "s-rk-vis")
+    +secao("var(--azul)", "Quem mais respondeu as demandas", "do líder e do gerente",
+        respondeu.map((x,i)=>linhaRank(i,x.nome,`${x.respondidas} de ${x.demandas}`,pct(x.respondidas,x.demandas),
+          `${x.horas_ate_responder!=null?`responde em ${h(x.horas_ate_responder)}`:"ainda não respondeu"}${x.vencidas?` · <span style="color:var(--verm-esc)">${x.vencidas} vencida${x.vencidas>1?"s":""}</span>`:""}${x.mandou_ao_lider?` · mandou ${x.mandou_ao_lider} ao líder`:""}`)).join("")||`<div class="vazio">Nenhuma demanda para a equipe no período.</div>`, "s-rk-resp")
+    +secao("var(--amb)", "Quem mais registrou nas lojas", "não tem, lotes, censos, contagens e entregas",
+        registrou.map((x,i)=>linhaRank(i,x.nome,`${registros(x)}`,null,detReg(x))).join("")||`<div class="vazio">Nenhum registro no período.</div>`, "s-rk-reg")
+    +secao("var(--verm)", atencao.length?`${plural(atencao.length,"repositor precisa","repositores precisam")} de atenção`:"Ninguém precisa de atenção agora", "",
+        atencao.map(z=>`<div class="rk"><div class="cab"><b>${esc(tit(z.x.nome))}</b><span class="mut" style="font-size:13px">rota ${esc(z.x.rota||"?")}</span></div>
+          <div>${z.motivos.map(m=>`<span class="chip">${esc(m)}</span>`).join("")}</div></div>`).join("")||`<div class="vazio">Todos acima de 70% de efetividade, sem demanda vencida.</div>`, "s-atencao");
+}
+/* No painel: a mesma conta, por lider, para comparar as equipes. */
+function secDesempenhoLideres(){
+  const rs=doFiltro(D.desempenho&&D.desempenho.repositores);
+  const por={}; rs.forEach(x=>{ (por[x.lider||"Sem líder"]=por[x.lider||"Sem líder"]||[]).push(x); });
+  const linhas=Object.entries(por).map(([l,xs])=>({l, n:xs.length, ...somaDesemp(xs)})).sort((a,b)=>(a.efet??-1)-(b.efet??-1));
+  const cel=(v,suf)=>`<b style="color:${corPct(v)}">${v??"—"}${v!=null?suf:""}</b>`;
+  return secao("var(--ink)", "Desempenho das equipes", `da menor efetividade para a maior, nos últimos ${DIAS} dias`,
+    linhas.length?linhas.map(x=>`<div class="rk"><div class="cab"><b>${esc(tit(x.l))}</b><span class="mut" style="font-size:13px">${plural(x.n,"repositor","repositores")}</span></div>
+      <div class="det" style="margin-top:4px">Efetividade ${cel(x.efet,"%")} · completas ${cel(x.completas,"%")} · resposta ${cel(x.resposta,"%")}${x.venc?` (${plural(x.venc,"vencida","vencidas")})`:""} · ${x.tempo!=null?x.tempo+" min por loja":"sem tempo médio"}</div></div>`).join("")
+      :`<div class="vazio">Nenhum dado no período.</div>`, "s-desemp-lid");
+}
+
 /* --------------------------- telas --------------------------- */
 function pintar(){
   const erro=ERRO?`<div class="aviso err"><b>Parte dos dados não carregou.</b> ${esc(ERRO)} Toque em Atualizar para tentar de novo.</div>`:"";
@@ -412,9 +499,10 @@ function pintar(){
     const nDem=doFiltro(D.demandas&&D.demandas.recebidas).filter(x=>!x.resolvida_em&&!x.resposta).length;
     const nAl=doFiltro(D.alertas&&D.alertas.vencimentos).length+doFiltro(D.alertas&&D.alertas.nao_tem).length;
     const aba=(k,t,n)=>`<button role="tab" aria-selected="${ABA===k}" data-aba="${k}">${t}${n?`<span class="n">${n}</span>`:""}</button>`;
-    $("corpo").innerHTML=erro+vista+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}</div>`
+    $("corpo").innerHTML=erro+vista+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}${aba("desemp","Desempenho")}</div>`
       +(ABA==="equipe"?secEquipeHoje()+secCumprimento()
        :ABA==="dem"?secDemandas()
+       :ABA==="desemp"?secDesempenho()
        :secVencimentos()+secNaoTem()+secEntregas(8)+secEstoque(8)+secMateriais()+secNaoTrabalha());
     $("corpo").querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA=b.dataset.aba; guarda.por("aba",ABA); pintar(); });
   } else {
@@ -423,7 +511,7 @@ function pintar(){
         <label>Líder<select id="fLid"><option value="">Todos os líderes (${lideres.length})</option>${lideres.map(n=>`<option ${n===FILTRO_LIDER?"selected":""} value="${esc(n)}">${esc(tit(n))}</option>`).join("")}</select></label>
         <label>Período<select id="fDias">${[7,15,30].map(d=>`<option ${d===DIAS?"selected":""} value="${d}">Últimos ${d} dias</option>`).join("")}</select></label>
         <button class="bt" data-nova>Nova demanda</button></div>`
-      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCumprimento()+secEstoque(10)+secEntregas(10)
+      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCumprimento()+secDesempenhoLideres()+secEstoque(10)+secEntregas(10)
       +`<div class="grade">${secMateriais()}${secNaoTrabalha()}</div>`;
     $("fLid").onchange=e=>{ FILTRO_LIDER=e.target.value; guarda.por("filtro",FILTRO_LIDER); pintar(); };
     $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("dias",DIAS); carregar(); };
@@ -435,6 +523,7 @@ function pintar(){
   ligar();
 }
 function ligar(){
+  $("corpo").querySelectorAll("[data-dias]").forEach(b=>b.onclick=()=>{ DIAS=Number(b.dataset.dias); guarda.por("dias",DIAS); carregar(); });
   $("corpo").querySelectorAll("[data-mais]").forEach(b=>b.onclick=()=>{ const s=b.closest(".sec").id;
     const ref={"s-venc":()=>secVencimentos(),"s-naotem":()=>secNaoTem(),"s-dem":()=>secDemandas(),"s-mat":()=>secMateriais(),"s-ntrab":()=>secNaoTrabalha(),
       "s-est":()=>secEstoque(),"s-ent":()=>secEntregas()}[s];
