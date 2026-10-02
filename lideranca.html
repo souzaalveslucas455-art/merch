@@ -152,7 +152,7 @@ const tit=n=>String(n||"").toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase())
 const MOTIVO={sem_pedido:"Não pediu",pedido_nao_chegou:"Pedido não chegou",sem_espaco:"Sem espaço",
   concorrente_ocupou:"Concorrente ocupou",deposito_cheio:"Tem no depósito",outro:"Outro"};
 const ACAO={girar:"Mudou de lugar para girar",troca:"Acionou troca",retirar:"Retirou da gôndola",outro:"Outro",registrar:"Só registrou",remarcar:"Remarcou"};
-const MODULO={oportunidade:"Oportunidade de Estoque",validade:"Controle de Vencimentos",pdv:"Materiais e Geladeiras",livre:"Geral"};
+const MODULO={oportunidade:"Oportunidade de Estoque",validade:"Controle de Vencimentos",pdv:"Materiais e Geladeiras",estoque:"Contagem de Estoque",entrega:"Validade na Entrega",livre:"Geral"};
 const TIPO_ATIVO={geladeira:"Geladeira",gondola:"Gôndola",display:"Display",ilha:"Ilha",checkout:"Checkout",material:"Material",outro:"Outro"};
 
 /* --------------------------- acesso --------------------------- */
@@ -268,6 +268,27 @@ setInterval(()=>{ if(EU && !document.hidden && navigator.onLine && !document.que
 const filtroAtual=()=>MODO==="lider"?(vendoComo()?COMO:""):FILTRO_LIDER;
 const doFiltro=lista=>!filtroAtual()?(lista||[]):(lista||[]).filter(x=>x.lider===filtroAtual());
 
+/* Onde o repositor estava ao comecar e ao encerrar a visita. */
+const RAIO=300;
+const distTxt=m=>m<1000?`${m} m`:`${(m/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})} km`;
+function geoChip(m, temGpsLoja, rotulo){
+  if(m==null) return `<span class="selo" style="background:var(--fundo);color:var(--ink3);font-size:11.5px">${rotulo}: ${temGpsLoja===false?"loja sem endereço":"sem GPS"}</span>`;
+  const ok=m<=RAIO, perto=m<=1000;
+  return `<span class="selo" style="background:${ok?"var(--verde-bg)":perto?"var(--amb-bg)":"var(--verm-bg)"};color:${ok?"var(--verde)":perto?"var(--amb)":"var(--verm-esc)"};font-size:11.5px">${rotulo}: ${ok?"na loja":"a "+distTxt(m)}</span>`;
+}
+/* A foto de uma demanda fica no armazenamento protegido: so abre com o login. */
+async function verFoto(caminho){
+  const fundo=document.createElement("div");
+  fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.85);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;color:#fff";
+  fundo.innerHTML="Abrindo a foto…"; fundo.onclick=()=>fundo.remove(); document.body.appendChild(fundo);
+  try{ const r=await fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+caminho,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
+    if(!r.ok) throw new Error("A foto ainda não subiu do celular do repositor, ou não está mais guardada.");
+    const u=URL.createObjectURL(await r.blob());
+    fundo.innerHTML=`<img src="${u}" alt="Foto da demanda" style="max-width:100%;max-height:100%;border-radius:12px">`; }
+  catch(e){ fundo.innerHTML=esc(e.message)+"<br><br>Toque para fechar."; }
+}
+window.verFoto=verFoto;
+
 /* --------------------------- secoes --------------------------- */
 const plural=(n,um,varios)=>`${n} ${n===1?um:varios}`;
 function secao(cor, titulo, sub, corpo, id){
@@ -307,7 +328,12 @@ function cartaoRecebida(x,i){
   return `<div class="dem">
     <div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(tit(x.de))}${x.loja?` <span class="mut" style="font-weight:400">· ${esc(x.loja)}</span>`:""}</b>
       <span class="selo" style="background:${aberta?(x.resposta?"var(--azul-bg)":"var(--verm-bg)"):"var(--verde-bg)"};color:${aberta?(x.resposta?"var(--azul)":"var(--verm-esc)"):"var(--verde)"}">${aberta?(x.resposta?"Respondida":Number(x.dias)>0?`Aberta há ${x.dias} ${Number(x.dias)===1?"dia":"dias"}`:"Aberta hoje"):"Resolvida"}</span></div>
-    <div class="txt">${esc(x.texto)}</div>
+    ${x.contexto&&x.contexto.assunto?`<div style="margin-top:6px"><span class="selo" style="background:var(--azul-bg);color:var(--azul)">${esc(x.contexto.assunto)}</span>
+      ${x.contexto.motivo?`<span class="selo" style="background:var(--amb-bg);color:var(--amb)">${esc(x.contexto.motivo)}</span>`:""}</div>
+      ${x.contexto.item_texto?`<div style="margin-top:6px;font-weight:600">${esc(x.contexto.item_texto)}</div>`:""}
+      ${x.contexto.obs?`<div class="txt">${esc(x.contexto.obs)}</div>`:""}`
+    :`<div class="txt">${esc(x.texto)}</div>`}
+    ${x.foto_url?`<button class="bt peq sec" onclick="verFoto('${esc(x.foto_url)}')" style="margin:4px 0 6px">Ver foto</button>`:""}
     <div class="mut" style="font-size:13px">${quando(x.criado_em)}${x.modulo?` · ${esc(MODULO[x.modulo]||x.modulo)}`:""}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div>
     ${x.resposta?`<div class="resp"><b>${esc(nomeCurto(x.respondido_por))}:</b> ${esc(x.resposta)}</div>`:""}
     ${aberta?`<textarea id="r${i}" placeholder="Responder para ${esc(nomeCurto(x.de))}"></textarea>
@@ -432,7 +458,8 @@ function secEquipeHoje(){
     return `<div class="rep-c"><div class="cab"><b>${esc(tit(r.nome))}</b><span class="mut" style="font-size:14px">rota ${esc(r.rota||"?")} · ${enc} de ${ls.length} ${ls.length===1?"loja":"lojas"}</span></div>
       ${r.usa_app===false?`<div class="aviso err" style="margin:8px 0 0;padding:7px 10px;font-size:13px">Esta rota nunca entrou no app.</div>`:""}
       ${ls.length?ls.map(l=>{ const k=l.fim?"ok":l.inicio?"and":"nao", fe=(l.feitos||[]).map(m=>MODULO[m]||m);
-        return `<div class="loj ${k}"><span>${esc(l.loja)}${fe.length?`<br><span class="mut" style="font-size:12.5px">${esc(fe.join(", "))}</span>`:""}</span>
+        return `<div class="loj ${k}"><span>${esc(l.loja)}${fe.length?`<br><span class="mut" style="font-size:12.5px">${esc(fe.join(", "))}</span>`:""}
+            ${l.inicio?`<br>${geoChip(l.dist_inicio_m,l.loja_tem_gps,"início")} ${l.fim?geoChip(l.dist_fim_m,l.loja_tem_gps,"fim"):""}`:""}</span>
           <span class="mut" style="white-space:nowrap">${l.fim?`${l.inicio}–${l.fim}`:l.inicio?`desde ${l.inicio}`:"não iniciada"}</span></div>`; }).join("")
         :`<div class="mut" style="font-size:14px;margin-top:6px">Sem loja no roteiro hoje.</div>`}</div>`; }).join(""):`<div class="vazio">Ninguém na equipe.</div>`);
 }

@@ -242,7 +242,8 @@ async function carregar(){
     oport:rpc("painel_oportunidades",{p_dias:DIAS}), venc:rpc("painel_vencimentos"), entr:rpc("entregas_da_equipe",{p_dias:DIAS}),
     estq:rpc("painel_estoque",{p_dias:30}), estqSem:rpc("estoque_da_equipe",{p_dias:7}), listas:rpc("painel_listas"),
     desemp:rpc("desempenho_da_equipe",{p_dias:DIAS}), desempAntes:rpc("desempenho_da_equipe",{p_dias:DIAS,p_fim:menosDias(H,DIAS)}),
-    desempHoje:rpc("desempenho_da_equipe",{p_dias:1}), dem:rpc("demandas_da_equipe",{p_dias:30}), eu:rpc("eu_sou")};
+    desempHoje:rpc("desempenho_da_equipe",{p_dias:1}), dem:rpc("demandas_da_equipe",{p_dias:30}), eu:rpc("eu_sou"),
+    vis:rpc("painel_visitas",{p_dias:DIAS})};
   const ks=Object.keys(chamadas), r=await Promise.allSettled(Object.values(chamadas));
   ERROS=[]; ks.forEach((k,i)=>{ if(r[i].status==="fulfilled") D[k]=r[i].value; else ERROS.push(traduz(r[i].reason.message)); });
   if(D.eu) EU=D.eu; CARREGADO_EM=new Date();
@@ -281,10 +282,11 @@ const IC={
   estq:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>',
   desemp:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>',
   dem:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  vis:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   arv:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-3h14v3"/></svg>',
   filtro:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"/></svg>'};
 const MODULOS=[["oport","Oportunidade de Estoque"],["venc","Controle de Vencimentos"],["entr","Validade na Entrega"],["estq","Contagem de Estoque"],
-               ["desemp","Desempenho da equipe"],["dem","Demandas"],["arv","Estrutura da equipe"]];
+               ["vis","Visitas e localização"],["desemp","Desempenho da equipe"],["dem","Demandas"],["arv","Estrutura da equipe"]];
 
 function pintar(){ pintaLado(); pintaMain(); }
 function pintaLado(){
@@ -303,6 +305,7 @@ function pintaLado(){
       <div class="it"><span><i style="background:#FFD1DA"></i>Lotes vencidos</span><b>${venc}</b></div>
       <div class="it"><span><i style="background:#FFB4C2"></i>Não tem</span><b>${nt}</b></div>
       <div class="it"><span><i style="background:#F6E05E"></i>Demandas em aberto</span><b>${abertas}</b></div>
+      <div class="it"><span><i style="background:#FFE8A3"></i>Começaram fora da loja</span><b>${filtra((D.vis||{}).visitas).filter(x=>x.data===hoje()&&x.dist_inicio_m>((D.vis||{}).raio||300)).length}</b></div>
       <div class="mini"><div><b>${(EU.lideres||[]).filter(l=>ligado(l.nome)).length}</b><span>líderes</span></div><div><b>${filtra(EU.repositores).length}</b><span>repositores</span></div><div><b>${((D.listas||{}).lojas||[]).length}</b><span>lojas</span></div></div></div>`;
   $("lado").querySelectorAll("[data-mod]").forEach(b=>b.onclick=()=>{ MOD=b.dataset.mod; guarda.por("p_mod",MOD); BUSCA=""; pintar(); });
 }
@@ -326,7 +329,7 @@ function pintaMain(){
         <label><div class="rot" style="margin-top:0">PERÍODO</div><select id="fDias">${[7,15,30].map(n=>`<option ${n===DIAS?"selected":""} value="${n}">Últimos ${n} dias</option>`).join("")}</select></label>
         <button class="bt" id="fLimpa">Limpar</button></div>
     </div>
-    <section class="mod" id="mod">${({oport:modOport,venc:modVenc,entr:modEntr,estq:modEstq,desemp:modDesemp,dem:modDem,arv:modArv}[MOD]||modVenc)()}</section>`;
+    <section class="mod" id="mod">${({oport:modOport,venc:modVenc,entr:modEntr,estq:modEstq,vis:modVis,desemp:modDesemp,dem:modDem,arv:modArv}[MOD]||modVenc)()}</section>`;
   ligar();
 }
 function ligar(){
@@ -388,16 +391,20 @@ function modVenc(){
                ["atencao",`Atenção · ${xs.filter(x=>nivel(x)==="atencao").length}`,`até ${da} dias`],["todos",`Todos · ${xs.length}`,"em acompanhamento"]];
   const at=abaAtual(lista), rs=ordena(at==="todos"?xs:xs.filter(x=>nivel(x)===at),"venc",{campo:"dias",dir:1});
   const vencidos=xs.filter(x=>x.dias<0), un=vencidos.reduce((a,x)=>a+(Number(x.quantidade)||0),0), parados=xs.filter(x=>Number(x.sem_atualizar)>7).length;
-  EXPORTA={nome:"vencimentos-"+at, cab:["Produto","Loja","Codigo","Lote","Vence em","Dias","Quantidade (un)","Ultima acao","Sem contar ha (dias)","Repositor","Lider"],
-    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,x.lote,dataBr(x.vence_em),x.dias,x.quantidade,ACAO[x.acao]||"",x.sem_atualizar,x.repositor,x.lider])};
+  EXPORTA={nome:"vencimentos-"+at, cab:["Produto","Loja","Codigo","Lote","Vence em","Dias","Quantidade inicial (un)","Quantidade agora (un)","Acompanhamento","Ultima acao","Sem contar ha (dias)","Repositor","Lider"],
+    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,x.lote,dataBr(x.vence_em),x.dias,x.inicial,x.quantidade,[x.inicial,...(x.historico||[]).map(m=>m.quantidade)].join(" > "),ACAO[x.acao]||"",x.sem_atualizar,x.repositor,x.lider])};
   const tag=x=>{ const n=nivel(x); return `<span class="tag ${n==="vencido"||n==="critico"?"t-verm":n==="atencao"?"t-amb":"t-cinza"}">${n==="vencido"?`vencido há ${-x.dias}d`:x.dias===0?"vence hoje":`vence em ${x.dias}d`}</span>`; };
   return `<h2>Controle de Vencimentos</h2>${abas(lista)}
     ${vencidos.length?`<div class="alerta"><b>${plural(vencidos.length,"lote vencido","lotes vencidos")} ainda na loja</b>, com ${fmt(un)} unidades. ${parados?`${plural(parados,"lote está","lotes estão")} sem contagem há mais de 7 dias.`:""}</div>`
       :`<div class="alerta ok">Nenhum lote vencido nas lojas da equipe.${parados?` ${plural(parados,"lote está","lotes estão")} sem contagem há mais de 7 dias.`:""}</div>`}
     ${barra(`<span class="mut">Crítico a partir de ${dc} dias para vencer.</span>`)}
-    ${tabela(th("venc","produto","Produto")+th("venc","loja","Loja")+"<th>Lote</th>"+th("venc","dias","Vence")+th("venc","quantidade","Na loja",1)+"<th>Última ação</th>"+th("venc","sem_atualizar","Sem contar",1)+th("venc","repositor","Repositor")+th("venc","lider","Líder"),
+    ${tabela(th("venc","produto","Produto")+th("venc","loja","Loja")+"<th>Lote</th>"+th("venc","dias","Vence")+th("venc","quantidade","Na loja",1)+"<th>Acompanhamento</th><th>Última ação</th>"+th("venc","sem_atualizar","Sem contar",1)+th("venc","repositor","Repositor")+th("venc","lider","Líder"),
       rs.map(x=>`<tr><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}</span></td><td>${esc(x.lote||"sem lote")}</td>
         <td>${dataBr(x.vence_em)} ${tag(x)}</td><td class="num">${x.quantidade!=null?`<span class="cel ${nivel(x)==="vencido"?"forte":""}">${fmt(x.quantidade)} un</span>`:"—"}</td>
+        <td>${(()=>{ /* a quantidade de cada visita, desde o registro, ate acabar */
+          const h=x.historico||[], seq=[x.inicial,...h.map(m=>m.quantidade)].filter(v=>v!=null);
+          return seq.length>1?`<details><summary style="cursor:pointer">${seq.map(v=>fmt(v)).join(" → ")} un</summary>${h.map(m=>`<div style="font-size:12px;margin-top:2px">${dataBr(m.data)} · <b>${fmt(m.quantidade)} un</b>${m.acao?` · ${esc(ACAO[m.acao]||m.acao)}`:""} · ${esc(curto(m.quem))}</div>`).join("")}</details>`
+            :`<span class="mut">registrado com ${fmt(x.inicial)} un</span>`; })()}</td>
         <td>${esc(ACAO[x.acao]||"Sem ação")}</td><td class="num">${Number(x.sem_atualizar)>7?`<span class="tag t-verm">${x.sem_atualizar} dias</span>`:`${x.sem_atualizar??"—"} d`}</td>
         <td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`),
       "Nenhum lote nesta aba.")}`;
@@ -527,7 +534,10 @@ function modDem(){
     EXPORTA={nome:"demandas-dos-repositores", cab:["De","Lider","Loja","Texto","Criada em","Resposta","Resolvida"], linhas:rec.map(x=>[x.de,x.lider,x.loja,x.texto,quando(x.criado_em),x.resposta,x.resolvida_em?"sim":"nao"])};
     corpo=tabela("<th>De</th><th>Loja</th><th>Demanda</th><th>Situação</th><th style='min-width:260px'>Resposta</th>",
       rec.map((x,i)=>`<tr><td><b>${esc(curto(x.de))}</b><span class="sub">líder ${esc(curto(x.lider))}</span></td><td>${esc(x.loja||"—")}</td>
-        <td style="white-space:pre-line;max-width:380px">${esc(x.texto)}<span class="sub">${quando(x.criado_em)}</span></td>
+        <td style="max-width:380px">${x.contexto&&x.contexto.assunto?`<span class="tag t-azul">${esc(x.contexto.assunto)}</span> ${x.contexto.motivo?`<span class="tag t-amb">${esc(x.contexto.motivo)}</span>`:""}
+            ${x.contexto.item_texto?`<div style="font-weight:600;margin-top:4px">${esc(x.contexto.item_texto)}</div>`:""}${x.contexto.obs?`<div style="white-space:pre-line;margin-top:3px">${esc(x.contexto.obs)}</div>`:""}`
+          :`<div style="white-space:pre-line">${esc(x.texto)}</div>`}
+          ${x.foto_url?`<button class="bt" style="margin-top:6px;padding:4px 10px" onclick="verFoto('${esc(x.foto_url)}')">Ver foto</button>`:""}<span class="sub">${quando(x.criado_em)}</span></td>
         <td><span class="tag ${x.resolvida_em?"t-verde":x.resposta?"t-azul":"t-verm"}">${x.resolvida_em?"Resolvida":x.resposta?"Respondida":`Aberta há ${x.dias} d`}</span></td>
         <td>${x.resposta?`<b>${esc(curto(x.respondido_por))}:</b> ${esc(x.resposta)}`:""}${!x.resolvida_em?`<textarea id="rt${i}" rows="2" style="width:100%;margin-top:6px;border:1px solid #D1D5DB;border-radius:8px;padding:6px 8px" placeholder="Responder"></textarea>
           <div style="display:flex;gap:6px;margin-top:6px"><button class="bt" data-resp="${i}" data-res="0">Responder</button><button class="bt verm" data-resp="${i}" data-res="1">Resolver</button></div>`:""}</td></tr>`),
@@ -583,6 +593,50 @@ function novaDemanda(){
 }
 window.novaDemanda=novaDemanda;
 function fechaDlg(){ const d=$("dlg"); if(d.close) d.close(); else d.removeAttribute("open"); }
+
+
+/* --------------------------- localizacao --------------------------- */
+const distTxt=m=>m<1000?`${m} m`:`${(m/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})} km`;
+function geoTag(m, temLoja, raio){
+  if(m==null) return `<span class="tag t-cinza">${temLoja===false?"loja sem endereço":"sem GPS"}</span>`;
+  return m<=raio?`<span class="tag t-verde">na loja</span>`:m<=1000?`<span class="tag t-amb">a ${distTxt(m)}</span>`:`<span class="tag t-verm">a ${distTxt(m)}</span>`;
+}
+function modVis(){
+  const v=D.vis||{}, raio=v.raio||300, xs=filtra(v.visitas);
+  const fora=x=>(x.dist_inicio_m!=null&&x.dist_inicio_m>raio)||(x.dist_fim_m!=null&&x.dist_fim_m>raio);
+  const semGps=x=>x.dist_inicio_m==null||(x.fim&&x.dist_fim_m==null);
+  const lista=[["todas",`Todas · ${xs.length}`,`últimos ${DIAS} dias`],["fora",`Fora da loja · ${xs.filter(fora).length}`,`início ou fim a mais de ${raio} m`],["sem",`Sem localização · ${xs.filter(semGps).length}`,"sem GPS ou loja sem endereço"]];
+  const at=abaAtual(lista), rs=ordena(at==="fora"?xs.filter(fora):at==="sem"?xs.filter(semGps):xs,"vis",{campo:"data",dir:-1});
+  const comIni=xs.filter(x=>x.dist_inicio_m!=null), comFim=xs.filter(x=>x.dist_fim_m!=null);
+  const nIni=comIni.filter(x=>x.dist_inicio_m<=raio).length, nFim=comFim.filter(x=>x.dist_fim_m<=raio).length;
+  const pIni=pct(nIni,comIni.length), pFim=pct(nFim,comFim.length);
+  const kpi=(n,v,c,sub)=>`<div class="kpi"><span>${n}</span><b style="color:${c||"var(--ink)"}">${v??"—"}</b><small>${sub}</small></div>`;
+  EXPORTA={nome:"visitas-localizacao", cab:["Data","Repositor","Lider","Loja","Codigo","Inicio","Distancia no inicio (m)","Fim","Distancia no fim (m)","Duracao (min)"],
+    linhas:rs.map(x=>[dataBr(x.data),x.repositor,x.lider,x.loja,x.codigo,x.inicio,x.dist_inicio_m,x.fim,x.dist_fim_m,x.duracao_min])};
+  return `<h2>Visitas e localização</h2>${abas(lista)}
+    <div class="kpis">${kpi("Começaram na loja",pIni!=null?pIni+"%":"—",cor(pIni),`${nIni} de ${comIni.length} com GPS`)}
+      ${kpi("Encerraram na loja",pFim!=null?pFim+"%":"—",cor(pFim),`${nFim} de ${comFim.length} com GPS`)}
+      ${kpi("Fora da loja",xs.filter(fora).length,null,`no início ou no fim, a mais de ${raio} m`)}${kpi("Sem localização",xs.filter(semGps).length,null,"sem GPS ou loja sem endereço")}</div>
+    ${xs.filter(fora).length?`<div class="alerta"><b>${plural(xs.filter(fora).length,"visita começou ou terminou","visitas começaram ou terminaram")} longe da loja</b> nos últimos ${DIAS} dias. A distância é a do celular do repositor até o endereço da loja.</div>`
+      :`<div class="alerta ok">Todas as visitas com localização começaram e terminaram na loja.</div>`}
+    ${barra(`<span class="mut">"Na loja" é até ${raio} m do endereço cadastrado.</span>`)}
+    ${tabela(th("vis","data","Data")+th("vis","repositor","Repositor")+th("vis","loja","Loja")+th("vis","dist_inicio_m","Início")+th("vis","dist_fim_m","Fim")+th("vis","duracao_min","Duração",1)+th("vis","lider","Líder"),
+      rs.map(x=>`<tr><td>${dataBr(x.data)}</td><td><b>${esc(curto(x.repositor))}</b></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}${x.cidade?` · ${esc(x.cidade)}`:""}</span></td>
+        <td>${esc(x.inicio||"—")} ${geoTag(x.dist_inicio_m,x.loja_tem_gps,raio)}</td><td>${x.fim?`${esc(x.fim)} ${geoTag(x.dist_fim_m,x.loja_tem_gps,raio)}`:'<span class="mut">em andamento</span>'}</td>
+        <td class="num">${x.duracao_min!=null?x.duracao_min+" min":"—"}</td><td>${esc(curto(x.lider))}</td></tr>`),
+      "Nenhuma visita nesta aba.")}`;
+}
+/* A foto de uma demanda fica no armazenamento protegido: so abre com o login. */
+async function verFoto(caminho){
+  const fundo=document.createElement("div");
+  fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.85);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px;color:#fff;cursor:pointer";
+  fundo.textContent="Abrindo a foto…"; fundo.onclick=()=>fundo.remove(); document.body.appendChild(fundo);
+  try{ const r=await fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+caminho,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
+    if(!r.ok) throw new Error("A foto ainda não subiu do celular do repositor, ou não está mais guardada.");
+    fundo.innerHTML=`<img src="${URL.createObjectURL(await r.blob())}" alt="Foto da demanda" style="max-width:100%;max-height:100%;border-radius:12px">`; }
+  catch(e){ fundo.textContent=e.message+" Clique para fechar."; }
+}
+window.verFoto=verFoto;
 
 /* --------------------------- 7. estrutura --------------------------- */
 function modArv(){
