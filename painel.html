@@ -243,7 +243,7 @@ async function carregar(){
     estq:rpc("painel_estoque",{p_dias:30}), estqSem:rpc("estoque_da_equipe",{p_dias:7}), listas:rpc("painel_listas"),
     desemp:rpc("desempenho_da_equipe",{p_dias:DIAS}), desempAntes:rpc("desempenho_da_equipe",{p_dias:DIAS,p_fim:menosDias(H,DIAS)}),
     desempHoje:rpc("desempenho_da_equipe",{p_dias:1}), dem:rpc("demandas_da_equipe",{p_dias:30}), eu:rpc("eu_sou"),
-    vis:rpc("painel_visitas",{p_dias:DIAS})};
+    vis:rpc("painel_visitas",{p_dias:DIAS}), camp:rpc("campanhas_da_equipe",{p_dias:60})};
   const ks=Object.keys(chamadas), r=await Promise.allSettled(Object.values(chamadas));
   ERROS=[]; ks.forEach((k,i)=>{ if(r[i].status==="fulfilled") D[k]=r[i].value; else ERROS.push(traduz(r[i].reason.message)); });
   if(D.eu) EU=D.eu; CARREGADO_EM=new Date();
@@ -316,7 +316,7 @@ function pintaMain(){
   $("main").innerHTML=`
     <div class="cab"><img src="${LOGO.coca}" alt="Coca-Cola Bandeirantes" style="height:44px;width:auto;flex:none"><div><h1>Painel de merchandising</h1>
       <p>Resultados dos repositores e líderes ${EU.perfil==="admin"?"de todas as equipes":"da sua equipe"}: ${esc(tit(EU.nome))}. Atualizado às ${CARREGADO_EM?CARREGADO_EM.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"}.</p></div>
-      <div class="acoes"><a class="bt" href="lideranca.html" style="text-decoration:none">App do líder</a><button class="bt" id="pAtual">Atualizar</button><button class="bt escuro" id="pNova">Nova demanda</button><button class="bt" id="pSai">Sair</button></div></div>
+      <div class="acoes"><a class="bt" href="lideranca.html" style="text-decoration:none">App do líder</a><button class="bt" id="pAtual">Atualizar</button><button class="bt" onclick="novaCampanha()">Nova campanha</button><button class="bt escuro" id="pNova">Nova demanda</button><button class="bt" id="pSai">Sair</button></div></div>
     ${ERROS.length?`<div class="alerta" style="margin:14px 26px 0">Parte dos dados não carregou: ${esc(ERROS[0])}. Toque em Atualizar.</div>`:""}
     <div class="filtros">
       <div class="tt"><span class="ic">${IC.filtro}</span><div><b>Filtros</b><span>Líder, repositor, loja e produto valem para todos os módulos.</span></div></div>
@@ -525,8 +525,11 @@ function modDesemp(){
 function modDem(){
   const d=D.dem||{}, rec=filtra(d.recebidas), env=(d.enviadas||[]).filter(x=>!BUSCA||JSON.stringify(x).toLowerCase().includes(BUSCA.toLowerCase()));
   const abertasRec=rec.filter(x=>!x.resolvida_em), venc=env.filter(x=>x.vencida);
-  const lista=[["env",`Enviadas · ${env.length}`,"da liderança para a equipe"],["rec",`Dos repositores · ${rec.length}`,`${abertasRec.length} em aberto`]];
+  const cs=D.camp||[];
+  const lista=[["camp",`Campanhas · ${cs.length}`,"a mesma tarefa em cada loja"],["env",`Enviadas · ${env.length}`,"da liderança para a equipe"],["rec",`Dos repositores · ${rec.length}`,`${abertasRec.length} em aberto`]];
   const at=abaAtual(lista);
+  if(at==="camp") return `<h2>Demandas</h2>${abas(lista)}${(()=>{ const vc=cs.reduce((a,c)=>a+c.vencidas,0);
+    return vc?`<div class="alerta"><b>${plural(vc,"loja está","lojas estão")} com prazo de campanha vencido</b> sem resposta.</div>`:`<div class="alerta ok">Nenhuma loja com prazo de campanha vencido.</div>`; })()}${corpoCampanhas()}`;
   ligarModulo=()=>{ document.querySelectorAll("[data-resp]").forEach(b=>b.onclick=async()=>{ const x=rec[+b.dataset.resp], t=$("rt"+b.dataset.resp).value.trim();
     try{ await rpc("responder_demanda",{p_id:x.id, p_resposta:t||null, p_resolver:b.dataset.res==="1"}); carregar(); }catch(e){ alert(traduz(e.message)); } }); };
   let corpo;
@@ -637,6 +640,75 @@ async function verFoto(caminho){
   catch(e){ fundo.textContent=e.message+" Clique para fechar."; }
 }
 window.verFoto=verFoto;
+
+
+/* --------------------------- campanhas --------------------------- */
+let CAMP_SEL=null;
+async function verFotos(caminhos){
+  const fundo=document.createElement("div");
+  fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.9);z-index:50;overflow:auto;padding:24px;color:#fff;text-align:center;cursor:pointer";
+  fundo.textContent=`Abrindo ${caminhos.length} ${caminhos.length===1?"foto":"fotos"}…`; fundo.onclick=()=>fundo.remove(); document.body.appendChild(fundo);
+  const imgs=[];
+  for(const c of caminhos){ try{ const r=await fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+c,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
+      imgs.push(r.ok?`<img src="${URL.createObjectURL(await r.blob())}" alt="Foto" style="max-width:min(100%,720px);border-radius:12px;margin:8px">`:`<p>Uma foto ainda não subiu do celular do repositor.</p>`); }
+    catch(e){ imgs.push(`<p>Não abriu uma das fotos.</p>`); } }
+  fundo.innerHTML=imgs.join("")+`<p>Clique para fechar</p>`;
+}
+window.verFotos=verFotos;
+function corpoCampanhas(){
+  const cs=(D.camp||[]).filter(c=>F.lideres===null||(c.lojas||[]).some(l=>(F.lideres||[]).some(n=>String(l.lider||"").includes(n))));
+  ligarModulo=()=>{ document.querySelectorAll("[data-camp]").forEach(tr=>tr.onclick=()=>{ CAMP_SEL=tr.dataset.camp; pintar(); });
+    if($("campVolta")) $("campVolta").onclick=()=>{ CAMP_SEL=null; pintar(); };
+    document.querySelectorAll("[data-cf]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c=cs.find(x=>x.campanha===CAMP_SEL); verFotos(c.lojas[+b.dataset.cf].fotos||[]); }); };
+  const c=CAMP_SEL&&cs.find(x=>x.campanha===CAMP_SEL);
+  if(c){
+    const ls=filtra((c.lojas||[]).map(l=>({...l, repositor:l.repositores})));
+    EXPORTA={nome:"campanha-"+c.titulo, cab:["Loja","Codigo","Cidade","Repositores","Lider","Situacao","Conferido","Comentario","Fotos","Respondido por","Em"],
+      linhas:ls.map(l=>[l.loja,l.codigo,l.cidade,l.repositores,l.lider,l.situacao==="feita"?"fez":l.situacao==="nao_feita"?"nao conseguiu":"sem resposta",
+        l.checklist?Object.entries(l.checklist).map(([k,v])=>`${v?"sim":"nao"}: ${k}`).join(" | "):"",l.comentario||"",(l.fotos||[]).length,l.por||"",l.em?quando(l.em):""])};
+    return `${barra(`<button class="bt" id="campVolta">← Todas as campanhas</button><b>${esc(c.titulo)}</b><span class="mut">${c.feitas} de ${c.total} lojas · ${c.pendentes} sem resposta${c.prazo?` · prazo ${dataBr(c.prazo)}`:""}</span>`)}
+      ${c.descricao?`<div class="alerta ok" style="margin-bottom:10px">${esc(c.descricao)}</div>`:""}
+      ${tabela("<th>Loja</th><th>Repositor</th><th>Situação</th><th>O que foi conferido</th><th>Fotos</th><th>Respondido</th>",
+        ls.map((l,i)=>`<tr><td><b>${esc(l.loja)}</b><span class="sub">${esc(l.codigo)}${l.cidade?` · ${esc(l.cidade)}`:""}</span></td><td>${esc(l.repositores||"—")}<span class="sub">líder ${esc(curto(l.lider))}</span></td>
+          <td><span class="tag ${l.situacao==="feita"?"t-verde":l.situacao==="nao_feita"?"t-amb":c.prazo&&c.prazo<hoje()?"t-verm":"t-cinza"}">${l.situacao==="feita"?"Fez a ativação":l.situacao==="nao_feita"?"Não conseguiu":c.prazo&&c.prazo<hoje()?"Vencida":"Sem resposta"}</span>${l.comentario?`<span class="sub">"${esc(l.comentario)}"</span>`:""}</td>
+          <td>${l.checklist?Object.entries(l.checklist).map(([k,v])=>`<div style="font-size:12.5px">${v?'<b style="color:var(--verde)">✓</b>':'<b style="color:var(--verm-esc)">✗</b>'} ${esc(k)}</div>`).join(""):'<span class="mut">—</span>'}</td>
+          <td>${(l.fotos||[]).length?`<button class="bt" data-cf="${(c.lojas||[]).indexOf((c.lojas||[]).find(x=>x.tarefa===l.tarefa))}" style="padding:4px 10px">Ver ${l.fotos.length}</button>`:'<span class="mut">—</span>'}</td>
+          <td>${l.em?`${esc(curto(l.por))}<span class="sub">${quando(l.em)}</span>`:"—"}</td></tr>`),"Nenhuma loja neste filtro.")}`;
+  }
+  EXPORTA={nome:"campanhas", cab:["Campanha","De","Criada em","Prazo","Lojas","Fizeram","Nao conseguiram","Sem resposta","Vencidas"],
+    linhas:cs.map(c=>[c.titulo,c.de,quando(c.criado_em),dataBr(c.prazo),c.total,c.feitas,c.nao_feitas,c.pendentes,c.vencidas])};
+  return `${barra(`<button class="bt escuro" onclick="novaCampanha()">Nova campanha</button><span class="mut">Clique numa campanha para ver loja por loja, com as fotos.</span>`)}
+    ${tabela("<th>Campanha</th><th>De</th><th>Prazo</th><th style='min-width:220px'>Andamento</th><th>Não conseguiram</th><th>Sem resposta</th>",
+      cs.map(c=>{ const p=Math.round(100*c.feitas/(c.total||1)); return `<tr class="clica" data-camp="${c.campanha}"><td><b>${esc(c.titulo)}</b><span class="sub">${(c.itens||[]).length?plural(c.itens.length,"item para conferir","itens para conferir"):"sem lista"} · ${c.fotos_min?plural(c.fotos_min,"foto","fotos")+" por loja":"sem foto obrigatória"}</span></td>
+        <td>${esc(curto(c.de))}<span class="sub">${quando(c.criado_em)}</span></td><td>${c.prazo?dataBr(c.prazo):"—"}${c.vencidas?` <span class="tag t-verm">${c.vencidas} vencidas</span>`:""}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;border-radius:8px;background:var(--linha);overflow:hidden"><span style="display:block;height:100%;width:${p}%;background:var(--verde)"></span></div><b>${c.feitas}/${c.total}</b></div></td>
+        <td class="num">${c.nao_feitas||"—"}</td><td class="num">${c.pendentes}</td></tr>`; }),"Nenhuma campanha nos últimos 60 dias.")}`;
+}
+function novaCampanha(){
+  const lids=(EU.lideres||[]).filter(l=>ligado(l.nome));
+  $("dlgc").innerHTML=`<h3>Nova campanha nas lojas</h3><p class="mut" style="margin:0">Vai para cada loja como uma solicitação. O repositor confere a lista, tira as fotos e diz se fez.</p>
+    <label class="campo"><span>Nome da campanha</span><input id="cTit" maxlength="120" placeholder="Ex.: Ativação Black Friday"></label>
+    <label class="campo"><span>O que fazer (opcional)</span><textarea id="cDesc" rows="2"></textarea></label>
+    <div class="campo"><span>O que conferir em cada loja</span><div id="cItens">${["Ex.: ponto extra montado","Ex.: preço da campanha aplicado","Ex.: material de PDV no lugar"].map(p=>`<input data-it style="margin-top:6px" placeholder="${p}">`).join("")}</div>
+      <button class="bt" id="cMaisIt" style="margin-top:6px">+ mais um item</button></div>
+    <div class="campo"><span>Fotos obrigatórias por loja</span><div class="seg" id="cFotos">${[0,1,2,3].map(n=>`<button data-nf="${n}" aria-pressed="${n===2}">${n===0?"Nenhuma":n}</button>`).join("")}</div></div>
+    <label class="campo"><span>Lojas</span><select id="cLider"><option value="">${EU.perfil==="admin"?"Todas as lojas":"Todas as lojas das minhas equipes"}</option>${lids.map(l=>`<option value="${l.id}">Só a equipe de ${esc(tit(l.nome))}</option>`).join("")}</select></label>
+    <label class="campo"><span>Prazo</span><input id="cPrazo" type="date" min="${hoje()}"></label>
+    <p class="mut" style="font-size:12.5px;margin:8px 0 0">Com prazo, a loja que não responder até lá trava o encerramento da visita.</p><div id="cErro"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="bt" id="cCanc">Cancelar</button><button class="bt verm" id="cOk">Mandar para as lojas</button></div>`;
+  let nf=2;
+  $("cFotos").querySelectorAll("[data-nf]").forEach(b=>b.onclick=()=>{ nf=+b.dataset.nf; $("cFotos").querySelectorAll("[data-nf]").forEach(x=>x.setAttribute("aria-pressed",x===b)); });
+  $("cMaisIt").onclick=()=>{ if($("cItens").querySelectorAll("[data-it]").length>=6) return; const i=document.createElement("input"); i.dataset.it=""; i.style.marginTop="6px"; $("cItens").appendChild(i); i.focus(); };
+  $("cCanc").onclick=fechaDlg;
+  $("cOk").onclick=async()=>{ const t=$("cTit").value.trim(); if(!t) return $("cErro").innerHTML=`<div class="erro">Escreva o nome da campanha.</div>`;
+    const itens=[...$("cItens").querySelectorAll("[data-it]")].map(i=>i.value.trim()).filter(Boolean);
+    $("cOk").disabled=true; $("cOk").textContent="Mandando…";
+    try{ const r=await rpc("criar_campanha",{p_titulo:t, p_descricao:$("cDesc").value.trim()||null, p_prazo:$("cPrazo").value||null, p_itens:itens.length?itens:null, p_fotos_min:nf, p_lider:$("cLider").value||null});
+      fechaDlg(); MOD="dem"; ABA.dem="camp"; CAMP_SEL=r.campanha; await carregar(); $("mod").insertAdjacentHTML("afterbegin",`<div class="okmsg">Campanha mandada para ${plural(r.lojas,"loja","lojas")}.</div>`); }
+    catch(e){ $("cErro").innerHTML=`<div class="erro">${esc(traduz(e.message))}</div>`; $("cOk").disabled=false; $("cOk").textContent="Mandar para as lojas"; } };
+  $("dlg").showModal ? $("dlg").showModal() : $("dlg").setAttribute("open","");
+}
+window.novaCampanha=novaCampanha;
 
 /* --------------------------- 7. estrutura --------------------------- */
 function modArv(){

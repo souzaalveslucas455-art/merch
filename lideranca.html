@@ -256,9 +256,10 @@ async function carregar(){
   if(MODO==="lider") pedidos.push(rpc("equipe_no_dia",{p_data:hoje()}));  /* tambem em "ver como lider" */
   /* as demandas do gerente para o proprio lider */
   const iParaMim = EU.perfil==="lider" ? pedidos.push(rpc("demandas_para_mim"))-1 : -1;
+  const iCamp = pedidos.push(rpc("campanhas_da_equipe",{p_dias:60}))-1;
   const r=await Promise.allSettled(pedidos);
   const v=i=>r[i]&&r[i].status==="fulfilled"?r[i].value:null;
-  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), desempenho:v(5), equipe:MODO==="lider"?v(6):null, paraMim:iParaMim>=0?v(iParaMim):null};
+  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), desempenho:v(5), equipe:MODO==="lider"?v(6):null, paraMim:iParaMim>=0?v(iParaMim):null, campanhas:v(iCamp)};
   const falhou=r.find(x=>x.status==="rejected"); if(falhou) ERRO=traduz(falhou.reason.message);
   pintar();
 }
@@ -532,6 +533,68 @@ function secDesempenhoLideres(){
       :`<div class="vazio">Nenhum dado no período.</div>`, "s-desemp-lid");
 }
 
+
+/* --------------------------- campanhas ---------------------------
+   A mesma tarefa em cada loja, com o que conferir e fotos obrigatorias. */
+async function verFotos(caminhos){
+  const fundo=document.createElement("div");
+  fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.9);z-index:50;overflow:auto;padding:16px;color:#fff;text-align:center";
+  fundo.innerHTML=`<p>Abrindo ${caminhos.length} ${caminhos.length===1?"foto":"fotos"}… toque para fechar</p>`; fundo.onclick=()=>fundo.remove(); document.body.appendChild(fundo);
+  const imgs=[];
+  for(const c of caminhos){ try{ const r=await fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+c,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
+      imgs.push(r.ok?`<img src="${URL.createObjectURL(await r.blob())}" alt="Foto" style="max-width:100%;border-radius:12px;margin:8px 0">`:`<p>Uma foto ainda não subiu do celular do repositor.</p>`); }
+    catch(e){ imgs.push(`<p>Não abriu uma das fotos.</p>`); } }
+  fundo.innerHTML=imgs.join("")+`<p>Toque para fechar</p>`;
+}
+window.verFotos=verFotos;
+function secCampanhas(){
+  const cs=(D.campanhas||[]).filter(c=>!filtroAtual()||(c.lojas||[]).some(l=>String(l.lider||"").includes(filtroAtual())));
+  const corpo=`<div style="padding:12px 16px;border-bottom:1px solid var(--linha);display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span class="mut" style="font-size:14px">A mesma tarefa em cada loja, com fotos</span>${vendoComo()?"":`<button class="bt peq" data-novacamp>Nova campanha</button>`}</div>
+    ${cs.length?cs.map((c,ci)=>{ const p=Math.round(100*c.feitas/(c.total||1));
+      return `<div class="dem"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(c.titulo)}</b>
+          <span class="selo" style="background:${c.vencidas?"var(--verm-bg)":p===100?"var(--verde-bg)":"var(--fundo)"};color:${c.vencidas?"var(--verm-esc)":p===100?"var(--verde)":"var(--ink2)"}">${c.feitas} de ${c.total} lojas</span></div>
+        <div class="tr" style="height:6px;border-radius:6px;background:var(--linha);overflow:hidden;margin:8px 0 4px"><span style="display:block;height:100%;width:${p}%;background:var(--verde)"></span></div>
+        <div class="mut" style="font-size:13px">${c.nao_feitas?`${c.nao_feitas} não conseguiram · `:""}${c.pendentes} sem resposta${c.vencidas?` · <b style="color:var(--verm-esc)">${c.vencidas} com prazo vencido</b>`:""}${c.prazo?` · prazo ${dataBr(c.prazo)}`:""} · de ${esc(nomeCurto(c.de))}</div>
+        <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--azul);font-size:14px">Ver as lojas</summary>
+          ${(c.lojas||[]).filter(l=>!filtroAtual()||String(l.lider||"").includes(filtroAtual())).map((l,li)=>`<div style="border-top:1px solid var(--linha);padding:8px 0;font-size:14px">
+            <div style="display:flex;justify-content:space-between;gap:8px"><span><b>${esc(l.loja)}</b><br><span class="mut" style="font-size:12.5px">${esc(l.repositores||"sem repositor")}</span></span>
+              <span class="selo" style="background:${l.situacao==="feita"?"var(--verde-bg)":l.situacao==="nao_feita"?"var(--amb-bg)":"var(--fundo)"};color:${l.situacao==="feita"?"var(--verde)":l.situacao==="nao_feita"?"var(--amb)":"var(--ink2)"}">${l.situacao==="feita"?"Fez":l.situacao==="nao_feita"?"Não conseguiu":"Sem resposta"}</span></div>
+            ${l.checklist?`<div style="font-size:12.5px;margin-top:4px">${Object.entries(l.checklist).map(([k,v])=>`${v?"✓":"✗"} ${esc(k)}`).join(" · ")}</div>`:""}
+            ${l.comentario?`<div class="mut" style="font-size:12.5px;margin-top:2px">"${esc(l.comentario)}"</div>`:""}
+            ${l.fotos&&l.fotos.length?`<button class="bt peq sec" style="margin-top:6px" data-fotos="${ci}:${li}">Ver ${l.fotos.length} ${l.fotos.length===1?"foto":"fotos"}</button>`:""}</div>`).join("")}</details></div>`; }).join("")
+      :`<div class="vazio">Nenhuma campanha nos últimos 60 dias.</div>`}`;
+  return secao("var(--verm)", cs.length?`${plural(cs.length,"campanha","campanhas")} nas lojas`:"Campanhas nas lojas", "", corpo, "s-camp");
+}
+function telaNovaCampanha(){
+  const lids=EU.perfil==="lider"?[]:(EU.lideres||[]);
+  $("corpo").innerHTML=`<div class="sec form" style="padding:4px 18px 18px">
+    <h2 style="padding:14px 0 6px;border:none">Nova campanha nas lojas</h2>
+    <p class="mut" style="margin:0;font-size:13.5px">Vai para cada loja como uma solicitação. O repositor confere a lista, tira as fotos e diz se fez.</p>
+    <label class="campo"><span>Nome da campanha</span><input id="cTit" maxlength="120" placeholder="Ex.: Ativação Black Friday"></label>
+    <label class="campo"><span>O que fazer (opcional)</span><textarea id="cDesc" rows="3" placeholder="Ex.: montar o ponto extra na entrada e aplicar o preço da campanha"></textarea></label>
+    <div class="campo"><span>O que conferir em cada loja</span><div id="cItens">${[0,1,2].map(i=>`<input data-it style="margin-top:6px" placeholder="${["Ex.: ponto extra montado","Ex.: preço da campanha aplicado","Ex.: material de PDV no lugar"][i]}">`).join("")}</div>
+      <button class="bt peq sec" id="cMaisIt" style="margin-top:6px">+ mais um item</button></div>
+    <div class="campo"><span>Fotos obrigatórias por loja</span><div class="periodo" id="cFotos">${[0,1,2,3].map(n=>`<button data-nf="${n}" aria-pressed="${n===2}">${n===0?"Nenhuma":n}</button>`).join("")}</div></div>
+    ${lids.length?`<label class="campo"><span>Lojas</span><select id="cLider"><option value="">Todas as lojas das minhas equipes</option>${lids.map(l=>`<option value="${l.id}">Só a equipe de ${esc(tit(l.nome))}</option>`).join("")}</select></label>`:`<p class="mut" style="font-size:13.5px">Vai para todas as lojas da sua equipe.</p>`}
+    <label class="campo"><span>Prazo</span><input id="cPrazo" type="date" min="${hoje()}"></label>
+    <p class="mut" style="font-size:13px;margin:8px 0 0">Com prazo, a loja que não responder até lá trava o encerramento da visita.</p>
+    <div id="cErro"></div>
+    <div style="display:flex;gap:10px;margin-top:14px"><button class="bt sec" id="cVolta">Cancelar</button><button class="bt" id="cManda">Mandar para as lojas</button></div></div>`;
+  let nf=2;
+  $("cFotos").querySelectorAll("[data-nf]").forEach(b=>b.onclick=()=>{ nf=+b.dataset.nf; $("cFotos").querySelectorAll("[data-nf]").forEach(x=>x.setAttribute("aria-pressed",x===b)); });
+  $("cMaisIt").onclick=()=>{ if($("cItens").querySelectorAll("[data-it]").length>=6) return; const i=document.createElement("input"); i.dataset.it=""; i.style.marginTop="6px"; $("cItens").appendChild(i); i.focus(); };
+  $("cVolta").onclick=pintar;
+  $("cManda").onclick=async()=>{ const t=$("cTit").value.trim(); if(!t) return $("cErro").innerHTML=`<div class="aviso err">Escreva o nome da campanha.</div>`;
+    const itens=[...$("cItens").querySelectorAll("[data-it]")].map(i=>i.value.trim()).filter(Boolean);
+    $("cManda").disabled=true; $("cManda").textContent="Mandando…";
+    try{ const r=await rpc("criar_campanha",{p_titulo:t, p_descricao:$("cDesc").value.trim()||null, p_prazo:$("cPrazo").value||null,
+          p_itens:itens.length?itens:null, p_fotos_min:nf, p_lider:$("cLider")?($("cLider").value||null):null});
+      ABA="dem"; guarda.por("aba",ABA); await carregar();
+      $("corpo").insertAdjacentHTML("afterbegin",`<div class="aviso ok">Campanha mandada para ${plural(r.lojas,"loja","lojas")}.</div>`); }
+    catch(e){ $("cErro").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`; $("cManda").disabled=false; $("cManda").textContent="Mandar para as lojas"; } };
+}
+
 /* --------------------------- telas --------------------------- */
 function pintar(){
   const erro=ERRO?`<div class="aviso err"><b>Parte dos dados não carregou.</b> ${esc(ERRO)} Toque em Atualizar para tentar de novo.</div>`:"";
@@ -547,7 +610,7 @@ function pintar(){
     const aba=(k,t,n)=>`<button role="tab" aria-selected="${ABA===k}" data-aba="${k}">${t}${n?`<span class="n">${n}</span>`:""}</button>`;
     $("corpo").innerHTML=erro+vista+`<div class="abas" role="tablist">${aba("equipe","Equipe hoje")}${aba("dem","Demandas",nDem)}${aba("alertas","Alertas",nAl)}${aba("desemp","Desempenho")}</div>`
       +(ABA==="equipe"?secEquipeHoje()+secCumprimento()
-       :ABA==="dem"?secParaMim()+secDemandas()
+       :ABA==="dem"?secParaMim()+secCampanhas()+secDemandas()
        :ABA==="desemp"?secDesempenho()
        :secVencimentos()+secNaoTem()+secEntregas(8)+secEstoque(8)+secMateriais()+secNaoTrabalha());
     $("corpo").querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA=b.dataset.aba; guarda.por("aba",ABA); pintar(); });
@@ -557,7 +620,7 @@ function pintar(){
         <label>Líder<select id="fLid"><option value="">Todos os líderes (${lideres.length})</option>${lideres.map(n=>`<option ${n===FILTRO_LIDER?"selected":""} value="${esc(n)}">${esc(tit(n))}</option>`).join("")}</select></label>
         <label>Período<select id="fDias">${[7,15,30].map(d=>`<option ${d===DIAS?"selected":""} value="${d}">Últimos ${d} dias</option>`).join("")}</select></label>
         <button class="bt" data-nova>Nova demanda</button></div>`
-      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCumprimento()+secDesempenhoLideres()+secEstoque(10)+secEntregas(10)
+      +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCampanhas()+secCumprimento()+secDesempenhoLideres()+secEstoque(10)+secEntregas(10)
       +`<div class="grade">${secMateriais()}${secNaoTrabalha()}</div>`;
     $("fLid").onchange=e=>{ FILTRO_LIDER=e.target.value; guarda.por("filtro",FILTRO_LIDER); pintar(); };
     $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("dias",DIAS); carregar(); };
@@ -581,6 +644,10 @@ function ligar(){
       "s-est":()=>secEstoque(),"s-ent":()=>secEntregas()}[s];
     if(ref){ b.closest(".sec").outerHTML=ref(); ligar(); } });
   $("corpo").querySelectorAll("[data-nova]").forEach(b=>b.onclick=()=>telaNovaDemanda());
+  $("corpo").querySelectorAll("[data-novacamp]").forEach(b=>b.onclick=()=>telaNovaCampanha());
+  $("corpo").querySelectorAll("[data-fotos]").forEach(b=>b.onclick=()=>{ const [ci,li]=b.dataset.fotos.split(":").map(Number);
+    const cs=(D.campanhas||[]).filter(c=>!filtroAtual()||(c.lojas||[]).some(l=>String(l.lider||"").includes(filtroAtual())));
+    const ls=(cs[ci].lojas||[]).filter(l=>!filtroAtual()||String(l.lider||"").includes(filtroAtual())); verFotos(ls[li].fotos||[]); });
   const rec=doFiltro(D.demandas&&D.demandas.recebidas);
   const responder=async(i,resolver)=>{
     const x=rec[i], t=$("r"+i).value.trim();
