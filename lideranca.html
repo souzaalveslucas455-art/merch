@@ -257,9 +257,10 @@ async function carregar(){
   /* as demandas do gerente para o proprio lider */
   const iParaMim = EU.perfil==="lider" ? pedidos.push(rpc("demandas_para_mim"))-1 : -1;
   const iCamp = pedidos.push(rpc("campanhas_da_equipe",{p_dias:60}))-1;
+  const iEquip = pedidos.push(rpc("painel_equipamentos",{p_dias:DIAS}))-1;
   const r=await Promise.allSettled(pedidos);
   const v=i=>r[i]&&r[i].status==="fulfilled"?r[i].value:null;
-  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), desempenho:v(5), equipe:MODO==="lider"?v(6):null, paraMim:iParaMim>=0?v(iParaMim):null, campanhas:v(iCamp)};
+  D={alertas:v(0), demandas:v(1), cumprimento:v(2), estoque:v(3), entregas:v(4), desempenho:v(5), equipe:MODO==="lider"?v(6):null, paraMim:iParaMim>=0?v(iParaMim):null, campanhas:v(iCamp), equip:v(iEquip)};
   const falhou=r.find(x=>x.status==="rejected"); if(falhou) ERRO=traduz(falhou.reason.message);
   pintar();
 }
@@ -429,6 +430,23 @@ function secEntregas(max){
     + (sem.length?`<div style="padding:12px 16px;border-top:1px solid var(--linha)"><b style="color:var(--verm-esc)">${plural(sem.length,"entrega prevista sem conferência","entregas previstas sem conferência")}</b>
         <div class="mut" style="font-size:14px;margin-top:4px">${sem.slice(0,max||sem.length).map(x=>`${esc(x.loja)} <span style="color:var(--ink3)">(pedido ${esc(x.nr_pedido)}, ${dataBr(x.previsao)}${x.repositor?`, ${esc(nomeCurto(x.repositor))}`:""})</span>`).join(" · ")}${max&&sem.length>max?` · e mais ${sem.length-max}`:""}</div></div>`:"");
   return secao("var(--amb)", titulo, `nos últimos ${DIAS} dias`, corpo, "s-ent");
+}
+/* As geladeiras da equipe: as que pedem atencao, com as fotos. */
+function secGeladeiras(){
+  const xs=doFiltro((D.equip&&D.equip.equipamentos)||[]);
+  const MARCA={"Total Ko":"Coca-Cola","Total Monster":"Monster","Total Hnk":"Heineken"};
+  const sumiu=xs.filter(x=>x.encontrado===false), ptm=xs.filter(x=>x.ptm_status==="diferente"), prob=xs.filter(x=>x.encontrado!==false&&x.problemas>0);
+  const semana=xs.filter(x=>!x.conferido_semana).length;
+  const lst=[...sumiu,...ptm.filter(x=>!sumiu.includes(x)),...prob.filter(x=>!sumiu.includes(x)&&!ptm.includes(x))];
+  const titulo=lst.length?`${plural(lst.length,"geladeira pede","geladeiras pedem")} atenção`:"Nenhuma geladeira com problema";
+  const sub=`${xs.length-semana} de ${xs.length} conferidas nesta semana`;
+  return secao("var(--roxo)", titulo, sub, lista(lst, x=>{ const fs=[x.foto_equip,x.foto_ptm].filter(Boolean), falhas=Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>k);
+    const st=x.encontrado===false?["Não encontrada","var(--verm-bg)","var(--verm-esc)"]:x.ptm_status==="diferente"?["PTM diferente","var(--verm-bg)","var(--verm-esc)"]:[`${falhas.length} ${falhas.length===1?"problema":"problemas"}`,"var(--amb-bg)","var(--amb)"];
+    return `<div class="lin"><div><b>${esc(x.modelo)}</b><div class="mut" style="font-size:14px">${esc(x.loja)} · ${esc(MARCA[x.marca]||x.marca||"")} · contrato ${esc(x.contrato)}</div></div>
+      <span class="selo" style="background:${st[1]};color:${st[2]}">${st[0]}</span>
+      <div class="det">${x.encontrado===false?esc(x.observacao||"sem motivo"):x.ptm_status==="diferente"?`registrado ${esc(x.ptm)}, lido ${esc(x.ptm_lido)}`:falhas.map(esc).join(" · ")} · ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}
+        ${fs.length?` · <a href="#" data-gfl="${esc(fs.join("|"))}">ver ${fs.length===1?"a foto":"as fotos"}</a>`:""}</div></div>`; },
+    xs.length?"Todas as geladeiras conferidas estão na loja e dentro do padrão.":"Nenhuma geladeira em comodato nas lojas da equipe.", 8), "s-gel");
 }
 function secMateriais(){
   const ms=doFiltro(D.alertas&&D.alertas.materiais);
@@ -612,7 +630,7 @@ function pintar(){
       +(ABA==="equipe"?secEquipeHoje()+secCumprimento()
        :ABA==="dem"?secParaMim()+secCampanhas()+secDemandas()
        :ABA==="desemp"?secDesempenho()
-       :secVencimentos()+secNaoTem()+secEntregas(8)+secEstoque(8)+secMateriais()+secNaoTrabalha());
+       :secVencimentos()+secNaoTem()+secEntregas(8)+secEstoque(8)+secGeladeiras()+secNaoTrabalha());
     $("corpo").querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA=b.dataset.aba; guarda.por("aba",ABA); pintar(); });
   } else {
     const lideres=(EU.lideres||[]).map(l=>l.nome);
@@ -621,7 +639,7 @@ function pintar(){
         <label>Período<select id="fDias">${[7,15,30].map(d=>`<option ${d===DIAS?"selected":""} value="${d}">Últimos ${d} dias</option>`).join("")}</select></label>
         <button class="bt" data-nova>Nova demanda</button></div>`
       +secVencimentos(10)+secNaoTem(10)+secDemandas(6)+secCampanhas()+secCumprimento()+secDesempenhoLideres()+secEstoque(10)+secEntregas(10)
-      +`<div class="grade">${secMateriais()}${secNaoTrabalha()}</div>`;
+      +`<div class="grade">${secGeladeiras()}${secNaoTrabalha()}</div>`;
     $("fLid").onchange=e=>{ FILTRO_LIDER=e.target.value; guarda.por("filtro",FILTRO_LIDER); pintar(); };
     $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("dias",DIAS); carregar(); };
   }
@@ -640,11 +658,12 @@ function ligar(){
   $("corpo").querySelectorAll("[data-pmn]").forEach(b=>b.onclick=()=>respondePm(+b.dataset.pmn,"nao_feita"));
   $("corpo").querySelectorAll("[data-dias]").forEach(b=>b.onclick=()=>{ DIAS=Number(b.dataset.dias); guarda.por("dias",DIAS); carregar(); });
   $("corpo").querySelectorAll("[data-mais]").forEach(b=>b.onclick=()=>{ const s=b.closest(".sec").id;
-    const ref={"s-venc":()=>secVencimentos(),"s-naotem":()=>secNaoTem(),"s-dem":()=>secDemandas(),"s-mat":()=>secMateriais(),"s-ntrab":()=>secNaoTrabalha(),
+    const ref={"s-venc":()=>secVencimentos(),"s-naotem":()=>secNaoTem(),"s-dem":()=>secDemandas(),"s-mat":()=>secMateriais(),"s-gel":()=>secGeladeiras(),"s-ntrab":()=>secNaoTrabalha(),
       "s-est":()=>secEstoque(),"s-ent":()=>secEntregas()}[s];
     if(ref){ b.closest(".sec").outerHTML=ref(); ligar(); } });
   $("corpo").querySelectorAll("[data-nova]").forEach(b=>b.onclick=()=>telaNovaDemanda());
   $("corpo").querySelectorAll("[data-novacamp]").forEach(b=>b.onclick=()=>telaNovaCampanha());
+  $("corpo").querySelectorAll("[data-gfl]").forEach(a=>a.onclick=ev=>{ ev.preventDefault(); verFotos(a.dataset.gfl.split("|")); });
   $("corpo").querySelectorAll("[data-fotos]").forEach(b=>b.onclick=()=>{ const [ci,li]=b.dataset.fotos.split(":").map(Number);
     const cs=(D.campanhas||[]).filter(c=>!filtroAtual()||(c.lojas||[]).some(l=>String(l.lider||"").includes(filtroAtual())));
     const ls=(cs[ci].lojas||[]).filter(l=>!filtroAtual()||String(l.lider||"").includes(filtroAtual())); verFotos(ls[li].fotos||[]); });

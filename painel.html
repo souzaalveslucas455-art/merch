@@ -243,7 +243,7 @@ async function carregar(){
     estq:rpc("painel_estoque",{p_dias:30}), estqSem:rpc("estoque_da_equipe",{p_dias:7}), listas:rpc("painel_listas"),
     desemp:rpc("desempenho_da_equipe",{p_dias:DIAS}), desempAntes:rpc("desempenho_da_equipe",{p_dias:DIAS,p_fim:menosDias(H,DIAS)}),
     desempHoje:rpc("desempenho_da_equipe",{p_dias:1}), dem:rpc("demandas_da_equipe",{p_dias:30}), eu:rpc("eu_sou"),
-    vis:rpc("painel_visitas",{p_dias:DIAS}), camp:rpc("campanhas_da_equipe",{p_dias:60})};
+    vis:rpc("painel_visitas",{p_dias:DIAS}), camp:rpc("campanhas_da_equipe",{p_dias:60}), equip:rpc("painel_equipamentos",{p_dias:DIAS})};
   const ks=Object.keys(chamadas), r=await Promise.allSettled(Object.values(chamadas));
   ERROS=[]; ks.forEach((k,i)=>{ if(r[i].status==="fulfilled") D[k]=r[i].value; else ERROS.push(traduz(r[i].reason.message)); });
   if(D.eu) EU=D.eu; CARREGADO_EM=new Date();
@@ -282,10 +282,11 @@ const IC={
   estq:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>',
   desemp:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>',
   dem:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  equip:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M5 10h14M9 6v2M9 13v3"/></svg>',
   vis:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   arv:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-3h14v3"/></svg>',
   filtro:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"/></svg>'};
-const MODULOS=[["oport","Oportunidade de Estoque"],["venc","Controle de Vencimentos"],["entr","Validade na Entrega"],["estq","Contagem de Estoque"],
+const MODULOS=[["oport","Oportunidade de Estoque"],["venc","Controle de Vencimentos"],["equip","Geladeiras"],["entr","Validade na Entrega"],["estq","Contagem de Estoque"],
                ["vis","Visitas e localização"],["desemp","Desempenho da equipe"],["dem","Demandas"],["arv","Estrutura da equipe"]];
 
 function pintar(){ pintaLado(); pintaMain(); }
@@ -293,7 +294,8 @@ function pintaLado(){
   const t=somaDesemp(filtra((D.desempHoje||{}).repositores));
   const venc=filtra((D.venc||{}).lotes).filter(x=>x.dias<0).length, nt=filtra(D.oport).filter(x=>x.ruptura).length;
   const abertas=filtra((D.dem||{}).recebidas).filter(x=>!x.resolvida_em).length+((D.dem||{}).enviadas||[]).filter(x=>x.vencida).length;
-  const badge={venc, oport:nt, dem:abertas};
+  const gelSumiu=filtra(((D.equip||{}).equipamentos)||[]).filter(x=>x.encontrado===false).length;
+  const badge={venc, oport:nt, dem:abertas, equip:gelSumiu};
   const d=new Date(), dia=d.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
   $("lado").innerHTML=`<div class="marca" style="flex-direction:column;align-items:flex-start;gap:8px"><img src="${LOGO.comercial}" alt="Comercial Bandeirantes" style="width:100%;max-width:196px;height:auto;display:block"><small>Painel de merchandising</small></div>
     <nav>${MODULOS.map(([k,n])=>`<button data-mod="${k}" ${MOD===k?'aria-current="page"':""}>${IC[k]}<span>${n}</span>${badge[k]?`<span class="n">${badge[k]}</span>`:""}</button>`).join("")}</nav>
@@ -305,6 +307,7 @@ function pintaLado(){
       <div class="it"><span><i style="background:#FFD1DA"></i>Lotes vencidos</span><b>${venc}</b></div>
       <div class="it"><span><i style="background:#FFB4C2"></i>Não tem</span><b>${nt}</b></div>
       <div class="it"><span><i style="background:#F6E05E"></i>Demandas em aberto</span><b>${abertas}</b></div>
+      <div class="it"><span><i style="background:#FFC9A8"></i>Geladeiras não encontradas</span><b>${gelSumiu}</b></div>
       <div class="it"><span><i style="background:#FFE8A3"></i>Começaram fora da loja</span><b>${filtra((D.vis||{}).visitas).filter(x=>x.data===hoje()&&x.dist_inicio_m>((D.vis||{}).raio||300)).length}</b></div>
       <div class="mini"><div><b>${(EU.lideres||[]).filter(l=>ligado(l.nome)).length}</b><span>líderes</span></div><div><b>${filtra(EU.repositores).length}</b><span>repositores</span></div><div><b>${((D.listas||{}).lojas||[]).length}</b><span>lojas</span></div></div></div>`;
   $("lado").querySelectorAll("[data-mod]").forEach(b=>b.onclick=()=>{ MOD=b.dataset.mod; guarda.por("p_mod",MOD); BUSCA=""; pintar(); });
@@ -329,7 +332,7 @@ function pintaMain(){
         <label><div class="rot" style="margin-top:0">PERÍODO</div><select id="fDias">${[7,15,30].map(n=>`<option ${n===DIAS?"selected":""} value="${n}">Últimos ${n} dias</option>`).join("")}</select></label>
         <button class="bt" id="fLimpa">Limpar</button></div>
     </div>
-    <section class="mod" id="mod">${({oport:modOport,venc:modVenc,entr:modEntr,estq:modEstq,vis:modVis,desemp:modDesemp,dem:modDem,arv:modArv}[MOD]||modVenc)()}</section>`;
+    <section class="mod" id="mod">${({oport:modOport,venc:modVenc,equip:modEquip,entr:modEntr,estq:modEstq,vis:modVis,desemp:modDesemp,dem:modDem,arv:modArv}[MOD]||modVenc)()}</section>`;
   ligar();
 }
 function ligar(){
@@ -709,6 +712,64 @@ function novaCampanha(){
   $("dlg").showModal ? $("dlg").showModal() : $("dlg").setAttribute("open","");
 }
 window.novaCampanha=novaCampanha;
+
+
+/* --------------------------- geladeiras (comodato) --------------------------- */
+const MARCA_EQ={"Total Ko":"Coca-Cola","Total Monster":"Monster","Total Hnk":"Heineken"};
+function situacaoGel(x){
+  if(!x.data) return {k:"sem", t:"Sem conferência", cls:"t-cinza"};
+  if(x.encontrado===false) return {k:"sumiu", t:"Não encontrada", cls:"t-verm"};
+  if(x.ptm_status==="diferente") return {k:"ptm", t:"PTM diferente", cls:"t-verm"};
+  if(x.problemas>0) return {k:"prob", t:`${x.problemas} ${x.problemas===1?"problema":"problemas"}`, cls:"t-amb"};
+  return {k:"ok", t:"Conforme", cls:"t-verde"};
+}
+function modEquip(){
+  const d=D.equip||{}, xs=filtra((d.equipamentos||[]).map(x=>({...x, nome:x.repositor}))), ex=filtra(d.extras||[]);
+  const sem=xs.filter(x=>!x.conferido_semana), sit=x=>situacaoGel(x).k;
+  const grupos=[["sumiu","Não encontradas","possível perda",x=>x.encontrado===false],["prob","Fora do padrão","requisito com Não",x=>x.encontrado!==false&&x.problemas>0],
+    ["ptm","PTM diferente","outro equipamento?",x=>x.ptm_status==="diferente"],["semana","Sem conferência","nesta semana",x=>!x.conferido_semana],
+    ["ok","Conformes","tudo Sim",x=>sit(x)==="ok"],["todas","Todas","na base",x=>true]];
+  const lista=[...grupos.map(([k,t,s,f])=>[k,`${t} · ${xs.filter(f).length}`,s]),["extra",`Fora da base · ${ex.length}`,"achadas na loja"]];
+  const at=abaAtual(lista);
+  const kpi=(n,v,c,sub)=>`<div class="kpi"><span>${n}</span><b style="color:${c||"var(--ink)"}">${v}</b><small>${sub}</small></div>`;
+  const pSem=pct(xs.length-sem.length,xs.length);
+  const cab=`<div class="kpis">${kpi("Conferidas nesta semana",pSem!=null?pSem+"%":"—",cor(pSem),`${xs.length-sem.length} de ${xs.length} geladeiras`)}
+    ${kpi("Não encontradas",xs.filter(x=>x.encontrado===false).length,xs.some(x=>x.encontrado===false)?"var(--verm)":null,"na última conferência")}
+    ${kpi("Fora do padrão",xs.filter(x=>x.encontrado!==false&&x.problemas>0).length,null,"algum requisito com Não")}
+    ${kpi("PTM diferente",xs.filter(x=>x.ptm_status==="diferente").length,null,"do registrado na primeira vez")}</div>`;
+  const fotos=x=>[x.foto_equip,x.foto_ptm].filter(Boolean);
+  if(at==="extra"){
+    EXPORTA={nome:"geladeiras-fora-da-base", cab:["Loja","Codigo","Data","Descricao","Marca","PTM","Repositor","Observacao"],
+      linhas:ex.map(x=>[x.loja,x.codigo,dataBr(x.data),(x.extra||{}).modelo,MARCA_EQ[(x.extra||{}).marca]||(x.extra||{}).marca,x.ptm,x.repositor,x.observacao])};
+    return `<h2>Geladeiras</h2>${abas(lista)}${cab}
+      <div class="alerta ${ex.length?"":"ok"}">${ex.length?`<b>${plural(ex.length,"geladeira foi achada","geladeiras foram achadas")} na loja sem estar na base de comodato</b> nos últimos ${DIAS} dias.`:"Nenhuma geladeira fora da base nos últimos "+DIAS+" dias."}</div>
+      ${barra()}${tabela("<th>Loja</th><th>Geladeira</th><th>PTM</th><th>Fotos</th><th>Registrada</th><th>Observação</th>",
+        ex.map((x,i)=>`<tr><td><b>${esc(x.loja)}</b><span class="sub">${esc(x.codigo)}</span></td><td>${esc((x.extra||{}).modelo||"—")}<span class="sub">${esc(MARCA_EQ[(x.extra||{}).marca]||(x.extra||{}).marca||"")}</span></td>
+          <td>${esc(x.ptm||"—")}</td><td>${x.foto_equip?`<button class="bt" data-gfx="${i}" style="padding:4px 10px">Ver</button>`:"—"}</td><td>${dataBr(x.data)}<span class="sub">${esc(curto(x.repositor))}</span></td><td>${esc(x.observacao||"")}</td></tr>`),"Nenhuma.")}`;
+  }
+  const g=grupos.find(x=>x[0]===at), rs=ordena(xs.filter(g[3]),"equip",{campo:"loja",dir:1});
+  ligarModulo=()=>{ document.querySelectorAll("[data-gf]").forEach(b=>b.onclick=()=>verFotos(fotos(rs[+b.dataset.gf])));
+    document.querySelectorAll("[data-gfx]").forEach(b=>b.onclick=()=>verFotos([ex[+b.dataset.gfx].foto_equip].filter(Boolean))); };
+  EXPORTA={nome:"geladeiras-"+at, cab:["Loja","Codigo","Cidade","Modelo","Marca","Portas","Contrato","Unidade","Situacao","Requisitos com problema","PTM registrado","PTM lido","Conferida em","Repositor","Lider","Situacao comercial","Acao sugerida"],
+    linhas:rs.map(x=>[x.loja,x.codigo,x.cidade,x.modelo,MARCA_EQ[x.marca]||x.marca,x.portas,x.contrato,x.item,situacaoGel(x).t,
+      Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>k).join(" | "),x.ptm,x.ptm_lido,dataBr(x.data),x.repositor,x.lider,x.situacao,x.acao_sugerida])};
+  const sumiu=xs.filter(x=>x.encontrado===false);
+  return `<h2>Geladeiras</h2>${abas(lista)}${cab}
+    ${sumiu.length?`<div class="alerta"><b>${plural(sumiu.length,"geladeira não foi encontrada","geladeiras não foram encontradas")} na loja</b>: ${sumiu.slice(0,4).map(x=>`${esc(x.modelo)} em ${esc(x.loja)}`).join("; ")}${sumiu.length>4?` e mais ${sumiu.length-4}`:""}.</div>`
+      :`<div class="alerta ok">Nenhuma geladeira dada como não encontrada.${sem.length?` ${plural(sem.length,"está","estão")} sem conferência nesta semana.`:""}</div>`}
+    ${barra(`<span class="mut">Semana desde ${dataBr(d.semana_desde)}. A base de comodato entra pela página de vendas do dia.</span>`)}
+    ${tabela(th("equip","loja","Loja")+th("equip","modelo","Geladeira")+"<th>Situação</th><th>Requisitos com Não</th>"+th("equip","ptm","PTM")+"<th>Fotos</th>"+th("equip","data","Conferida")+th("equip","acao_sugerida","Comercial")+th("equip","lider","Líder"),
+      rs.map((x,i)=>{ const st=situacaoGel(x), fs=fotos(x), falhas=Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>k);
+        return `<tr><td><b>${esc(x.loja)}</b><span class="sub">${esc(x.codigo)}${x.cidade?` · ${esc(x.cidade)}`:""}</span></td>
+          <td>${esc(x.modelo)}${x.item>1?` · un. ${x.item}`:""}<span class="sub">${esc(MARCA_EQ[x.marca]||x.marca||"")}${x.portas?` · ${esc(x.portas)} portas`:""} · contrato ${esc(x.contrato)}</span></td>
+          <td><span class="tag ${st.cls}">${st.t}</span>${x.encontrado===false&&x.observacao?`<span class="sub">${esc(x.observacao)}</span>`:""}</td>
+          <td>${falhas.length?falhas.map(f=>`<div style="font-size:12.5px"><b style="color:var(--verm-esc)">✗</b> ${esc(f)}</div>`).join(""):'<span class="mut">—</span>'}</td>
+          <td>${x.ptm?esc(x.ptm):'<span class="mut">sem registro</span>'}${x.ptm_status==="diferente"?`<span class="sub" style="color:var(--verm-esc)">lido ${esc(x.ptm_lido)}</span>`:""}</td>
+          <td>${fs.length?`<button class="bt" data-gf="${i}" style="padding:4px 10px">Ver ${fs.length}</button>`:'<span class="mut">—</span>'}</td>
+          <td>${x.data?`${dataBr(x.data)}<span class="sub">${esc(curto(x.repositor))}</span>`:'<span class="mut">nunca</span>'}</td>
+          <td>${/renegociar|recolher|acompanhar/i.test(x.acao_sugerida||"")?`<span class="tag t-verm">${esc(x.acao_sugerida)}</span>`:`<span class="mut">${esc(x.situacao||"—")}</span>`}</td>
+          <td>${esc(curto(x.lider))}</td></tr>`; }),"Nenhuma geladeira nesta aba.")}`;
+}
 
 /* --------------------------- 7. estrutura --------------------------- */
 function modArv(){

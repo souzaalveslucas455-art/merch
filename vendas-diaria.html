@@ -94,6 +94,8 @@ const $ = id => document.getElementById(id);
 /* Duas bases possiveis. A de movimento vem primeiro na checagem, porque ela
    tambem tem Calendar Month. */
 const TIPOS = [
+  {k:"comodato", exige:["COD. CLIENTE","COD. CONTRATO","DESCRICAO EQUIPAMENTO"],
+   tabela:"stg_comodato", arquivo:"comodato.csv", sql:"select carregar_vendas_do_dia();", nome:"comodato"},
   {k:"movimento", exige:["COD. CLIENTE","COD. PRODUTO","NR. PEDIDO","ORIGEM","DATA EMISSAO"],
    tabela:"stg_movimento", arquivo:"movimento.csv", sql:"select carregar_vendas_do_dia();",
    nome:"movimento de venda"},
@@ -187,6 +189,9 @@ function agregar(linhas){
 }
 
 const COLS = {
+  comodato:  ["codigo_cliente","contrato","descricao","agrupador","classe","portas","mes_instalacao","data_contrato","status",
+              "giro_status","ultima_compra","situacao_4m","acao_sugerida","meta","instalados","vol_m2","vol_m1","vol_mes","media_3m",
+              "gerencia","supervisao"],
   /* Os nomes batem com as colunas das caixas de entrada no banco. */
   vendas:    ["codigo_cliente","codigo_produto","mes","caixas","faturado","descricao"],
   movimento: ["codigo_cliente","nr_pedido","codigo_produto","descricao","data_emissao","hora_pedido","hora_expedicao",
@@ -202,6 +207,46 @@ const reais = v => "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionD
 const inteiro = v => Math.round(Number(v||0)).toLocaleString("pt-BR");
 const mesTxt = m => m.slice(4)+"/"+m.slice(0,4);
 
+
+/* --------------------------- base de comodato ---------------------------
+   Os equipamentos da Bandeirantes em cada loja. Vai para a stg_comodato, e o
+   mesmo comando da carga do dia atualiza os equipamentos. */
+function linhasComodato(L){
+  const out=[];
+  for(const r of L){
+    const cli=codigo(r["COD. CLIENTE"]), con=codigo(r["COD. CONTRATO"]), desc=txt(r["DESCRICAO EQUIPAMENTO"]);
+    if(!cli||!con||!desc) continue;
+    const mes=r["CALENDAR MONTH"]!=null?String(r["CALENDAR MONTH"]).slice(0,6):null;
+    out.push({codigo_cliente:cli, contrato:con, descricao:desc, agrupador:txt(r["AGRUPADOR EQUIPAMENTO"]), classe:txt(r["CLASSE MATERIAL"]),
+      portas:txt(r["NUMERO DE PORTAS"]), mes_instalacao:mes, data_contrato:dataIso(r["DATA FIM CONTRATO"]), status:txt(r["STATUS COMODATO"]),
+      giro_status:null, ultima_compra:dataIso(r["DATA ULTIMA COMPRA"]), situacao_4m:txt(r["SITUACAO ULT. 4 MESES"]), acao_sugerida:txt(r["ACAO SUGERIDA"]),
+      meta:num(r["META EQUIPAMENTO"]), instalados:num(r["INSTALADOS"])||1, vol_m2:num(r["VOL CXF M-2"]), vol_m1:num(r["VOL CXF M-1"]),
+      vol_mes:num(r["VOL CXF MES ATUAL"]), media_3m:num(r["MEDIA 3M CXF"]), gerencia:txt(r["GERENCIA COMERCIAL ATUAL"]), supervisao:txt(r["SUPERVISAO ATUAL"])});
+  }
+  return out;
+}
+function processarComodato(L, f){
+  const v=linhasComodato(L);
+  if(!v.length) return $("saida").innerHTML=`<div class="aviso err">A planilha de comodato não tem nenhum equipamento válido.</div>`;
+  const unid=v.reduce((a,x)=>a+(x.instalados||1),0), lojas=new Set(v.map(x=>x.codigo_cliente)).size;
+  const por=campo=>{ const m=new Map(); v.forEach(x=>m.set(x[campo]||"—",(m.get(x[campo]||"—")||0)+(x.instalados||1))); return [...m.entries()].sort((a,b)=>b[1]-a[1]); };
+  const nomeMarca=m=>({"Total Ko":"Coca-Cola","Total Monster":"Monster","Total Hnk":"Heineken"}[m]||m);
+  const acoes=por("acao_sugerida").filter(([a])=>/renegociar|recolher|acompanhar/i.test(a));
+  $("saida").innerHTML=`<div class="cartao"><b>${escHtml(f.name)}</b> · base de comodato
+      <p style="margin:8px 0 0"><b>${inteiro(unid)} equipamentos</b> em <b>${inteiro(lojas)} lojas</b> · ${por("agrupador").map(([m,n])=>`${escHtml(nomeMarca(m))} ${inteiro(n)}`).join(" · ")}</p>
+      ${acoes.length?`<p class="mut" style="margin:6px 0 0">Ação sugerida: ${acoes.map(([a,n])=>`${escHtml(a)} ${inteiro(n)}`).join(" · ")}</p>`:""}
+      <div class="aviso ok"><b>Pode subir.</b> Os equipamentos das lojas desta planilha vão ser atualizados. O que sair da base fica como retirado; as conferências dos repositores continuam guardadas.</div>
+      <div id="envio"></div></div>
+    <details class="cartao"><summary><b>Caminho reserva: pelo CSV</b></summary>
+      <button class="bt" id="baixar" style="background:#fff;color:#1A1D21;border:1px solid #E5E7EB">Baixar comodato.csv</button>
+      <p class="mut" style="margin:10px 0 0">Suba o CSV na stg_comodato pelo Table Editor e rode no SQL Editor:</p>
+      <div class="sql"><code>select carregar_vendas_do_dia();</code></div></details>`;
+  $("baixar").onclick=()=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+csv(v,"comodato")],{type:"text/csv;charset=utf-8"})); a.download="comodato.csv"; a.click(); };
+  envioCartao($("envio"), {stg_comodato:v.map(o=>{ const x={}; COLS.comodato.forEach(c=>x[c]=o[c]); return x; })}, "diaria",
+    ["stg_comodato","stg_movimento","stg_venda_mensal"], r=>{ const c=(r&&r.comodato)||{};
+      return `<b>Equipamentos atualizados.</b> ${inteiro(c.equipamentos||0)} equipamentos em ${inteiro(c.lojas||0)} lojas${c.retirados?` · ${inteiro(c.retirados)} saíram da base`:""}${c.linhas_sem_loja?` · ${inteiro(c.linhas_sem_loja)} linhas de loja fora do cadastro`:""}.`; });
+}
+
 async function processar(f){
   $("saida").innerHTML = `<div class="cartao mut">Lendo ${escHtml(f.name)}…</div>`;
   let linhas = null;
@@ -216,6 +261,7 @@ async function processar(f){
     Procurei as colunas de cliente, produto e pedido e não achei. Confira se é o relatório de movimento de venda ou o de produtos e vendas.</div>`;
 
   const tipo = linhas.tipo;
+  if (tipo.k==="comodato") return processarComodato(linhas, f);
   const v = tipo.k==="movimento" ? agregarMovimento(linhas) : agregar(linhas);
   if (!v.length) return $("saida").innerHTML = `<div class="aviso err">A planilha não tem nenhuma linha de venda válida.</div>`;
   const meses = [...new Set(v.map(x=>x.mes))].sort();
