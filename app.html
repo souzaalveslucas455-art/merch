@@ -2373,9 +2373,14 @@ async function buscarEquipamentos(data){
   if(!navigator.onLine) return;
   try{ const r=await api("/rest/v1/rpc/meus_equipamentos",{method:"POST",body:JSON.stringify({p_data:data})});
     if(data!==DATA) return; EQUIP=r||{lojas:{}}; CARREGADO.equip=data; guarda.porJ("equip:"+data,EQUIP); delete ERRO_BUSCA.equip;
-    if(TELA==="loja") telaLoja(); }
-  catch(e){ ERRO_BUSCA.equip=e.message; }
+    if(TELA==="loja") telaLoja();
+    else if(TELA==="mod"&&$("topo")&&$("topo").textContent.includes("Materiais e Geladeiras")) telaEquipamentos(); }
+  catch(e){ ERRO_BUSCA.equip=e.message;
+    if(TELA==="mod"&&$("topo")&&$("topo").textContent.includes("Materiais e Geladeiras")) telaEquipamentos(); }
 }
+/* Lista vazia: busca de novo uma vez por sessao, para nao ficar preso a uma
+   copia guardada antes da base de comodato ser carregada no dia. */
+let EQ_REBUSCOU=false;
 LISTAS.equip=()=>EQUIP&&EQUIP.lojas;
 const equipDe=l=>(EQUIP&&EQUIP.lojas&&EQUIP.lojas[l.id])||[];
 const confDaSemana=e=>EQ_CONF[e.id]||(e.na_semana?e.ultima:null);
@@ -2390,8 +2395,13 @@ function telaEquipamentos(){ if(!chegou("equip")) return telaEsperando("equip","
   topo("Materiais e Geladeiras", ()=>telaLoja(), "");
   const es=equipDe(LOJA), feitas=es.filter(e=>confDaSemana(e)).length;
   const acaoForte=a=>/renegociar|recolher|acompanhar/i.test(a||"");
+  if(!es.length&&!EQ_REBUSCOU&&navigator.onLine){ EQ_REBUSCOU=true; buscarEquipamentos(DATA); }
+  const nLojasEq=Object.keys((EQUIP&&EQUIP.lojas)||{}).length;
   $("corpo").innerHTML=`
+    ${ERRO_BUSCA.equip?`<div class="aviso amb"><b>Não consegui atualizar as geladeiras.</b> Esta lista pode estar desatualizada.<br>${esc(traduz(ERRO_BUSCA.equip))}
+      <button class="bt sec" id="eqTenta" style="margin-top:8px">Tentar de novo</button></div>`:""}
     <div class="aviso inf">Uma vez por semana, confira cada geladeira: se está na loja, a foto de como está, o PTM e os requisitos da marca.</div>
+    ${!es.length?`<div class="mut" style="font-size:12.5px;margin:0 2px 8px">Loja ${esc(LOJA.codigo||LOJA.id)} · a base de comodato trouxe geladeiras para ${nLojasEq} ${nLojasEq===1?"loja":"lojas"} da sua rota${nLojasEq?", mas não para esta":""}. Se a loja tem geladeira, avise o supervisor.</div>`:""}
     <div class="cartao" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
       <b>${es.length?`${feitas} de ${es.length} conferidas nesta semana`:"Nenhuma geladeira em comodato nesta loja"}</b>
       <span class="mut" style="font-size:13px">${es.length?(es.length-feitas?`faltam ${es.length-feitas}`:"todas conferidas"):"pela base de comodato"}</span></div>
@@ -2407,6 +2417,7 @@ function telaEquipamentos(){ if(!chegou("equip")) return telaEsperando("equip","
     <button class="bt sec" id="eqExtra" style="margin-top:12px">+ Geladeira que não está na lista</button>`;
   $("corpo").querySelectorAll("[data-eq]").forEach(b=>b.onclick=()=>{ if(!exigeVisita()) return; telaConferirEquip(es[+b.dataset.eq]); });
   $("eqExtra").onclick=()=>{ if(!exigeVisita()) return; telaConferirEquip(null); };
+  if($("eqTenta")) $("eqTenta").onclick=()=>{ delete ERRO_BUSCA.equip; $("eqTenta").textContent="Buscando…"; buscarEquipamentos(DATA); };
   rodape(botaoConcluir("pdv"));
   ligaConcluir(()=>{ if(!es.length) return {ok:true, resultado:"nada_a_registrar"};
     const falta=es.filter(e=>!confDaSemana(e)).length;
