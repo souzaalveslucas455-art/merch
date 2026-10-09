@@ -271,7 +271,7 @@ const filtroAtual=()=>MODO==="lider"?(vendoComo()?COMO:""):FILTRO_LIDER;
 const doFiltro=lista=>!filtroAtual()?(lista||[]):(lista||[]).filter(x=>x.lider===filtroAtual());
 
 /* Onde o repositor estava ao comecar e ao encerrar a visita. */
-const RAIO=300;
+const RAIO=100;   /* cerca digital: o mesmo raio_visita_m do banco */
 const distTxt=m=>m<1000?`${m} m`:`${(m/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})} km`;
 function geoChip(m, temGpsLoja, rotulo){
   if(m==null) return `<span class="selo" style="background:var(--fundo);color:var(--ink3);font-size:11.5px">${rotulo}: ${temGpsLoja===false?"loja sem endereço":"sem GPS"}</span>`;
@@ -470,16 +470,18 @@ function secNaoTrabalha(){
 
 function secEquipeHoje(){
   const eq=doFiltro(D.equipe);
-  const fazendo=eq.filter(r=>(r.lojas||[]).some(l=>l.inicio)).length;
+  const fazendo=eq.filter(r=>(r.lojas||[]).some(l=>l.inicio||l.situacao==="nao_atendida")).length;
   const titulo=eq.length?`${fazendo} de ${plural(eq.length,"repositor","repositores")} já começaram o dia`:"Nenhum repositor na equipe";
   return secao("var(--ink)", titulo, "", eq.length?eq.slice().sort((a,b)=>(a.lojas||[]).filter(l=>l.fim).length/((a.lojas||[]).length||1)-(b.lojas||[]).filter(l=>l.fim).length/((b.lojas||[]).length||1)).map(r=>{
     const ls=r.lojas||[], enc=ls.filter(l=>l.fim).length;
     return `<div class="rep-c"><div class="cab"><b>${esc(tit(r.nome))}</b><span class="mut" style="font-size:14px">rota ${esc(r.rota||"?")} · ${enc} de ${ls.length} ${ls.length===1?"loja":"lojas"}</span></div>
       ${r.usa_app===false?`<div class="aviso err" style="margin:8px 0 0;padding:7px 10px;font-size:13px">Esta rota nunca entrou no app.</div>`:""}
-      ${ls.length?ls.map(l=>{ const k=l.fim?"ok":l.inicio?"and":"nao", fe=(l.feitos||[]).map(m=>MODULO[m]||m);
+      ${ls.length?ls.map(l=>{ const canc=l.situacao==="nao_atendida", k=canc?"nao":l.fim?"ok":l.inicio?"and":"nao", fe=(l.feitos||[]).map(m=>MODULO[m]||m);
+        const tempo=l.tempo_min!=null&&l.fim?` · ${l.tempo_min} min`:"";
         return `<div class="loj ${k}"><span>${esc(l.loja)}${fe.length?`<br><span class="mut" style="font-size:12.5px">${esc(fe.join(", "))}</span>`:""}
-            ${l.inicio?`<br>${geoChip(l.dist_inicio_m,l.loja_tem_gps,"início")} ${l.fim?geoChip(l.dist_fim_m,l.loja_tem_gps,"fim"):""}`:""}</span>
-          <span class="mut" style="white-space:nowrap">${l.fim?`${l.inicio}–${l.fim}`:l.inicio?`desde ${l.inicio}`:"não iniciada"}</span></div>`; }).join("")
+            ${canc?`<br><span class="selo" style="background:var(--verm-bg);color:var(--verm-esc);font-size:11.5px">Cancelada: ${esc(l.motivo||"sem motivo")}</span> ${geoChip(l.dist_fim_m,l.loja_tem_gps,"onde cancelou")}`
+              :l.inicio?`<br>${geoChip(l.dist_inicio_m,l.loja_tem_gps,"início")} ${l.fim?geoChip(l.dist_fim_m,l.loja_tem_gps,"fim"):""}${l.reaberturas?` <span class="selo" style="background:var(--amb-bg);color:var(--amb);font-size:11.5px">reaberta${l.reaberturas>1?` ${l.reaberturas}x`:""}</span>`:""}`:""}</span>
+          <span class="mut" style="white-space:nowrap">${canc?`cancelada às ${l.fim||"?"}`:l.fim?`${l.inicio}–${l.fim}${tempo}`:l.inicio?`desde ${l.inicio}`:"não iniciada"}</span></div>`; }).join("")
         :`<div class="mut" style="font-size:14px;margin-top:6px">Sem loja no roteiro hoje.</div>`}</div>`; }).join(""):`<div class="vazio">Ninguém na equipe.</div>`);
 }
 

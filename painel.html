@@ -308,7 +308,7 @@ function pintaLado(){
       <div class="it"><span><i style="background:#FFB4C2"></i>Não tem</span><b>${nt}</b></div>
       <div class="it"><span><i style="background:#F6E05E"></i>Demandas em aberto</span><b>${abertas}</b></div>
       <div class="it"><span><i style="background:#FFC9A8"></i>Geladeiras não encontradas</span><b>${gelSumiu}</b></div>
-      <div class="it"><span><i style="background:#FFE8A3"></i>Começaram fora da loja</span><b>${filtra((D.vis||{}).visitas).filter(x=>x.data===hoje()&&x.dist_inicio_m>((D.vis||{}).raio||300)).length}</b></div>
+      <div class="it"><span><i style="background:#FFE8A3"></i>Começaram fora da loja</span><b>${filtra((D.vis||{}).visitas).filter(x=>x.data===hoje()&&x.dist_inicio_m>((D.vis||{}).raio||100)).length}</b></div>
       <div class="mini"><div><b>${(EU.lideres||[]).filter(l=>ligado(l.nome)).length}</b><span>líderes</span></div><div><b>${filtra(EU.repositores).length}</b><span>repositores</span></div><div><b>${((D.listas||{}).lojas||[]).length}</b><span>lojas</span></div></div></div>`;
   $("lado").querySelectorAll("[data-mod]").forEach(b=>b.onclick=()=>{ MOD=b.dataset.mod; guarda.por("p_mod",MOD); BUSCA=""; pintar(); });
 }
@@ -608,29 +608,40 @@ function geoTag(m, temLoja, raio){
   return m<=raio?`<span class="tag t-verde">na loja</span>`:m<=1000?`<span class="tag t-amb">a ${distTxt(m)}</span>`:`<span class="tag t-verm">a ${distTxt(m)}</span>`;
 }
 function modVis(){
-  const v=D.vis||{}, raio=v.raio||300, xs=filtra(v.visitas);
+  const v=D.vis||{}, raio=v.raio||100, todas=filtra(v.visitas);
+  /* canceladas tem aba propria; as outras abas e indicadores sao das visitas feitas */
+  const canc=todas.filter(x=>x.situacao==="nao_atendida"), xs=todas.filter(x=>x.situacao!=="nao_atendida");
   const fora=x=>(x.dist_inicio_m!=null&&x.dist_inicio_m>raio)||(x.dist_fim_m!=null&&x.dist_fim_m>raio);
   const semGps=x=>x.dist_inicio_m==null||(x.fim&&x.dist_fim_m==null);
-  const lista=[["todas",`Todas · ${xs.length}`,`últimos ${DIAS} dias`],["fora",`Fora da loja · ${xs.filter(fora).length}`,`início ou fim a mais de ${raio} m`],["sem",`Sem localização · ${xs.filter(semGps).length}`,"sem GPS ou loja sem endereço"]];
-  const at=abaAtual(lista), rs=ordena(at==="fora"?xs.filter(fora):at==="sem"?xs.filter(semGps):xs,"vis",{campo:"data",dir:-1});
+  const comTempo=xs.filter(x=>x.tempo_min!=null&&x.fim), tMed=comTempo.length?Math.round(comTempo.reduce((a,x)=>a+x.tempo_min,0)/comTempo.length):null;
+  const lista=[["todas",`Todas · ${xs.length}`,`últimos ${DIAS} dias`],["canc",`Canceladas · ${canc.length}`,"com o motivo e onde estava"],["fora",`Fora da loja · ${xs.filter(fora).length}`,`início ou fim a mais de ${raio} m`],["sem",`Sem localização · ${xs.filter(semGps).length}`,"sem GPS ou loja sem endereço"]];
+  const at=abaAtual(lista), rs=ordena(at==="canc"?canc:at==="fora"?xs.filter(fora):at==="sem"?xs.filter(semGps):xs,"vis",{campo:"data",dir:-1});
+  /* o historico de cada visita: cada momento, com a hora e a distancia */
+  const NOME_EV={inicio:"Iniciou",fim:"Finalizou",reabertura:"Reabriu",cancelamento:"Cancelou"};
+  const historico=x=>(x.eventos||[]).length?`<details><summary style="cursor:pointer;color:var(--azul);font-size:12.5px">${plural(x.eventos.length,"momento","momentos")}</summary>${x.eventos.map(e=>`<div style="font-size:12px;margin-top:3px">${esc(e.hora)} · ${NOME_EV[e.tipo]||e.tipo} ${geoTag(e.dist_m,x.loja_tem_gps,raio)}${e.motivo?` <span class="mut">${esc(e.motivo)}</span>`:""}</div>`).join("")}</details>`:"";
   const comIni=xs.filter(x=>x.dist_inicio_m!=null), comFim=xs.filter(x=>x.dist_fim_m!=null);
   const nIni=comIni.filter(x=>x.dist_inicio_m<=raio).length, nFim=comFim.filter(x=>x.dist_fim_m<=raio).length;
   const pIni=pct(nIni,comIni.length), pFim=pct(nFim,comFim.length);
   const kpi=(n,v,c,sub)=>`<div class="kpi"><span>${n}</span><b style="color:${c||"var(--ink)"}">${v??"—"}</b><small>${sub}</small></div>`;
-  EXPORTA={nome:"visitas-localizacao", cab:["Data","Repositor","Lider","Loja","Codigo","Inicio","Distancia no inicio (m)","Fim","Distancia no fim (m)","Duracao (min)"],
-    linhas:rs.map(x=>[dataBr(x.data),x.repositor,x.lider,x.loja,x.codigo,x.inicio,x.dist_inicio_m,x.fim,x.dist_fim_m,x.duracao_min])};
+  EXPORTA={nome:"visitas-localizacao", cab:["Data","Repositor","Lider","Loja","Codigo","Situacao","Motivo do cancelamento","Inicio","Distancia no inicio (m)","Fim","Distancia no fim (m)","Tempo na loja (min)","Reaberturas"],
+    linhas:rs.map(x=>[dataBr(x.data),x.repositor,x.lider,x.loja,x.codigo,x.situacao==="nao_atendida"?"cancelada":x.fim?"concluida":"em andamento",x.motivo||"",x.inicio,x.dist_inicio_m,x.fim,x.dist_fim_m,x.tempo_min??x.duracao_min,x.reaberturas||0])};
   return `<h2>Visitas e localização</h2>${abas(lista)}
     <div class="kpis">${kpi("Começaram na loja",pIni!=null?pIni+"%":"—",cor(pIni),`${nIni} de ${comIni.length} com GPS`)}
       ${kpi("Encerraram na loja",pFim!=null?pFim+"%":"—",cor(pFim),`${nFim} de ${comFim.length} com GPS`)}
-      ${kpi("Fora da loja",xs.filter(fora).length,null,`no início ou no fim, a mais de ${raio} m`)}${kpi("Sem localização",xs.filter(semGps).length,null,"sem GPS ou loja sem endereço")}</div>
+      ${kpi("Tempo médio na loja",tMed!=null?tMed+" min":"—",null,`${comTempo.length} visitas encerradas`)}${kpi("Canceladas",canc.length,canc.length?"var(--verm)":null,`fora do raio: ${canc.filter(x=>x.dist_fim_m!=null&&x.dist_fim_m>raio).length}`)}</div>
     ${xs.filter(fora).length?`<div class="alerta"><b>${plural(xs.filter(fora).length,"visita começou ou terminou","visitas começaram ou terminaram")} longe da loja</b> nos últimos ${DIAS} dias. A distância é a do celular do repositor até o endereço da loja.</div>`
       :`<div class="alerta ok">Todas as visitas com localização começaram e terminaram na loja.</div>`}
     ${barra(`<span class="mut">"Na loja" é até ${raio} m do endereço cadastrado.</span>`)}
-    ${tabela(th("vis","data","Data")+th("vis","repositor","Repositor")+th("vis","loja","Loja")+th("vis","dist_inicio_m","Início")+th("vis","dist_fim_m","Fim")+th("vis","duracao_min","Duração",1)+th("vis","lider","Líder"),
-      rs.map(x=>`<tr><td>${dataBr(x.data)}</td><td><b>${esc(curto(x.repositor))}</b></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}${x.cidade?` · ${esc(x.cidade)}`:""}</span></td>
-        <td>${esc(x.inicio||"—")} ${geoTag(x.dist_inicio_m,x.loja_tem_gps,raio)}</td><td>${x.fim?`${esc(x.fim)} ${geoTag(x.dist_fim_m,x.loja_tem_gps,raio)}`:'<span class="mut">em andamento</span>'}</td>
-        <td class="num">${x.duracao_min!=null?x.duracao_min+" min":"—"}</td><td>${esc(curto(x.lider))}</td></tr>`),
-      "Nenhuma visita nesta aba.")}`;
+    ${at==="canc"
+      ?tabela(th("vis","data","Data")+th("vis","repositor","Repositor")+th("vis","loja","Loja")+"<th>Motivo</th>"+th("vis","dist_fim_m","Onde cancelou")+th("vis","lider","Líder"),
+        rs.map(x=>`<tr><td>${dataBr(x.data)}</td><td><b>${esc(curto(x.repositor))}</b></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}${x.cidade?` · ${esc(x.cidade)}`:""}</span></td>
+          <td><span class="tag t-verm">${esc(x.motivo||"sem motivo")}</span></td><td>${esc(x.fim||"")} ${geoTag(x.dist_fim_m,x.loja_tem_gps,raio)}${historico(x)}</td><td>${esc(curto(x.lider))}</td></tr>`),
+        "Nenhuma visita cancelada no período.")
+      :tabela(th("vis","data","Data")+th("vis","repositor","Repositor")+th("vis","loja","Loja")+th("vis","dist_inicio_m","Início")+th("vis","dist_fim_m","Fim")+th("vis","tempo_min","Tempo na loja",1)+th("vis","lider","Líder"),
+        rs.map(x=>`<tr><td>${dataBr(x.data)}</td><td><b>${esc(curto(x.repositor))}</b></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}${x.cidade?` · ${esc(x.cidade)}`:""}</span></td>
+          <td>${esc(x.inicio||"—")} ${geoTag(x.dist_inicio_m,x.loja_tem_gps,raio)}</td><td>${x.fim?`${esc(x.fim)} ${geoTag(x.dist_fim_m,x.loja_tem_gps,raio)}`:'<span class="mut">em andamento</span>'}${historico(x)}</td>
+          <td class="num">${(x.tempo_min??x.duracao_min)!=null?(x.tempo_min??x.duracao_min)+" min":"—"}${x.reaberturas?`<span class="sub">reaberta ${x.reaberturas}x</span>`:""}</td><td>${esc(curto(x.lider))}</td></tr>`),
+        "Nenhuma visita nesta aba.")}`;
 }
 /* A foto de uma demanda fica no armazenamento protegido: so abre com o login. */
 async function verFoto(caminho){
