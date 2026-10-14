@@ -106,6 +106,8 @@ td .sub{display:block;font-size:12px;color:var(--ink3)}
 .cel{display:inline-block;min-width:64px;text-align:center;border-radius:6px;padding:4px 8px;font-weight:700;background:var(--teal-bg);color:#145a60}
 .cel.forte{background:var(--teal);color:#fff}
 .vazio{padding:26px;text-align:center;color:var(--ink2)}
+tr.tend-ok td{background:#EEF4FD} tr.tend-ok td:first-child{box-shadow:inset 4px 0 0 #1E6FD9}
+tr.tend-risco td{background:#FDEDF0} tr.tend-risco td:first-child{box-shadow:inset 4px 0 0 #C8102E}
 .var-up{color:var(--verde);font-weight:700;font-size:12px} .var-dn{color:var(--verm-esc);font-weight:700;font-size:12px}
 
 /* indicadores */
@@ -387,31 +389,92 @@ function modOport(){
 }
 
 /* --------------------------- 2. vencimentos --------------------------- */
+/* A tendencia de um lote: com o registro (quantidade inicial) e cada contagem
+   das visitas, calcula o giro por dia (a reta que melhor passa pelos pontos) e
+   preve se o lote acaba ANTES de vencer (azul) ou se vai vencer com produto na
+   loja (vermelho, alerta maximo). Com uma contagem so, ainda nao ha tendencia. */
+function tendenciaLote(x, hojeIso){
+  const dia=d=>new Date(String(d).slice(0,10)+"T12:00").getTime(), D=864e5;
+  const pts=[]; if(x.registrado_em&&x.inicial!=null) pts.push({d:String(x.registrado_em).slice(0,10), q:Number(x.inicial)});
+  (x.historico||[]).forEach(m=>{ if(m.quantidade!=null&&m.data) pts.push({d:String(m.data).slice(0,10), q:Number(m.quantidade)}); });
+  const porDia=new Map(); pts.forEach(p=>porDia.set(p.d,p));                 /* no mesmo dia, vale a ultima */
+  const ps=[...porDia.values()].sort((a,b)=>a.d<b.d?-1:1);
+  const ult=ps[ps.length-1], qtd=ult?ult.q:(x.quantidade!=null?Number(x.quantidade):null);   /* a ultima contagem pela data */
+  const base={pts:ps, qtd, vence:String(x.vence_em).slice(0,10)};
+  if(x.dias<0) return {...base, k:"vencido", sobra:qtd};
+  if(!qtd) return {...base, k:"acabou"};
+  if(ps.length<2||dia(ult.d)===dia(ps[0].d)) return {...base, k:"sem"};
+  const t=ps.map(p=>(dia(p.d)-dia(ps[0].d))/D), q=ps.map(p=>p.q), n=ps.length;
+  const mt=t.reduce((a,v)=>a+v,0)/n, mq=q.reduce((a,v)=>a+v,0)/n;
+  const giro=-(t.reduce((a,v,i)=>a+(v-mt)*(q[i]-mq),0)/t.reduce((a,v)=>a+(v-mt)**2,0));
+  const restam=Math.max(0,(dia(base.vence)-dia(ult.d))/D);                  /* dias da ultima contagem ate vencer */
+  if(!(giro>0)) return {...base, k:"risco", parado:true, giro:0, sobra:qtd, restam, ult};
+  const diasAcabar=qtd/giro, acaba=new Date(dia(ult.d)+diasAcabar*D).toISOString().slice(0,10);
+  const sobra=Math.max(0,Math.round(qtd-giro*restam));
+  return sobra>0?{...base, k:"risco", giro, sobra, acaba, restam, ult}
+                :{...base, k:"ok", giro, sobra:0, acaba, folga:Math.floor(restam-diasAcabar), restam, ult};
+}
+/* O grafico pequeno: as contagens (linha cheia) e a projecao ate o vencimento (tracejada). */
+function graficoLote(tr){
+  const ps=tr.pts; if(!ps.length) return "";
+  const W=150,H=40,P=4, dia=d=>new Date(d+"T12:00").getTime();
+  const x0=dia(ps[0].d), x1=Math.max(dia(tr.vence), dia(ps[ps.length-1].d)+864e5), ymax=Math.max(...ps.map(p=>p.q),1);
+  const X=d=>P+(W-2*P)*(dia(d)-x0)/(x1-x0), Y=v=>H-P-(H-2*P)*Math.max(0,v)/ymax;
+  const cor=tr.k==="ok"?"#1E6FD9":tr.k==="sem"?"#9CA3AF":"#C8102E";
+  const linha=ps.map(p=>`${X(p.d).toFixed(1)},${Y(p.q).toFixed(1)}`).join(" "), u=ps[ps.length-1];
+  let proj="";
+  if(tr.k==="ok") proj=`<line x1="${X(u.d)}" y1="${Y(u.q)}" x2="${X(tr.acaba)}" y2="${Y(0)}" stroke="${cor}" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+  else if(tr.k==="risco") proj=`<line x1="${X(u.d)}" y1="${Y(u.q)}" x2="${X(tr.vence)}" y2="${Y(tr.sobra)}" stroke="${cor}" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Contagens e projeção do lote" style="display:block">
+    <line x1="${X(tr.vence)}" y1="2" x2="${X(tr.vence)}" y2="${H-2}" stroke="#C8102E" stroke-width="1" opacity=".45"/>
+    <line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="#E5E7EB"/>
+    ${proj}<polyline points="${linha}" fill="none" stroke="${cor}" stroke-width="2"/>
+    ${ps.map(p=>`<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.q).toFixed(1)}" r="2.2" fill="${cor}"/>`).join("")}</svg>`;
+}
 function modVenc(){
-  const v=D.venc||{}, dc=v.dias_critico||20, da=v.dias_alerta||30, xs=filtra(v.lotes);
-  const nivel=x=>x.dias<0?"vencido":x.dias<=dc?"critico":x.dias<=da?"atencao":"ok";
-  const lista=[["vencido",`Vencidos · ${xs.filter(x=>nivel(x)==="vencido").length}`,"ainda na loja"],["critico",`Críticos · ${xs.filter(x=>nivel(x)==="critico").length}`,`até ${dc} dias`],
+  const v=D.venc||{}, da=v.dias_alerta||30, hj=hoje();
+  const xs=filtra(v.lotes).map(x=>{ const tr=tendenciaLote(x,hj);
+    return {...x, tr, tendencia:tr.k, sobra:tr.sobra??null, giro:tr.giro??null,
+            risco:tr.k==="vencido"?4e6+(tr.sobra||0):tr.k==="risco"?3e6+(tr.sobra||0):tr.k==="sem"?2e6-(x.dias||0):1e6-(tr.folga||0)}; });
+  const nivel=x=>x.dias<0?"vencido":x.dias<=da?"atencao":"ok";
+  const lista=[["vencido",`Vencidos · ${xs.filter(x=>nivel(x)==="vencido").length}`,"ainda na loja"],
                ["atencao",`Atenção · ${xs.filter(x=>nivel(x)==="atencao").length}`,`até ${da} dias`],["todos",`Todos · ${xs.length}`,"em acompanhamento"]];
-  const at=abaAtual(lista), rs=ordena(at==="todos"?xs:xs.filter(x=>nivel(x)===at),"venc",{campo:"dias",dir:1});
-  const vencidos=xs.filter(x=>x.dias<0), un=vencidos.reduce((a,x)=>a+(Number(x.quantidade)||0),0), parados=xs.filter(x=>Number(x.sem_atualizar)>7).length;
-  EXPORTA={nome:"vencimentos-"+at, cab:["Produto","Loja","Codigo","Lote","Vence em","Dias","Quantidade inicial (un)","Quantidade agora (un)","Acompanhamento","Ultima acao","Sem contar ha (dias)","Repositor","Lider"],
-    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,x.lote,dataBr(x.vence_em),x.dias,x.inicial,x.quantidade,[x.inicial,...(x.historico||[]).map(m=>m.quantidade)].join(" > "),ACAO[x.acao]||"",x.sem_atualizar,x.repositor,x.lider])};
-  const tag=x=>{ const n=nivel(x); return `<span class="tag ${n==="vencido"||n==="critico"?"t-verm":n==="atencao"?"t-amb":"t-cinza"}">${n==="vencido"?`vencido há ${-x.dias}d`:x.dias===0?"vence hoje":`vence em ${x.dias}d`}</span>`; };
+  const at=abaAtual(lista), rs=ordena(at==="todos"?xs:xs.filter(x=>nivel(x)===at),"venc",{campo:"risco",dir:-1});
+  const ab=xs.filter(x=>x.dias>=0), ok=ab.filter(x=>x.tendencia==="ok"), risco=ab.filter(x=>x.tendencia==="risco"), sem=ab.filter(x=>x.tendencia==="sem");
+  const vencidos=xs.filter(x=>x.dias<0), unV=vencidos.reduce((a,x)=>a+(Number(x.quantidade)||0),0), unR=risco.reduce((a,x)=>a+(x.sobra||0),0);
+  const kpi=(n,val,c,sub)=>`<div class="kpi"><span>${n}</span><b style="color:${c}">${val}</b><small>${sub}</small></div>`;
+  const prev=x=>{ const t=x.tr;
+    if(t.k==="vencido") return `<span class="tag t-verm">Venceu com ${fmt(t.qtd)} un</span>`;
+    if(t.k==="acabou") return `<span class="tag t-verde">Acabou</span>`;
+    if(t.k==="sem") return `<span class="tag t-cinza">Sem tendência</span><span class="sub">precisa de mais uma contagem</span>`;
+    if(t.k==="ok") return `<span class="tag t-azul">Acaba antes de vencer</span><span class="sub">acaba ~${dataBr(t.acaba)}${t.folga>0?`, ${t.folga} ${t.folga===1?"dia":"dias"} antes`:""} · giro ${fmt(t.giro)} un/dia</span>`;
+    return `<span class="tag" style="background:#C8102E;color:#fff">ALERTA · vai vencer com ~${fmt(t.sobra)} un</span><span class="sub">${t.parado?"não está girando":`giro ${fmt(t.giro)} un/dia; precisaria de ${fmt(t.qtd/Math.max(t.restam,1))} un/dia`}</span>`; };
+  EXPORTA={nome:"vencimentos-"+at, cab:["Produto","Loja","Codigo","Lote","Vence em","Dias","Quantidade inicial (un)","Quantidade agora (un)","Contagens","Giro por dia (un)","Tendencia","Previsao","Sobra prevista no vencimento (un)","Sem contar ha (dias)","Repositor","Lider"],
+    linhas:rs.map(x=>{ const t=x.tr; return [x.produto,x.loja,x.codigo,x.lote,dataBr(x.vence_em),x.dias,x.inicial,x.quantidade,
+      t.pts.map(p=>`${dataBr(p.d)}: ${p.q}`).join(" | "), t.giro!=null?Math.round(t.giro*10)/10:"",
+      {ok:"acaba antes de vencer",risco:"vai vencer com produto",sem:"sem tendencia",vencido:"vencido",acabou:"acabou"}[t.k],
+      t.acaba?dataBr(t.acaba):"", t.sobra??"", x.sem_atualizar, x.repositor, x.lider]; })};
+  const tag=x=>`<span class="tag ${x.dias<0?"t-verm":x.dias<=da?"t-amb":"t-cinza"}">${x.dias<0?`vencido há ${-x.dias}d`:x.dias===0?"vence hoje":`vence em ${x.dias}d`}</span>`;
+  const piores=risco.slice().sort((a,b)=>b.sobra-a.sobra).slice(0,3);
   return `<h2>Controle de Vencimentos</h2>${abas(lista)}
-    ${vencidos.length?`<div class="alerta"><b>${plural(vencidos.length,"lote vencido","lotes vencidos")} ainda na loja</b>, com ${fmt(un)} unidades. ${parados?`${plural(parados,"lote está","lotes estão")} sem contagem há mais de 7 dias.`:""}</div>`
-      :`<div class="alerta ok">Nenhum lote vencido nas lojas da equipe.${parados?` ${plural(parados,"lote está","lotes estão")} sem contagem há mais de 7 dias.`:""}</div>`}
-    ${barra(`<span class="mut">Crítico a partir de ${dc} dias para vencer.</span>`)}
-    ${tabela(th("venc","produto","Produto")+th("venc","loja","Loja")+"<th>Lote</th>"+th("venc","dias","Vence")+th("venc","quantidade","Na loja",1)+"<th>Acompanhamento</th><th>Última ação</th>"+th("venc","sem_atualizar","Sem contar",1)+th("venc","repositor","Repositor")+th("venc","lider","Líder"),
-      rs.map(x=>`<tr><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}</span></td><td>${esc(x.lote||"sem lote")}</td>
-        <td>${dataBr(x.vence_em)} ${tag(x)}</td><td class="num">${x.quantidade!=null?`<span class="cel ${nivel(x)==="vencido"?"forte":""}">${fmt(x.quantidade)} un</span>`:"—"}</td>
-        <td>${(()=>{ /* a quantidade de cada visita, desde o registro, ate acabar */
-          const h=x.historico||[], seq=[x.inicial,...h.map(m=>m.quantidade)].filter(v=>v!=null);
-          return seq.length>1?`<details><summary style="cursor:pointer">${seq.map(v=>fmt(v)).join(" → ")} un</summary>${h.map(m=>`<div style="font-size:12px;margin-top:2px">${dataBr(m.data)} · <b>${fmt(m.quantidade)} un</b>${m.acao?` · ${esc(ACAO[m.acao]||m.acao)}`:""} · ${esc(curto(m.quem))}</div>`).join("")}</details>`
-            :`<span class="mut">registrado com ${fmt(x.inicial)} un</span>`; })()}</td>
-        <td>${esc(ACAO[x.acao]||"Sem ação")}</td><td class="num">${Number(x.sem_atualizar)>7?`<span class="tag t-verm">${x.sem_atualizar} dias</span>`:`${x.sem_atualizar??"—"} d`}</td>
-        <td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`),
+    <div class="kpis">${kpi("Vão vencer com produto",risco.length,risco.length?"#C8102E":"var(--ink)",`~${fmt(unR)} un previstas no vencimento`)}
+      ${kpi("Acabam antes de vencer",ok.length,"#1E6FD9","pelo giro das contagens")}
+      ${kpi("Sem tendência",sem.length,"var(--ink3)","só uma contagem até agora")}
+      ${kpi("Vencidos na loja",vencidos.length,vencidos.length?"#C8102E":"var(--ink)",`${fmt(unV)} un`)}</div>
+    ${risco.length?`<div class="alerta"><b>${plural(risco.length,"lote vai vencer","lotes vão vencer")} com produto na loja</b>, cerca de ${fmt(unR)} unidades, pelo giro das contagens. ${piores.map(x=>`${esc(x.produto)} em ${esc(x.loja)} (~${fmt(x.sobra)} un)`).join("; ")}.</div>`
+      :`<div class="alerta ok">Pelo giro das contagens, todos os lotes com tendência acabam antes de vencer.</div>`}
+    ${barra(`<span class="mut">A tendência usa o registro do lote e cada contagem das visitas. <b style="color:#1E6FD9">Azul</b>: acaba antes de vencer. <b style="color:#C8102E">Vermelho</b>: vai vencer com produto.</span>`)}
+    ${tabela(th("venc","produto","Produto")+th("venc","loja","Loja")+"<th>Lote</th>"+th("venc","dias","Vence")+th("venc","quantidade","Na loja",1)+"<th>Contagens</th>"+th("venc","risco","Tendência")+th("venc","sem_atualizar","Sem contar",1)+th("venc","repositor","Repositor")+th("venc","lider","Líder"),
+      rs.map(x=>{ const t=x.tr, cls=t.k==="ok"?"tend-ok":(t.k==="risco"||t.k==="vencido")?"tend-risco":"";
+        return `<tr class="${cls}"><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}</span></td><td>${esc(x.lote||"sem lote")}</td>
+        <td>${dataBr(x.vence_em)} ${tag(x)}</td><td class="num">${x.quantidade!=null?`<span class="cel ${x.dias<0?"forte":""}">${fmt(x.quantidade)} un</span>`:"—"}</td>
+        <td>${graficoLote(t)}<details><summary style="cursor:pointer;font-size:12px" class="mut">${t.pts.map(p=>fmt(p.q)).join(" → ")} un</summary>
+          ${t.pts.map((p,i)=>`<div style="font-size:12px;margin-top:2px">${dataBr(p.d)} · <b>${fmt(p.q)} un</b>${i===0&&x.registrado_em?" · registro":""}</div>`).join("")}</details></td>
+        <td>${prev(x)}</td><td class="num">${Number(x.sem_atualizar)>7?`<span class="tag t-verm">${x.sem_atualizar} dias</span>`:`${x.sem_atualizar??"—"} d`}</td>
+        <td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`; }),
       "Nenhum lote nesta aba.")}`;
 }
+
 
 /* --------------------------- 3. entrega --------------------------- */
 function modEntr(){
