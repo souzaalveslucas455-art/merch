@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conferência de bases · Merchandising</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F1F4F2; --card:#FFFFFF; --ink:#15231D; --ink2:#5A6B63; --ink3:#8A9A92;
+  --rule:#D2DAD6; --rule2:#E6EBE8;
+  --glass:#0F6E56; --glass-bg:#E3F0EB;
+  --amber:#8F5E10; --amber-bg:#FAF0DC;
+  --red:#9E2B2B; --red-bg:#FAE9E9;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:15px; line-height:1.55; font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+}
+.page{max-width:1120px;margin:0 auto;padding:32px 24px 96px}
+
+header.top{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:28px}
+header.top h1{font-size:22px;font-weight:600;margin:0 0 2px;letter-spacing:-.01em}
+header.top p{margin:0;color:var(--ink2);font-size:14px;max-width:62ch}
+
+.grid{display:grid;grid-template-columns:250px 1fr;gap:36px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr;gap:24px}}
+
+.rail{position:sticky;top:24px}
+@media (max-width:860px){.rail{position:static}}
+.rail h2,.block h2{font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 10px}
+.slot{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--rule2);align-items:baseline}
+.slot:last-child{border-bottom:1px solid var(--rule2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--rule);flex:none;transform:translateY(-2px)}
+.slot.ok .dot{background:var(--glass)}
+.slot.bad .dot{background:var(--red)}
+.slot b{font-weight:500;font-size:14px;display:block}
+.slot small{color:var(--ink3);font-size:12.5px;font-family:var(--mono)}
+.slot.ok small{color:var(--ink2)}
+
+.drop{
+  border:1.5px dashed var(--rule);background:var(--card);border-radius:3px;
+  padding:34px 24px;text-align:center;transition:border-color .15s,background .15s;
+}
+.drop.over{border-color:var(--glass);background:var(--glass-bg)}
+.drop p{margin:0 0 4px;font-size:15px}
+.drop small{color:var(--ink2);display:block;margin-bottom:16px}
+button{font:inherit;font-weight:500;cursor:pointer;border-radius:3px;padding:8px 16px;border:1px solid var(--ink)}
+button.go{background:var(--ink);color:#fff}
+button.plain{background:var(--card);color:var(--ink)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--glass);outline-offset:2px}
+
+.bar{height:2px;background:var(--rule2);margin-top:18px;overflow:hidden;display:none}
+.bar.on{display:block}
+.bar i{display:block;height:100%;background:var(--glass);width:0;transition:width .2s}
+.status{font-family:var(--mono);font-size:12.5px;color:var(--ink2);margin-top:8px;min-height:18px}
+
+.block{margin-top:34px;display:none}
+.block.on{display:block}
+
+table.ledger{width:100%;border-collapse:collapse;background:var(--card)}
+table.ledger th{
+  text-align:left;font-size:12.5px;font-weight:500;color:var(--ink2);
+  padding:7px 12px;border-bottom:1px solid var(--ink);
+}
+table.ledger td{padding:8px 12px;border-bottom:1px solid var(--rule2);font-size:14px;vertical-align:top}
+table.ledger td.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+table.ledger tr:last-child td{border-bottom:1px solid var(--rule)}
+.mono{font-family:var(--mono)}
+.mut{color:var(--ink2)}
+
+.issue{border-left:3px solid var(--rule);padding:10px 0 10px 14px;margin-bottom:2px;background:var(--card)}
+.issue.err{border-left-color:var(--red)}
+.issue.warn{border-left-color:var(--amber)}
+.issue.info{border-left-color:var(--glass)}
+.issue b{font-weight:500;font-size:14px}
+.issue p{margin:2px 0 0;font-size:13.5px;color:var(--ink2);max-width:78ch}
+.issue .ex{font-family:var(--mono);font-size:12.5px;color:var(--ink3);margin-top:4px;word-break:break-word}
+.tag{font-size:11.5px;font-family:var(--mono);padding:1px 6px;border-radius:2px;margin-left:6px;vertical-align:1px}
+.tag.err{background:var(--red-bg);color:var(--red)}
+.tag.warn{background:var(--amber-bg);color:var(--amber)}
+.tag.info{background:var(--glass-bg);color:var(--glass)}
+
+.outs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.outs button{font-family:var(--mono);font-size:13px;padding:6px 12px}
+.verdict{padding:14px 16px;background:var(--card);border-left:3px solid var(--glass);margin-bottom:18px}
+.verdict.blocked{border-left-color:var(--red)}
+.verdict b{font-weight:600}
+.verdict p{margin:2px 0 0;color:var(--ink2);font-size:14px;max-width:78ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="top">
+  <h1>Conferência de bases</h1>
+  <p>Solte as planilhas do mês. Nada é gravado aqui: esta tela lê, confere e mostra o que está errado antes de qualquer coisa entrar no sistema.</p>
+</header>
+
+<div class="grid">
+  <aside class="rail">
+    <h2>Planilhas esperadas</h2>
+    <div id="slots"></div>
+  </aside>
+
+  <main>
+    <div class="drop" id="drop">
+      <p>Arraste as planilhas para cá</p>
+      <small>Pode soltar todas de uma vez, em qualquer ordem. A tela reconhece cada uma pelo cabeçalho.</small>
+      <button class="go" id="pick">Escolher arquivos</button>
+      <input type="file" id="file" accept=".xlsx,.xlsm" multiple hidden>
+      <div class="bar" id="bar"><i></i></div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <section class="block" id="bConf">
+      <h2>O que veio nas planilhas</h2>
+      <table class="ledger"><thead><tr>
+        <th>Conteúdo</th><th class="n">Linhas</th><th class="n">Únicos</th><th>Observação</th>
+      </tr></thead><tbody id="conf"></tbody></table>
+    </section>
+
+    <section class="block" id="bProb">
+      <h2>Conferência</h2>
+      <div id="verdict"></div>
+      <div id="probs"></div>
+    </section>
+
+    <section class="block" id="bOut">
+      <h2>Carga</h2>
+      <p class="mut" style="font-size:13.5px;margin:0;max-width:78ch">Envie direto para o sistema: a página manda as bases e já roda a carga do mês. Os CSVs abaixo ficam como caminho reserva, para subir pelo editor de tabelas.</p>
+      <div id="envio" style="max-width:520px"></div>
+      <h3 style="font-size:14px;margin:18px 0 6px">Caminho reserva: os CSVs</h3>
+      <div class="outs" id="outs"></div>
+    </section>
+  </main>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------------
+   Feriados. Tem que bater com 02-feriados.sql. Se divergir, a tela e o banco
+   vao calcular datas de entrega diferentes e ninguem vai entender por que.
+--------------------------------------------------------------------------- */
+const FERIADOS = new Set([
+  "2026-01-01","2026-02-16","2026-02-17","2026-04-03","2026-04-21","2026-05-01",
+  "2026-06-04","2026-09-07","2026-10-12","2026-11-02","2026-11-15","2026-11-20",
+  "2026-12-25","2027-01-01","2027-02-08","2027-02-09","2027-03-26","2027-04-21",
+  "2027-05-01","2027-05-27","2027-09-07","2027-10-12","2027-11-02","2027-11-15",
+  "2027-11-20","2027-12-25"
+]);
+const PRAZO_DIAS_UTEIS = 2;
+
+/* Datas nunca passam por Date de fuso horario. O Excel guarda numero serial e
+   a gente converte direto para ano/mes/dia. Foi assim que 11:06 virou 1899 no
+   projeto anterior. */
+function celulaData(v){
+  if (v == null || v === "") return null;
+  if (typeof v === "number"){
+    const d = XLSX.SSF.parse_date_code(v);
+    if (!d || !d.y) return null;
+    return {y:d.y, m:d.m, d:d.d};
+  }
+  if (v instanceof Date) return {y:v.getFullYear(), m:v.getMonth()+1, d:v.getDate()};
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return {y:+m[1], m:+m[2], d:+m[3]};
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return {y:+m[3], m:+m[2], d:+m[1]};
+  return null;
+}
+const iso = o => o ? `${o.y}-${String(o.m).padStart(2,"0")}-${String(o.d).padStart(2,"0")}` : null;
+function diaSemana(o){ return new Date(Date.UTC(o.y,o.m-1,o.d)).getUTCDay(); }  // 0=dom
+function diasUteisApos(o, n){
+  let t = Date.UTC(o.y, o.m-1, o.d);
+  let restam = n;
+  while (restam > 0){
+    t += 86400000;
+    const d = new Date(t), dow = d.getUTCDay();
+    const s = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
+    if (dow !== 0 && dow !== 6 && !FERIADOS.has(s)) restam--;
+  }
+  const d = new Date(t);
+  return {y:d.getUTCFullYear(), m:d.getUTCMonth()+1, d:d.getUTCDate()};
+}
+
+/* Escapa texto antes de pintar na tela, para nome de loja com < ou & nao
+   quebrar a pagina. Global: e usada na conferencia e na lista de problemas. */
+const escHtml = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* Normalizacao de texto. JOÃO e JOAO sao a mesma pessoa. */
+const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toUpperCase().replace(/\s+/g," ").trim();
+const txt = s => { const v = String(s ?? "").replace(/\s+/g," ").trim(); return v === "" ? null : v; };
+/* Numero que chega como TEXTO pode estar em dois formatos, e eles brigam:
+     brasileiro:  1.234,56   -> ponto e milhar, virgula e decimal
+     americano:   -16.357763 -> ponto e decimal
+   A versao antiga assumia sempre o brasileiro e apagava todo ponto. Foi
+   assim que a latitude -16.357763 virou -16357763 e mandou o mapa para a
+   Antartida. A regra agora:
+     tem virgula                -> brasileiro (tira ponto, virgula vira ponto)
+     sem virgula e UM ponto     -> o ponto e decimal, deixa como esta
+     sem virgula e varios pontos-> sao milhar, tira todos                  */
+function num(v){
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  let s = String(v).trim().replace(/\s/g,"");
+  if (!s) return null;
+  if (s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  else if ((s.match(/\./g)||[]).length > 1) s = s.replace(/\./g,"");
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+/* Coordenada tem regra propria: nunca tem milhar, e fora da faixa possivel
+   vira ausente. Coordenada errada e pior que coordenada nenhuma, porque
+   manda o repositor para o lugar errado com toda a confianca. */
+function coord(v, min, max){
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).trim().replace(",","."));
+  return isFinite(n) && n >= min && n <= max ? n : null;
+}
+function codigo(v){
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return String(Math.round(v));
+  return String(v).trim().replace(/\.0+$/,"") || null;
+}
+
+/* ---------------------------------------------------------------------------
+   Reconhecimento das planilhas pelo cabecalho, nao pelo nome do arquivo nem
+   pela posicao da linha. Cada relatorio vem com um numero diferente de linhas
+   de enfeite antes do cabecalho.
+--------------------------------------------------------------------------- */
+const TIPOS = {
+  clientes:   {rotulo:"Base de clientes",  exige:["COD. CLIENTE","NOME FANTASIA","ENDERECO","LATITUDE"]},
+  produtos:   {rotulo:"Cadastro de produtos", exige:["COD. PRODUTO","GRUPO ESPECIE","MARCA"]},
+  roteiro:    {rotulo:"Roteirização",      exige:["ROTA RP","NOME REPOSITOR","SEG"]},
+  /* Notas e vendas mensais ficaram opcionais: o movimento de venda diario
+     (vendas-diaria.html) ja traz os pedidos e as vendas do mes. */
+  notas:      {rotulo:"Notas fiscais",     exige:["NUM. NOTA FISCAL","STATUS NF","COD. CLIENTE"], opcional:true,
+               nota:"opcional · os pedidos vêm do movimento diário"},
+  funcionarios:{rotulo:"Cadastro de funcionários", exige:["MATRICULA","NOME FUNC.","CARGO"], opcional:true},
+  vendas:     {rotulo:"Vendas mensais",     exige:["COD. CLIENTE","COD. PRODUTO","CALENDAR MONTH"], opcional:true,
+               nota:"opcional · as vendas vêm do movimento diário"}
+};
+
+/* ---------------------------------------------------------------------------
+   A ESTRUTURA E O ROTEIRO VEM DO PORTAL MERCHANDISING (desde 15/10/2026).
+   O Portal da Administracao de Vendas manda todo dia quem esta em cada rota,
+   a hierarquia, e os clientes de cada rota com os dias de visita; o app aplica
+   isso pelo aplicar_portal. Por isso esta pagina NAO envia mais a Roteirizacao
+   (stg_pessoa, stg_rota, stg_rota_ocupacao, stg_roteiro): se enviasse, a carga
+   mensal passaria por cima do portal e abriria um ciclo novo com a planilha.
+   As 4 caixas continuam sendo ESVAZIADAS antes de cada envio (CAIXAS_DO_MES),
+   para nenhuma sobra antiga entrar. Quais clientes viram loja (o escopo) vem do
+   banco: escopo_da_carga(), o roteiro do ciclo em uso mais os clientes do portal.
+   Para voltar ao jeito antigo, troque para false.
+--------------------------------------------------------------------------- */
+const ESTRUTURA_VEM_DO_PORTAL = true;
+if (ESTRUTURA_VEM_DO_PORTAL)
+  Object.assign(TIPOS.roteiro, {opcional:true, nota:"não é mais enviada · a estrutura e o roteiro vêm do Portal Merchandising"});
+if (ESTRUTURA_VEM_DO_PORTAL)
+  Object.assign(TIPOS.clientes, {opcional:true, nota:"não é mais enviada · o cadastro das lojas vem do Portal Merchandising"});
+let ESCOPO_BANCO = null;   // {codigos:Set, ciclo} ou {erro}
+const codNorm = c => c == null ? null : String(c).toUpperCase().replace(/\s/g,"").replace(/^0+(?=.)/,"");
+async function buscarEscopoBanco(){
+  const cfg = envioCfg();
+  if (!cfg.chave) return {erro:"chave"};
+  try{
+    const r = await envioRpc(cfg, "escopo_da_carga", {p_chave:cfg.chave});
+    return {codigos:new Set([...(r.lojas_do_roteiro||[]), ...(r.clientes_do_portal||[])].map(codNorm)), ciclo:r.ciclo};
+  }catch(e){ return {erro:e.message}; }
+}
+
+function acharCabecalho(matriz){
+  const lim = Math.min(matriz.length, 12);
+  for (let i = 0; i < lim; i++){
+    const cab = (matriz[i]||[]).map(norm);
+    for (const [k, t] of Object.entries(TIPOS)){
+      if (t.exige.every(e => cab.includes(e))) return {linha:i, tipo:k};
+    }
+  }
+  return null;
+}
+function objetos(matriz, linhaCab){
+  const cab = (matriz[linhaCab]||[]).map(c => norm(c));
+  const fora = [];
+  for (let i = linhaCab+1; i < matriz.length; i++){
+    const l = matriz[i]; if (!l) continue;
+    let vazia = true;
+    const o = {};
+    for (let j = 0; j < cab.length; j++){
+      if (!cab[j]) continue;
+      const v = l[j];
+      o[cab[j]] = v;
+      if (v !== undefined && v !== null && v !== "") vazia = false;
+    }
+    if (!vazia) fora.push(o);
+  }
+  return fora;
+}
+
+/* --------------------------------- estado -------------------------------- */
+const dados = {};       // tipo -> {arquivo, linhas:[...]}
+const el = id => document.getElementById(id);
+
+function pintarSlots(){
+  el("slots").innerHTML = Object.entries(TIPOS).map(([k,t]) => {
+    const d = dados[k];
+    const cls = d ? "ok" : "";
+    const sub = d ? `${d.linhas.length.toLocaleString("pt-BR")} linhas` :
+                    (t.opcional ? (t.nota || "opcional") : "aguardando");
+    return `<div class="slot ${cls}"><span class="dot"></span><span>
+      <b>${t.rotulo}</b><small>${sub}</small></span></div>`;
+  }).join("");
+}
+pintarSlots();
+
+/* ------------------------------- leitura --------------------------------- */
+const drop = el("drop");
+el("pick").onclick = () => el("file").click();
+el("file").onchange = e => receber([...e.target.files]);
+["dragenter","dragover"].forEach(n => drop.addEventListener(n, e => {
+  e.preventDefault(); drop.classList.add("over");
+}));
+["dragleave","drop"].forEach(n => drop.addEventListener(n, e => {
+  e.preventDefault(); drop.classList.remove("over");
+}));
+drop.addEventListener("drop", e => receber([...e.dataTransfer.files]));
+
+function progresso(pct, texto){
+  el("bar").classList.add("on");
+  el("bar").firstElementChild.style.width = pct + "%";
+  el("status").textContent = texto;
+}
+const respirar = () => new Promise(r => setTimeout(r, 16));
+
+async function receber(arquivos){
+  arquivos = arquivos.filter(f => /\.xlsx?$|\.xlsm$/i.test(f.name));
+  if (!arquivos.length){ el("status").textContent = "Nenhuma planilha reconhecida nos arquivos soltos."; return; }
+  const naoReconhecidos = [];
+
+  for (let i = 0; i < arquivos.length; i++){
+    const f = arquivos[i];
+    progresso((i/arquivos.length)*100, `Lendo ${f.name}…`);
+    await respirar();
+    try {
+      const buf = await f.arrayBuffer();
+      const wb = XLSX.read(buf, {type:"array", cellDates:false, cellNF:false, cellText:false});
+      let achou = false;
+      for (const nomeAba of wb.SheetNames){
+        const matriz = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], {header:1, raw:true, defval:null, blankrows:false});
+        const cab = acharCabecalho(matriz);
+        if (!cab) continue;
+        /* A base de vendas mensais vem com o cabecalho quebrado em duas linhas:
+           os nomes das medidas (Caixa Fisica, Valor Faturado) ficam na linha de
+           cima. Completa as celulas vazias do cabecalho com a de cima. */
+        if (cab.tipo === "vendas" && cab.linha > 0) {
+          const cima = matriz[cab.linha-1] || [], cabRow = matriz[cab.linha];
+          for (let j = 0; j < Math.max(cima.length, cabRow.length); j++)
+            if ((cabRow[j] == null || cabRow[j] === "") && cima[j] != null) cabRow[j] = cima[j];
+        }
+        dados[cab.tipo] = {arquivo:f.name, aba:nomeAba, linhas:objetos(matriz, cab.linha)};
+        achou = true;
+        progresso((i/arquivos.length)*100, `${f.name} → ${TIPOS[cab.tipo].rotulo}: ${dados[cab.tipo].linhas.length.toLocaleString("pt-BR")} linhas`);
+        await respirar();
+      }
+      if (!achou) naoReconhecidos.push(f.name);
+    } catch(err){
+      naoReconhecidos.push(`${f.name} (${err.message})`);
+    }
+    pintarSlots();
+  }
+
+  if (ESTRUTURA_VEM_DO_PORTAL){ progresso(100, "Buscando no sistema as lojas do roteiro…"); ESCOPO_BANCO = await buscarEscopoBanco(); }
+  progresso(100, "Conferindo…");
+  await respirar();
+  try {
+    analisar(naoReconhecidos);
+  } catch(err){
+    el("status").textContent = "Erro ao conferir: " + err.message;
+    console.error(err);
+    return;
+  }
+  el("bar").classList.remove("on");
+  el("status").textContent = "Conferência concluída.";
+}
+
+/* ------------------------------- análise --------------------------------- */
+let saida = {};
+
+function analisar(naoReconhecidos){
+  const probs = [];
+  const conf = [];
+  saida = {};
+  // Escopo do sistema: SO as lojas que um repositor atende. Definido pelo
+  // roteiro, nao pela base de clientes. Decisao do negocio, e ela derruba a
+  // carga de 29.354 lojas para ~549 e de 75.766 notas para ~5.686.
+  let escopo = null, escopoNorm = false;
+
+  const add = (nivel, titulo, texto, exemplo) => probs.push({nivel, titulo, texto, exemplo});
+
+  for (const n of naoReconhecidos)
+    add("warn", "Planilha não reconhecida", `Nenhuma aba de ${n} tem um cabeçalho conhecido. Confira se o relatório mudou de formato.`);
+
+  /* ---- lojas ---- */
+  const lojas = new Map();
+  if (dados.clientes && ESTRUTURA_VEM_DO_PORTAL)
+    add("info","Base de clientes ignorada","O cadastro das lojas (endereço, coordenada, consultor) vem do Portal Merchandising todos os dias. Esta planilha não é mais enviada.");
+  if (dados.clientes && !ESTRUTURA_VEM_DO_PORTAL){
+    let semGps = 0, dupl = 0;
+    for (const r of dados.clientes.linhas){
+      const cod = codigo(r["COD. CLIENTE"]);
+      if (!cod) continue;
+      if (lojas.has(cod)){ dupl++; continue; }
+      const la = coord(r["LATITUDE"], -34, 6), lo = coord(r["LONGITUDE"], -74, -34);  // limites do Brasil
+      if (la == null || lo == null) semGps++;
+      lojas.set(cod, {
+        codigo:cod, cnpj:txt(r["CNPJ/CPF"]), nome:txt(r["NOME FANTASIA"]),
+        razao:txt(r["RAZAO SOCIAL"]), segmento:txt(r["SEGMENTO"]),
+        canal:txt(r["CANAL CLIENTE"]), subcanal:txt(r["SUBCANAL"]),
+        endereco:txt(r["ENDERECO"]), complemento:txt(r["COMPLEMENTO"]),
+        cep:txt(r["CEP"]), bairro:txt(r["BAIRRO"]), cidade:txt(r["CIDADE"]),
+        gps_lat:la, gps_lon:lo, telefone:txt(r["TELEFONE CLIENTE"]),
+        consultor:txt(r["NOME CONSULTOR"]), consultor_tel:txt(r["TEL. CONSULTOR"]),
+        // Cadeia comercial: quem o repositor chama quando o consultor nao resolve.
+        supervisor:txt(r["NOME SUPERVISOR"]), supervisor_tel:txt(r["TELEFONE SUP."]),
+        gerencia:txt(r["GERENCIA COMERCIAL"]), gerencia_tel:txt(r["TELEFONE G.C"]),
+        rota_venda:codigo(r["ROTA"])
+      });
+    }
+    conf.push(["Clientes na base", dados.clientes.linhas.length, lojas.size,
+      semGps ? `${semGps} sem coordenada` : "todos com coordenada"]);
+    if (dupl) add("warn","Código de cliente repetido",`${dupl} linhas repetem um código já lido. Mantive a primeira de cada.`);
+    // saida["loja"] sai mais abaixo, depois que o roteiro definir o escopo.
+  } else if (!ESTRUTURA_VEM_DO_PORTAL) add("err","Falta a base de clientes","Sem ela não há endereço nem coordenada, e o roteiro não tem para onde apontar.");
+
+  /* ---- produtos ---- */
+  const produtos = new Map();
+  if (dados.produtos){
+    for (const r of dados.produtos.linhas){
+      const cod = codigo(r["COD. PRODUTO"]);
+      if (!cod || produtos.has(cod)) continue;
+      produtos.set(cod, {
+        sku:cod, nome:txt(r["PRODUTO"]), categoria:txt(r["GRUPO ESPECIE"]),
+        marca:txt(r["MARCA"]), sabor:txt(r["SABOR"]), embalagem:txt(r["EMBALAGEM"]),
+        ean:txt(r["COD. EAN / DUM"]), fator_cx:num(r["FATOR CX"]),
+        dias_validade:num(r["DIAS VALIDADE"]),
+        ativo: norm(r["SUPRIMIDO"]) === "SIM" ? false : true
+      });
+    }
+    conf.push(["Produtos cadastrados", dados.produtos.linhas.length, produtos.size, ""]);
+    saida["produto"] = [...produtos.values()];
+  } else add("err","Falta o cadastro de produtos","A contagem de estoque não tem o que listar sem ele.");
+
+  /* ---- roteiro ---- */
+  const DIAS = {SEG:1, TER:2, QUA:3, QUI:4, SEX:5, SAB:6};
+  const rotas = new Map(), pessoas = new Map(), roteiro = [];
+  if (dados.roteiro && !ESTRUTURA_VEM_DO_PORTAL){
+    const rotaNome = new Map(), nomeRota = new Map();
+    let semRota = 0, semNome = 0, semDia = 0;
+    const pvOrfaos = new Set(), conflitos = [];
+
+    for (const r of dados.roteiro.linhas){
+      const rota = norm(r["ROTA RP"]);
+      const nome = norm(r["NOME REPOSITOR"]);
+      const pv   = codigo(r["PV"]);
+      if (!rota){ semRota++; continue; }
+
+      if (nome){
+        if (!rotaNome.has(rota)) rotaNome.set(rota, nome);
+        else if (rotaNome.get(rota) !== nome) conflitos.push(`${rota}: ${rotaNome.get(rota)} / ${nome}`);
+        if (!nomeRota.has(nome)) nomeRota.set(nome, rota);
+        else if (nomeRota.get(nome) !== rota) conflitos.push(`${nome}: ${nomeRota.get(nome)} / ${rota}`);
+      } else semNome++;
+
+      rotas.set(rota, {codigo:rota, ativa:true});
+
+      if (nome && !pessoas.has(nome)){
+        pessoas.set(nome, {
+          nome: txt(r["NOME REPOSITOR"]), nome_norm:nome, perfil:"repositor",
+          matricula: codigo(r["MATRICULA REP"]), telefone: txt(r["TELEFONE REPOSITOR"]),
+          lider_norm: norm(r["NOME LIDER DE MERCHANDISING"]) || null,
+          rota: rota,
+          ausencia: txt(r["STATUS FERIAS"])
+        });
+      }
+      const lider = norm(r["NOME LIDER DE MERCHANDISING"]);
+      if (lider && !pessoas.has(lider)) pessoas.set(lider, {
+        nome:txt(r["NOME LIDER DE MERCHANDISING"]), nome_norm:lider, perfil:"lider",
+        matricula:codigo(r["MATRICULA LIDER"]), telefone:txt(r["TELEFONE LIDER"]),
+        lider_norm: norm(r["NOME GERENTE/SUPERVISOR"]) || null, rota:null, ausencia:null
+      });
+      const ger = norm(r["NOME GERENTE/SUPERVISOR"]);
+      if (ger && !pessoas.has(ger)) pessoas.set(ger, {
+        nome:txt(r["NOME GERENTE/SUPERVISOR"]), nome_norm:ger, perfil:"gerente",
+        matricula:null, telefone:txt(r["TELEFONE GERENTE/SUPERVISOR"]),
+        lider_norm:null, rota:null, ausencia:null
+      });
+
+      if (pv && lojas.size && !lojas.has(pv)) pvOrfaos.add(pv);
+
+      let marcou = false;
+      for (const [sig, d] of Object.entries(DIAS)){
+        if (num(r[sig])) { roteiro.push({referencia:iso(celulaData(r["REFERENCIA"])), rota_codigo:rota, loja_codigo:pv, dia_semana:d}); marcou = true; }
+      }
+      if (!marcou) semDia++;
+    }
+
+    /* Mes de referencia em destaque. Ja chegou arquivo de "mes novo" que era
+       copia identica do anterior, com a referencia velha. Sem este aviso a
+       carga viraria uma segunda versao do mesmo mes sem ninguem perceber. */
+    const refs=[...new Set(roteiro.map(l=>l.referencia).filter(Boolean))].sort();
+    const ref=refs[refs.length-1];
+    if(ref){
+      const [ay,am]=ref.split("-").map(Number), h=new Date();
+      const atual=h.getFullYear()*12+h.getMonth()+1, doArq=ay*12+am;
+      const rotulo=String(am).padStart(2,"0")+"/"+ay;
+      conf.push(["Mês de referência", "", "", "<b>"+rotulo+"</b>"]);
+      if(refs.length>1) add("err","Mais de um mês na mesma base",
+        `A roteirização tem ${refs.length} meses de referência misturados: ${refs.join(", ")}. Confira a planilha de origem.`);
+      else if(doArq<atual) add("warn","Referência de mês que já passou",
+        `Esta base está marcada como ${rotulo}. Se ela deveria ser do mês atual, provavelmente o relatório foi baixado antes de ser atualizado. Subir assim cria uma nova versão de ${rotulo}, sem mudar o mês.`);
+    }
+    conf.push(["Linhas de roteiro", dados.roteiro.linhas.length, roteiro.length, "uma linha por loja e dia"]);
+    conf.push(["Rotas de repositor", "", rotas.size, `${[...pessoas.values()].filter(p=>p.perfil==="repositor").length} repositores nomeados`]);
+    conf.push(["Líderes e gerentes", "",
+      [...pessoas.values()].filter(p=>p.perfil!=="repositor").length, ""]);
+
+    if (semRota) add("err","Linha sem rota",`${semRota} linhas não têm Rota RP e foram descartadas. A rota é a chave: sem ela a linha não tem dono.`);
+    if (semNome) add("warn","Rota sem repositor",`${semNome} linhas têm rota mas nenhum nome. Vai aparecer como rota descoberta no painel do líder.`);
+    if (semDia)  add("warn","Loja sem dia marcado",`${semDia} linhas não têm nenhum dia entre SEG e SAB marcado, então a loja não entra em roteiro nenhum.`);
+    if (conflitos.length) add("err","Rota e nome não batem",
+      `${conflitos.length} casos em que a mesma rota aparece com dois nomes, ou o mesmo nome em duas rotas. Como a rota é a identidade do login, isso precisa ser resolvido antes de subir.`,
+      conflitos.slice(0,4).join("  ·  "));
+    if (pvOrfaos.size) add("warn","Loja do roteiro sem cadastro",
+      `${pvOrfaos.size} lojas atendidas não estão na base de clientes, então ficam sem endereço e sem coordenada.`,
+      [...pvOrfaos].slice(0,8).join(", "));
+
+    const ausentes = [...pessoas.values()].filter(p => p.ausencia);
+    if (ausentes.length) add("info","Repositor ausente neste ciclo",
+      `${ausentes.length} pessoas com afastamento marcado. As rotas delas precisam de cobertura ou vão ficar sem atendimento.`,
+      ausentes.slice(0,6).map(p => `${p.rota} ${p.nome} (${p.ausencia})`).join("  ·  "));
+
+    saida["rota"] = [...rotas.values()];
+    saida["pessoa"] = [...pessoas.values()].map(p => ({
+      nome:p.nome, nome_norm:p.nome_norm, perfil:p.perfil,
+      matricula:p.matricula, telefone:p.telefone, lider_norm:p.lider_norm
+    }));
+    saida["rota_ocupacao"] = [...pessoas.values()].filter(p => p.rota)
+      .map(p => ({rota_codigo:p.rota, pessoa_norm:p.nome_norm, cobertura:false, ausencia:p.ausencia}));
+    saida["roteiro"] = roteiro;
+
+    // Escopo fechado. Daqui pra frente, loja fora do roteiro nao existe.
+    escopo = new Set(roteiro.map(l => l.loja_codigo).filter(Boolean));
+    if (lojas.size){
+      const dentro = [...escopo].filter(c => lojas.has(c));
+      saida["loja"] = dentro.map(c => lojas.get(c));
+      conf.push(["Lojas que entram no sistema", "", dentro.length,
+        `de ${lojas.size.toLocaleString("pt-BR")} clientes na base`]);
+    }
+  } else if (ESTRUTURA_VEM_DO_PORTAL){
+    /* A estrutura e o roteiro vem do portal; o escopo (quais clientes viram loja) vem do banco. */
+    if (dados.roteiro) add("info","Roteirização ignorada","A estrutura e o roteiro vêm do Portal Merchandising todos os dias. Esta planilha não é mais enviada.");
+    const E = ESCOPO_BANCO || {erro:"sem resposta do sistema"};
+    if (E.erro === "chave") add("err","Conecte ao sistema","Para saber quais clientes viram loja, a página pergunta ao sistema o roteiro que veio do portal. Cole a chave de carga em Conectar ao sistema, na página de vendas do dia (a chave vale para as duas), e solte as planilhas aqui de novo.");
+    else if (E.erro) add("err","Não consegui buscar o roteiro no sistema", escHtml(E.erro) + " Solte as planilhas de novo. Se continuar, confira se o 56-escopo-da-carga.sql foi rodado.");
+    else if (!E.codigos.size) add("err","O roteiro no sistema está vazio","Não há nenhuma loja no roteiro do ciclo em uso. Confira a integração com o portal antes de fazer a carga mensal.");
+    else {
+      /* O recorte das notas e das vendas sao as lojas do roteiro que veio do portal.
+         O cadastro das lojas tambem vem do portal: esta pagina nao envia lojas. */
+      escopo = E.codigos; escopoNorm = true;
+      conf.push(["Lojas no roteiro do portal", "", E.codigos.size,
+        `ciclo ${escHtml(E.ciclo||"?")} · o cadastro das lojas vem do portal`]);
+    }
+  } else add("err","Falta a roteirização","É a base que diz quem atende qual loja em que dia.");
+
+  /* ---- notas fiscais ---- */
+  if (dados.notas){
+    const nf = new Map(), itens = [];
+    const prodSemCad = new Set();
+    let semNumero = 0, semData = 0, divergentes = 0, emAberto = 0, foraEscopo = 0;
+
+    for (const r of dados.notas.linhas){
+      const numero = codigo(r["NUM. NOTA FISCAL"]);
+      if (!numero){ semNumero++; continue; }
+      const cli = codigo(r["COD. CLIENTE"]);
+      // Fora do escopo: loja sem repositor. Nao e problema, e recorte.
+      if (escopo && !escopo.has(escopoNorm ? codNorm(cli) : cli)){ foraEscopo++; continue; }
+      const dEmi = celulaData(r["DATA EMISSAO GERENCIAL"]);
+      if (!dEmi){ semData++; continue; }
+      const st  = norm(r["STATUS NF"]);
+      const prod = codigo(r["COD. PRODUTO"]);
+
+      if (prod && produtos.size && !produtos.has(prod)) prodSemCad.add(prod);
+
+      if (!nf.has(numero)){
+        const prev = diasUteisApos(dEmi, PRAZO_DIAS_UTEIS);
+        const hoje = new Date();
+        const hojeIso = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}-${String(hoje.getDate()).padStart(2,"0")}`;
+        if (st === "ABERTA" && iso(prev) < hojeIso) emAberto++;
+        nf.set(numero, {
+          numero, loja_codigo:cli, rota_venda:codigo(r["ROTA"]),
+          consultor:null, supervisor:txt(r["SUPERVISOR"]), gerencia:txt(r["GERENCIA COMERCIAL"]),
+          data_emissao:iso(dEmi), previsao_entrega:iso(prev), status:st, faturamento:0
+        });
+      } else {
+        const a = nf.get(numero);
+        if ((a.loja_codigo && cli && a.loja_codigo !== cli) ||
+            (a.data_emissao !== iso(dEmi)) || (a.status !== st)) divergentes++;
+      }
+      const cab = nf.get(numero);
+      cab.faturamento += num(r["FATURAMENTO"]) || 0;
+      itens.push({numero, produto_sku:prod, caixas:num(r["VOLUME CX FISICA"]),
+                  volume:num(r["VOLUME"]), faturamento:num(r["FATURAMENTO"])});
+    }
+
+    const abertas = [...nf.values()].filter(n => n.status === "ABERTA").length;
+    conf.push(["Notas fiscais no escopo", dados.notas.linhas.length, nf.size,
+      `${abertas.toLocaleString("pt-BR")} abertas, ${(nf.size-abertas).toLocaleString("pt-BR")} acertadas`]);
+    conf.push(["Itens de nota", itens.length, "", "chave: nota + produto"]);
+    if (foraEscopo) conf.push(["Descartado por não ter repositor", foraEscopo, "", "lojas fora do roteiro"]);
+
+    if (semNumero) add("err","Nota sem número",`${semNumero} linhas sem número de NF foram descartadas. Sem o número não dá para reimportar sem duplicar.`);
+    if (semData) add("err","Nota sem data de emissão",`${semData} linhas descartadas: sem emissão não dá para calcular a chegada.`);
+    if (divergentes) add("err","Nota com dados conflitantes",
+      `${divergentes} linhas trazem cliente, data ou status diferentes de outra linha da mesma nota. Mantive a primeira, mas isso indica problema no relatório de origem.`);
+    if (prodSemCad.size) add("warn","Produto vendido sem cadastro",
+      `${prodSemCad.size} produtos faturados não estão no cadastro. Vou criá-los sem marca nem embalagem, para a linha não sumir.`,
+      [...prodSemCad].slice(0,8).join(", "));
+    if (emAberto) add("info","Nota em aberto além da previsão",
+      `${emAberto.toLocaleString("pt-BR")} notas passaram dos ${PRAZO_DIAS_UTEIS} dias úteis e continuam abertas. Aberta pode ser não entregue ou entregue sem acerto no caixa: quem separa os dois é o repositor, confirmando na visita.`);
+
+    saida["nota_fiscal"] = [...nf.values()];
+    saida["nota_item"] = itens;
+  } else add("warn","Sem notas fiscais nesta carga","O roteiro sobe do mesmo jeito, mas o repositor não vai ver o que chega em cada loja.");
+
+  /* ---- vendas mensais: base da Oportunidade do Estoque ---- */
+  if (dados.vendas){
+    const agg = new Map(); let foraEsc = 0;
+    for (const r of dados.vendas.linhas){
+      const cli = codigo(r["COD. CLIENTE"]), prod = codigo(r["COD. PRODUTO"]);
+      const mes = String(codigo(r["CALENDAR MONTH"])||"").slice(0,6);
+      if (!cli || !prod || !/^\d{6}$/.test(mes)) continue;
+      if (escopo && !escopo.has(escopoNorm ? codNorm(cli) : cli)) { foraEsc++; continue; }
+      const k = cli+"|"+prod+"|"+mes;
+      const a = agg.get(k) || {codigo_cliente:cli, codigo_produto:prod, mes, caixas:0, faturado:0,
+                               descricao:txt(r["DESCRICAO PRODUTO"])};
+      a.caixas += num(r["CAIXA FISICA"]) || 0;
+      a.faturado += num(r["VALOR FATURADO"]) || 0;
+      agg.set(k, a);
+    }
+    const linhasV = [...agg.values()];
+    const meses = [...new Set(linhasV.map(x=>x.mes))].sort();
+    const lojasV = new Set(linhasV.map(x=>x.codigo_cliente)).size;
+    conf.push(["Vendas mensais", dados.vendas.linhas.length, linhasV.length,
+      `${lojasV} lojas · meses ${meses.map(m=>m.slice(4)+"/"+m.slice(0,4)).join(", ")}`]);
+    /* A regra precisa de dois meses completos para saber o que e normal, mais
+       o mes corrente para comparar. Com menos, o modulo fica vazio. */
+    if (meses.length < 3) add("warn","Poucos meses de venda",
+      `A base tem ${meses.length} ${meses.length===1?"mês":"meses"}. A Oportunidade do Estoque precisa de pelo menos 3: dois completos para saber o que é normal e o atual para comparar.`);
+    if (!linhasV.some(x=>x.caixas>0)) add("err","Vendas sem caixas",
+      "A coluna Caixa Física veio vazia. Confira se o relatório trouxe as medidas.");
+    saida["venda_mensal"] = linhasV;
+  }
+
+  /* ---- veredito ---- */
+  const erros = probs.filter(p => p.nivel === "err").length;
+  const avisos = probs.filter(p => p.nivel === "warn").length;
+  el("verdict").innerHTML = erros
+    ? `<div class="verdict blocked"><b>Não suba ainda.</b><p>${erros} ${erros===1?"problema impede":"problemas impedem"} a carga. Corrija na origem e solte a planilha de novo.</p></div>`
+    : `<div class="verdict"><b>Pode subir.</b><p>Nenhum problema impeditivo.${avisos?` ${avisos} ${avisos===1?"ponto merece":"pontos merecem"} sua atenção, mas não travam a carga.`:""}</p></div>`;
+
+  el("conf").innerHTML = conf.map(([a,b,c,d]) => `<tr>
+    <td>${a}</td>
+    <td class="n">${b === "" ? "" : Number(b).toLocaleString("pt-BR")}</td>
+    <td class="n">${c === "" ? "" : Number(c).toLocaleString("pt-BR")}</td>
+    <td class="mut">${String(d).startsWith("<b>")?d:escHtml(d)}</td></tr>`).join("");
+
+  const ordem = {err:0, warn:1, info:2};
+  const rotulo = {err:"impede", warn:"atenção", info:"nota"};
+  el("probs").innerHTML = probs.length
+    ? probs.sort((a,b) => ordem[a.nivel]-ordem[b.nivel]).map(p => `<div class="issue ${p.nivel}">
+        <b>${p.titulo}</b><span class="tag ${p.nivel}">${rotulo[p.nivel]}</span>
+        <p>${p.texto}</p>${p.exemplo?`<div class="ex">${p.exemplo}</div>`:""}</div>`).join("")
+    : `<div class="issue info"><b>Nada a apontar</b><p>As bases passaram em todas as conferências.</p></div>`;
+
+  el("outs").innerHTML = Object.entries(saida).filter(([,v]) => v && v.length)
+    .map(([k,v]) => `<button class="plain" data-t="${k}">${k}.csv · ${v.length.toLocaleString("pt-BR")}</button>`).join("");
+  el("outs").querySelectorAll("button").forEach(b => b.onclick = () => baixar(b.dataset.t));
+  /* Envio direto. Esvazia todas as caixas do mes antes, como o 03 fazia, para
+     nenhuma sobra do mes passado entrar junto. */
+  if (!erros) envioCartao(el("envio"),
+    Object.fromEntries(Object.entries(saida).filter(([,v]) => v && v.length).map(([k,v]) => ["stg_"+k, v])),
+    "mensal", CAIXAS_DO_MES, resumirMensal);
+  else el("envio").innerHTML = "";
+
+  el("bConf").classList.add("on");
+  el("bProb").classList.add("on");
+  if (!erros) el("bOut").classList.add("on"); else el("bOut").classList.remove("on");
+}
+
+/* =========================== ENVIO DIRETO AO SISTEMA ===========================
+   COPIA EXATA nas duas paginas: importador.html e vendas-diaria.html. Um teste
+   confere que as duas estao iguais. Se mudar numa, mude na outra.
+
+   A pagina manda as linhas para as caixas de entrada em pedacos de 1.500 e
+   depois pede a carga. Quem autoriza e a chave de carga, gerada no
+   34-carga-pela-pagina.sql e guardada so neste navegador.
+============================================================================== */
+const ENVIO_PADRAO = {url:"https://kqpdledhaghuzuwjkvrf.supabase.co",
+                      anon:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid"};
+const ENVIO_LOTE = 1500;
+/* A chave fica guardada no navegador. Se o navegador nao deixar gravar (pagina
+   aberta direto do computador, em alguns navegadores), ela fica ao menos na
+   memoria enquanto a pagina estiver aberta, em vez de sumir sem aviso. */
+let ENVIO_MEM = null;
+function envioCfg(){ let g = {}; try{ g = JSON.parse(localStorage.getItem("merch_carga")||"{}"); }catch(e){}
+                     return Object.assign({}, ENVIO_PADRAO, g, ENVIO_MEM || {}); }
+function envioSalvar(c){ ENVIO_MEM = c; try{ localStorage.setItem("merch_carga", JSON.stringify(c)); }catch(e){} }
+async function envioRpc(cfg, fn, corpo){
+  let r;
+  try{ r = await fetch(cfg.url.replace(/\/+$/,"") + "/rest/v1/rpc/" + fn, {method:"POST",
+         headers:{"Content-Type":"application/json", "apikey":cfg.anon, "Authorization":"Bearer "+cfg.anon},
+         body:JSON.stringify(corpo)}); }
+  catch(e){ throw new Error("Sem conexão com o sistema. Confira a internet e tente de novo."); }
+  const t = await r.text(); let j = null; try{ j = t ? JSON.parse(t) : null; }catch(e){}
+  if (!r.ok){
+    const cod = j && j.code, msg = (j && (j.message || j.hint)) || t || ("HTTP " + r.status);
+    if (cod === "57014" || /statement timeout|canceling statement/i.test(msg))
+      throw Object.assign(new Error("A carga passou do limite de tempo e o sistema desfez tudo, sem deixar nada pela metade. Tente de novo em alguns minutos. Se repetir, use o caminho pelo SQL Editor, com os arquivos CSV."), {tempo:true});
+    if (cod === "42501" || /chave de carga invalida/i.test(msg))
+      throw Object.assign(new Error("A chave de carga não confere. Cole a chave de novo em Conectar ao sistema."), {chave:true});
+    if (r.status === 404 || /could not find the function/i.test(msg))
+      throw new Error("O sistema ainda não recebe pela página. Rode o 34-carga-pela-pagina.sql no SQL Editor.");
+    throw new Error(msg);
+  }
+  return j;
+}
+/* tabelas: {stg_x: [linhas]}. esvaziar: caixas a esvaziar antes, alem das enviadas. */
+async function enviarAoSistema(tabelas, tipo, esvaziar, progresso){
+  const cfg = envioCfg();
+  if (!cfg.chave) throw Object.assign(new Error("Conecte ao sistema primeiro: cole a chave de carga."), {chave:true});
+  const nomes = Object.keys(tabelas).filter(k => tabelas[k].length);
+  const total = nomes.reduce((a,k) => a + tabelas[k].length, 0); let feito = 0;
+  progresso({fase:"esvaziar", feito, total});
+  await envioRpc(cfg, "esvaziar_caixas", {p_chave:cfg.chave, p_tabelas:[...new Set([...(esvaziar||[]), ...nomes])]});
+  for (const k of nomes){ const rs = tabelas[k];
+    for (let i = 0; i < rs.length; i += ENVIO_LOTE){
+      await envioRpc(cfg, "receber_lote", {p_chave:cfg.chave, p_tabela:k, p_linhas:rs.slice(i, i+ENVIO_LOTE)});
+      feito += Math.min(ENVIO_LOTE, rs.length - i); progresso({fase:"enviar", tabela:k, feito, total});
+    } }
+  progresso({fase:"carga", feito, total});
+  return await envioRpc(cfg, "rodar_carga", {p_chave:cfg.chave, p_tipo:tipo});
+}
+/* O cartao de envio: conectar (uma vez so), o botao, o progresso e o resultado.
+   resumir(json) devolve o HTML do resultado, que cada pagina escreve do seu jeito. */
+function envioCartao(alvo, tabelas, tipo, esvaziar, resumir){
+  const e = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const bt = "display:block;width:100%;border:none;border-radius:12px;background:#E4002B;color:#fff;font:inherit;font-weight:700;font-size:15px;padding:14px;cursor:pointer;margin-top:12px";
+  const cx = "width:100%;box-sizing:border-box;border:1px solid #D1D5DB;border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;margin-top:4px";
+  const cfg = envioCfg(), total = Object.values(tabelas).reduce((a,x) => a + x.length, 0);
+  const conectar = () => {
+    alvo.innerHTML = `<div style="border:1px solid #E5E7EB;border-radius:14px;padding:14px;margin-top:12px">
+      <b>Conectar ao sistema</b>
+      <p style="margin:4px 0 10px;color:#6B7280;font-size:13.5px">Cole a chave de carga que apareceu no fim do 34-carga-pela-pagina.sql. Ela fica guardada só neste navegador.</p>
+      <label style="font-size:12.5px;color:#6B7280">Chave de carga</label>
+      <input id="envChave" type="password" autocomplete="off" placeholder="carga_..." style="${cx}">
+      <details style="margin-top:10px;font-size:13px;color:#6B7280"><summary>Endereço e chave pública</summary>
+        <label style="font-size:12.5px">Endereço</label><input id="envUrl" value="${e(cfg.url)}" style="${cx}">
+        <label style="font-size:12.5px;display:block;margin-top:8px">Chave pública</label><input id="envAnon" value="${e(cfg.anon)}" style="${cx}">
+      </details>
+      <button id="envSalva" style="${bt}">Conectar</button><div id="envErr" style="color:#B80022;font-size:13.5px;margin-top:8px"></div></div>`;
+    alvo.querySelector("#envSalva").onclick = () => {
+      const k = alvo.querySelector("#envChave").value.trim();
+      if (!/^carga_[0-9a-f]{64}$/.test(k)) { alvo.querySelector("#envErr").textContent = "Essa não parece a chave de carga: ela começa com carga_ e tem 70 caracteres."; return; }
+      envioSalvar({url:alvo.querySelector("#envUrl").value.trim(), anon:alvo.querySelector("#envAnon").value.trim(), chave:k});
+      envioCartao(alvo, tabelas, tipo, esvaziar, resumir);
+    };
+  };
+  if (!cfg.chave) return conectar();
+  alvo.innerHTML = `<button id="envBt" style="${bt}">Enviar para o sistema · ${total.toLocaleString("pt-BR")} linhas</button>
+    <div id="envSt" style="margin-top:10px"></div>
+    <a href="#" id="envTroca" style="display:inline-block;margin-top:8px;font-size:12.5px;color:#6B7280">trocar a chave de carga</a>`;
+  alvo.querySelector("#envTroca").onclick = ev => { ev.preventDefault(); conectar(); };
+  alvo.querySelector("#envBt").onclick = async () => {
+    const b = alvo.querySelector("#envBt"), st = alvo.querySelector("#envSt");
+    b.disabled = true; b.style.opacity = ".5";
+    const barra = (p, txt) => st.innerHTML = `<div style="height:8px;background:#E5E7EB;border-radius:8px;overflow:hidden">
+        <span style="display:block;height:100%;width:${p}%;background:#E4002B;transition:width .2s"></span></div>
+      <div style="font-size:13px;color:#6B7280;margin-top:6px">${txt}</div>`;
+    try{
+      const r = await enviarAoSistema(tabelas, tipo, esvaziar, p => {
+        if (p.fase === "esvaziar") barra(2, "Preparando as caixas de entrada…");
+        else if (p.fase === "enviar") barra(Math.max(3, Math.round(p.feito/p.total*90)), `Enviando ${p.feito.toLocaleString("pt-BR")} de ${p.total.toLocaleString("pt-BR")} linhas…`);
+        else barra(94, "Rodando a carga no sistema. Pode levar até um minuto…");
+      });
+      barra(100, "Pronto.");
+      st.insertAdjacentHTML("beforeend", `<div style="background:#E6F4EE;color:#0F7A52;border-radius:12px;padding:11px 13px;margin-top:10px;font-size:14px">${resumir(r)}</div>`);
+      b.textContent = "Enviado"; 
+    }catch(err){
+      st.innerHTML = `<div style="background:#FDE7EC;color:#B80022;border-radius:12px;padding:11px 13px;margin-top:6px;font-size:14px"><b>Não foi.</b> ${e(err.message)}</div>`;
+      b.disabled = false; b.style.opacity = "";
+      if (err.chave) setTimeout(conectar, 1800);
+    }
+  };
+}
+/* ========================= fim do ENVIO DIRETO AO SISTEMA ========================= */
+
+/* O que o importador mostra depois da carga mensal. */
+const CAIXAS_DO_MES = ["stg_loja","stg_produto","stg_pessoa","stg_rota","stg_rota_ocupacao",
+                       "stg_roteiro","stg_nota_fiscal","stg_nota_item","stg_venda_mensal"];
+function resumirMensal(r){
+  const f = n => Number(n||0).toLocaleString("pt-BR"), fora = (r && r.fora) || {};
+  const semRep = (r && r.rotas_sem_repositor) || [];
+  return `<b>Carga do mês feita.</b> Ciclo ${escHtml(r.ciclo)} · ${f(r.lojas)} lojas · ${f(r.pessoas)} pessoas ·
+    ${f(r.linhas_de_roteiro)} linhas de roteiro · ${f(r.catalogo_do_mes)} itens de catálogo · ${f(r.notas)} notas.`
+    + (semRep.length ? `<br><span style="color:#96620F">Rotas sem repositor: ${escHtml(semRep.join(", "))}.</span>` : "")
+    + ((fora.roteiro_sem_loja||fora.roteiro_sem_rota) ? `<br><span style="color:#6B7280">Ficaram de fora: ${f(fora.roteiro_sem_loja)} linhas de roteiro sem loja cadastrada, ${f(fora.roteiro_sem_rota)} sem rota.</span>` : "");
+}
+
+/* ------------------------------- saída ----------------------------------- */
+function baixar(tabela){
+  const linhas = saida[tabela];
+  const cols = [...new Set(linhas.flatMap(o => Object.keys(o)))];
+  const esc = v => {
+    if (v == null) return "";
+    const s = String(v);
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  const partes = [cols.join(",")];
+  for (const o of linhas) partes.push(cols.map(c => esc(o[c])).join(","));
+  // Sem BOM. O BOM ajuda quem abre o CSV no Excel, mas faz o nome da primeira
+  // coluna chegar sujo no importador do Supabase e a coluna nao ser encontrada.
+  // Estes arquivos sao para maquina ler, nao para pessoa abrir.
+  const blob = new Blob([partes.join("\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = tabela + ".csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+</script>
+</body>
+</html>
