@@ -195,11 +195,18 @@ async function api(caminho, opc={}, comToken=true, tentou=false){
 }
 const rpc=(fn,a)=>api("/rest/v1/rpc/"+fn,{method:"POST",body:JSON.stringify(a||{})});
 function traduz(m){ const s=String(m||"").toLowerCase();
-  if(s.includes("invalid login")||s.includes("credentials")) return "Telefone ou senha não conferem.";
+  if(s.includes("invalid login")||s.includes("credentials")) return "Telefone (ou usuário) e senha não conferem.";
   if(s.includes("nao e de nenhum lider")) return "Este telefone não é de nenhum líder ou gerente da base.";
   if(s.includes("ja foi ativado")) return "Este telefone já foi ativado em outro acesso. Fale com o administrador.";
   if(s.includes("nao e da sua equipe")) return "Isso não é da sua equipe.";
   return m; }
+/* login por USUARIO (ex.: admv.comercial, o administrador): a conta e criada no Supabase;
+   aqui so entra, nunca cadastra. O perfil vem da pessoa ligada a conta (arquivo admin-por-usuario.sql). */
+async function entrarUsuario(usuario,senha){
+  const email=`${usuario}@${CFG.dominio}`;
+  const d=await api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password:senha})},false);
+  TOKEN=d.access_token; guarda.por("token",TOKEN); guarda.por("refresh",d.refresh_token);
+}
 function sair(){ guarda.tira("token"); guarda.tira("refresh"); TOKEN=null; EU=null; telaLogin(); }
 async function entrar(tel,senha){
   const email=`tel-${tel}@${CFG.dominio}`, logar=()=>api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password:senha})},false);
@@ -214,16 +221,18 @@ async function entrar(tel,senha){
 function telaLogin(msg){
   $("lado").innerHTML=""; $("app").style.gridTemplateColumns="1fr";
   $("main").innerHTML=`<div class="login"><img src="${LOGO.coca}" alt="Coca-Cola Bandeirantes" style="display:block;width:190px;height:auto;margin:0 auto 14px"><h2>Painel de merchandising</h2><p class="mut" style="margin:0">Para gerentes e líderes. O mesmo acesso do app do líder.</p>
-    <label class="campo"><span>Seu telefone, com DDD</span><input id="tel" type="tel" placeholder="(62) 99999-9999"></label>
+    <label class="campo"><span>Seu telefone com DDD (ou usuário)</span><input id="tel" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="(62) 99999-9999"></label>
     <label class="campo"><span>Senha</span><input id="sen" type="password"></label>
     <p class="mut" style="font-size:12.5px;margin:8px 0 0">No primeiro acesso, a senha que você digitar passa a ser a sua. Pelo menos 6 caracteres.</p>
     <div id="lerro">${msg?`<div class="erro">${esc(msg)}</div>`:""}</div>
     <button class="bt verm" id="entrar" style="width:100%;margin-top:14px;padding:11px">Entrar</button></div>`;
-  const vai=async()=>{ const tel=soTel($("tel").value), sen=$("sen").value;
-    if(tel.length<10) return $("lerro").innerHTML=`<div class="erro">Digite o telefone com DDD.</div>`;
+  const vai=async()=>{ const bruto=$("tel").value.trim(), tel=soTel(bruto), sen=$("sen").value;
+    const usuario=/[a-z]/i.test(bruto)?bruto.toLowerCase():null;
+    if(usuario&&!/^[a-z0-9._-]{3,40}$/.test(usuario)) return $("lerro").innerHTML=`<div class="erro">Usuário inválido.</div>`;
+    if(!usuario&&tel.length<10) return $("lerro").innerHTML=`<div class="erro">Digite o telefone com DDD.</div>`;
     if(sen.length<6) return $("lerro").innerHTML=`<div class="erro">A senha precisa ter pelo menos 6 caracteres.</div>`;
     $("entrar").disabled=true; $("entrar").textContent="Entrando…";
-    try{ await entrar(tel,sen); await abrir(); }catch(e){ $("lerro").innerHTML=`<div class="erro">${esc(traduz(e.message))}</div>`; if($("entrar")){ $("entrar").disabled=false; $("entrar").textContent="Entrar"; } } };
+    try{ if(usuario) await entrarUsuario(usuario,sen); else await entrar(tel,sen); await abrir(); }catch(e){ $("lerro").innerHTML=`<div class="erro">${esc(traduz(e.message))}</div>`; if($("entrar")){ $("entrar").disabled=false; $("entrar").textContent="Entrar"; } } };
   $("entrar").onclick=vai; $("sen").onkeydown=e=>{ if(e.key==="Enter") vai(); };
 }
 
