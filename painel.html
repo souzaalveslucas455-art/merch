@@ -289,9 +289,10 @@ const IC={
   inv:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c0-1.4-1.3-2.5-3-2.5s-3 1-3 2.3c0 3.2 6 1.8 6 5 0 1.4-1.3 2.7-3 2.7s-3-1.1-3-2.5M12 5.5v2M12 16.5v2"/></svg>',
   vis:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   arv:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-3h14v3"/></svg>',
+  acess:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="11" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16.5" r="1.5"/></svg>',
   filtro:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"/></svg>'};
 const MODULOS=[["oport","Oportunidade de Estoque"],["venc","Controle de Vencimentos"],["equip","Geladeiras"],["entr","Validade na Entrega"],["estq","Contagem de Estoque"],
-               ["vis","Visitas e localização"],["desemp","Desempenho da equipe"],["dem","Demandas"],["arv","Estrutura da equipe"],["inv","Investimentos"]];
+               ["vis","Visitas e localização"],["desemp","Desempenho da equipe"],["dem","Demandas"],["arv","Estrutura da equipe"],["inv","Investimentos"],["acess","Acessos"]];
 
 function pintar(){ pintaLado(); pintaMain(); }
 function pintaLado(){
@@ -302,7 +303,7 @@ function pintaLado(){
   const badge={venc, oport:nt, dem:abertas, equip:gelSumiu};
   const d=new Date(), dia=d.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
   $("lado").innerHTML=`<div class="marca" style="flex-direction:column;align-items:flex-start;gap:8px"><img src="${LOGO.comercial}" alt="Comercial Bandeirantes" style="width:100%;max-width:196px;height:auto;display:block"><small>Painel de merchandising</small></div>
-    <nav>${MODULOS.filter(([k])=>k!=="inv"||(EU&&["gerente","admin"].includes(EU.perfil))).map(([k,n])=>`<button data-mod="${k}" ${MOD===k?'aria-current="page"':""}>${IC[k]}<span>${n}</span>${badge[k]?`<span class="n">${badge[k]}</span>`:""}</button>`).join("")}</nav>
+    <nav>${MODULOS.filter(([k])=>(k!=="inv"||(EU&&["gerente","admin"].includes(EU.perfil)))&&(k!=="acess"||(EU&&EU.perfil==="admin"))).map(([k,n])=>`<button data-mod="${k}" ${MOD===k?'aria-current="page"':""}>${IC[k]}<span>${n}</span>${badge[k]?`<span class="n">${badge[k]}</span>`:""}</button>`).join("")}</nav>
     <div class="hoje"><div class="top"><span class="pill">Hoje</span><span>${dataBr(hoje())}/${hoje().slice(0,4)}</span></div>
       <h3>${esc(dia[0].toUpperCase()+dia.slice(1))}</h3>
       <div class="big">${t.vis}<small> de ${t.prev}</small></div><div style="font-size:12.5px;opacity:.92">visitas do roteiro feitas</div>
@@ -336,7 +337,7 @@ function pintaMain(){
         <label><div class="rot" style="margin-top:0">PERÍODO</div><select id="fDias">${[7,15,30].map(n=>`<option ${n===DIAS?"selected":""} value="${n}">Últimos ${n} dias</option>`).join("")}</select></label>
         <button class="bt" id="fLimpa">Limpar</button></div>
     </div>
-    <section class="mod" id="mod">${({oport:modOport,venc:modVenc,equip:modEquip,inv:modInv,entr:modEntr,estq:modEstq,vis:modVis,desemp:modDesemp,dem:modDem,arv:modArv}[MOD]||modVenc)()}</section>`;
+    <section class="mod" id="mod">${({oport:modOport,venc:modVenc,equip:modEquip,inv:modInv,entr:modEntr,estq:modEstq,vis:modVis,desemp:modDesemp,dem:modDem,arv:modArv,acess:modAcess}[MOD]||modVenc)()}</section>`;
   ligar();
 }
 function ligar(){
@@ -983,6 +984,92 @@ function modArv(){
         <span class="mut">${plural(rs.length,"repositor","repositores")}${l.telefone?` · ${esc(l.telefone)}`:""}</span>${l.ativou?'<span class="tag t-verde">acesso ativo</span>':'<span class="tag t-amb">não ativou</span>'}</span></summary>
         <div class="reps">${rs.map(r=>`<div class="rep"><b>${esc(tit(r.nome))}</b><div class="mut">rota ${esc(r.rota||"?")}${r.telefone?` · ${esc(r.telefone)}`:""}</div>
           <div style="margin-top:4px">${r.usa_app?'<span class="tag t-verde">usa o app</span>':'<span class="tag t-verm">nunca entrou</span>'} <span class="mut">${plural((r.lojas||[]).length,"loja","lojas")}</span></div></div>`).join("")||'<span class="mut">Sem repositor.</span>'}</div></details></div>`; }).join("")}</div>`).join("")||'<div class="vazio">Nenhum líder.</div>'}</div>`;
+}
+
+/* --------------------------- 11. acessos (so o administrador) --------------------------- */
+async function carregarAcess(){ try{ D.acess=await rpc("acessos_lista"); }catch(e){ D.acess={erro:traduz(e.message)}; } }
+const PERFIL_NOME={admin:"Administrador",gerente:"Gerente",lider:"Líder"};
+/* senha provisoria: 8 caracteres, sem os que confundem (0/O, 1/I/l) */
+function senhaSugerida(){ const a="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789", v=new Uint32Array(8);
+  crypto.getRandomValues(v); return Array.from(v,n=>a[n%a.length]).join(""); }
+function modAcess(){
+  if(!(EU&&EU.perfil==="admin")) return `<h2>Acessos</h2><div class="alerta">Este módulo é só para o administrador.</div>`;
+  if(!D.acess||D.acess.erro){ if(!D.acess) carregarAcess().then(pintar);
+    return `<h2>Acessos</h2><div class="vazio">${D.acess&&D.acess.erro?esc(D.acess.erro):"Buscando os acessos…"}</div>`; }
+  const ls=D.acess.liderancas||[], rs=D.acess.rotas||[];
+  const lista=[["lid",`Lideranças · ${ls.length}`,`${ls.filter(x=>x.ativou).length} já ativaram o acesso`],
+               ["rot",`Rotas · ${rs.length}`,`${rs.filter(x=>x.ativou).length} já ativadas`]];
+  const at=abaAtual(lista);
+  const sit=x=>x.ativou?'<span class="tag t-verde">acesso ativo</span>':'<span class="tag t-amb">ainda não ativou</span>';
+  const ult=x=>x.ultimo_acesso?quando(x.ultimo_acesso):'<span class="mut">—</span>';
+  const busca=t=>esc(String(t||"").toLowerCase());
+  const corpo=at==="lid"
+    ? tabela(`<th>Nome</th><th>Perfil</th><th>Telefone</th><th>Situação</th><th>Último acesso</th><th></th>`,
+        ls.map(x=>`<tr data-b="${busca([x.nome,x.tel_final,PERFIL_NOME[x.perfil]].join(" "))}"><td><b>${esc(tit(x.nome))}</b></td>
+          <td>${PERFIL_NOME[x.perfil]||esc(x.perfil)}</td>
+          <td>${x.tel_final?`final ${esc(x.tel_final)}`:'<span class="tag t-verm">sem telefone</span>'}</td>
+          <td>${sit(x)}</td><td>${ult(x)}</td>
+          <td style="white-space:nowrap;text-align:right">${x.ativou?`<button class="bt" data-acsenha="lideranca|${x.id}|${esc(x.nome)}">Senha provisória</button>${x.id!==EU.id?` <button class="bt" data-aclib="${x.id}|${esc(x.nome)}">Liberar</button>`:""}`:""}</td></tr>`),
+        "Nenhuma liderança ativa.")
+    : tabela(`<th>Rota</th><th>Repositor hoje</th><th>Situação</th><th>Último acesso</th><th></th>`,
+        rs.map(x=>`<tr data-b="${busca([x.codigo,x.ocupante].join(" "))}"><td><b>${esc(x.codigo)}</b></td>
+          <td>${x.ocupante?esc(tit(x.ocupante)):'<span class="tag t-cinza">vaga</span>'}</td>
+          <td>${sit(x)}</td><td>${ult(x)}</td>
+          <td style="white-space:nowrap;text-align:right">${x.ativou?`<button class="bt" data-acsenha="rota|${x.id}|rota ${esc(x.codigo)}">Senha provisória</button>`:""}</td></tr>`),
+        "Nenhuma rota ativa.");
+  const ajuda=at==="lid"
+    ? `<b>Esqueceu a senha?</b> Use <b>Senha provisória</b> e passe a senha para a pessoa: ela entra com o telefone e essa senha.
+       <b>Trocou de número?</b> Use <b>Liberar</b>: no próximo acesso, ela entra com o número novo e cria a senha. Quem ainda não ativou faz o primeiro acesso sozinho, com o telefone.`
+    : `<b>Ninguém sabe a senha da rota?</b> Use <b>Senha provisória</b>: o repositor entra com o código da rota e essa senha, e cria o PIN no celular.
+       Trocar de celular não precisa de nada: basta entrar no celular novo com o código da rota e a mesma senha. Rota que ainda não foi ativada: a senha digitada no primeiro acesso vira a senha da rota.`;
+  ligarModulo=()=>{
+    if($("acBusca")) $("acBusca").oninput=e=>{ const b=e.target.value.trim().toLowerCase();
+      document.querySelectorAll("#mod tr[data-b]").forEach(tr=>tr.style.display=!b||tr.dataset.b.includes(b)?"":"none"); };
+    document.querySelectorAll("[data-acsenha]").forEach(b=>b.onclick=()=>{ const [t,id,nome]=b.dataset.acsenha.split("|"); formSenhaProvisoria(t,id,nome); });
+    document.querySelectorAll("[data-aclib]").forEach(b=>b.onclick=()=>{ const [id,nome]=b.dataset.aclib.split("|"); formLiberarAcesso(id,nome); });
+  };
+  return `<h2>Acessos</h2>${abas(lista)}
+    <div class="alerta">${ajuda}</div>
+    <input id="acBusca" placeholder="${at==="lid"?"Buscar por nome ou final do telefone":"Buscar por rota ou repositor"}" style="width:100%;max-width:360px;border:1px solid var(--linha);border-radius:9px;padding:8px 10px;margin:4px 0 10px">
+    ${corpo}`;
+}
+function formSenhaProvisoria(tipo,id,nome){
+  const ehRota=tipo==="rota";
+  $("dlgc").innerHTML=`<h3>Senha provisória</h3>
+    <p class="mut" style="margin:0">Para <b>${esc(tit(nome))}</b>. ${ehRota?"O repositor entra com o código da rota e esta senha.":"A pessoa entra com o telefone e esta senha."}</p>
+    <label class="campo"><span>Senha (pelo menos 6 caracteres)</span>
+      <div style="display:flex;gap:8px"><input id="sNova" value="${senhaSugerida()}" autocomplete="off" spellcheck="false" style="flex:1;font-family:monospace;font-size:16px">
+      <button class="bt" id="sGera" type="button">Gerar outra</button></div></label>
+    <div id="sErro"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="bt" id="sCanc">Cancelar</button><button class="bt verm" id="sOk">Definir senha</button></div>`;
+  $("sCanc").onclick=fechaDlg; $("sGera").onclick=()=>{ $("sNova").value=senhaSugerida(); };
+  $("sOk").onclick=async()=>{
+    const senha=$("sNova").value.trim();
+    if(senha.length<6){ $("sErro").innerHTML=`<div class="erro">A senha precisa ter pelo menos 6 caracteres.</div>`; return; }
+    $("sOk").disabled=true; $("sOk").textContent="Definindo…";
+    try{ await rpc("acesso_senha_provisoria",{p_tipo:tipo, p_id:id, p_senha:senha});
+      $("dlgc").innerHTML=`<h3>Senha definida</h3>
+        <p>Passe esta senha para <b>${esc(tit(nome))}</b>. Ela não fica guardada em lugar nenhum: anote agora.</p>
+        <div style="font-family:monospace;font-size:24px;letter-spacing:2px;text-align:center;padding:14px;border:1px dashed var(--linha);border-radius:10px;margin:8px 0;user-select:all">${esc(senha)}</div>
+        <p class="mut" style="margin:0">${ehRota?"O repositor entra com o código da rota e esta senha, e depois cria o PIN do celular.":"A pessoa entra no app com o telefone e esta senha."}</p>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="bt verm" id="sFim">Pronto</button></div>`;
+      $("sFim").onclick=async()=>{ fechaDlg(); D.acess=null; await carregarAcess(); pintar(); };
+    }catch(e){ $("sErro").innerHTML=`<div class="erro">${esc(traduz(e.message))}</div>`; $("sOk").disabled=false; $("sOk").textContent="Definir senha"; } };
+  $("dlg").showModal ? $("dlg").showModal() : $("dlg").setAttribute("open","");
+}
+function formLiberarAcesso(id,nome){
+  $("dlgc").innerHTML=`<h3>Liberar o acesso</h3>
+    <p>Liberar o acesso de <b>${esc(tit(nome))}</b>?</p>
+    <p class="mut">Use quando a pessoa <b>trocou de número de telefone</b>. O acesso atual deixa de valer, e no próximo acesso ela entra com o número novo e cria a senha. O número novo precisa estar no cadastro (vem do portal de estrutura).</p>
+    <p class="mut" style="margin:0">Se ela só esqueceu a senha, use <b>Senha provisória</b>.</p>
+    <div id="lErro"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="bt" id="lCanc">Cancelar</button><button class="bt verm" id="lOk">Liberar</button></div>`;
+  $("lCanc").onclick=fechaDlg;
+  $("lOk").onclick=async()=>{ $("lOk").disabled=true; $("lOk").textContent="Liberando…";
+    try{ await rpc("acesso_liberar",{p_id:id}); fechaDlg(); D.acess=null; await carregarAcess(); pintar();
+      $("mod").insertAdjacentHTML("afterbegin",`<div class="okmsg">Acesso de ${esc(tit(nome))} liberado.</div>`); }
+    catch(e){ $("lErro").innerHTML=`<div class="erro">${esc(traduz(e.message))}</div>`; $("lOk").disabled=false; $("lOk").textContent="Liberar"; } };
+  $("dlg").showModal ? $("dlg").showModal() : $("dlg").setAttribute("open","");
 }
 
 if(TOKEN) abrir(); else telaLogin();
