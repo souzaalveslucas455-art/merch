@@ -187,7 +187,16 @@ function traduz(m){ const s=String(m||"").toLowerCase();
   if(s.includes("ja foi ativado")) return "Este telefone já foi ativado em outro acesso. Fale com o administrador para liberar.";
   if(s.includes("mais de uma pessoa")) return "Este telefone está em mais de uma pessoa da base. Fale com o administrador.";
   if(s.includes("nao e da sua equipe")) return "Isso não é da sua equipe.";
+  if(s.includes("weak password")) return "A senha precisa ter pelo menos 6 caracteres.";
+  if(s.includes("email not confirmed")) return "Este acesso ainda não foi liberado no sistema. Fale com o administrador.";
+  if(s.includes("signup")&&(s.includes("not allowed")||s.includes("disabled"))) return "O primeiro acesso está desligado no sistema. Fale com o administrador.";
+  if(s.includes("rate limit")||s.includes("too many")||s.includes("only request this after")) return "Muitas tentativas seguidas. Espere um minuto e tente de novo.";
+  if(s.includes("load failed")||s.includes("networkerror")||s.includes("network request failed")) return "Sem conexão com o sistema agora.";
+  if(s.includes("jwt expired")||s.includes("refresh token")) return "Sua sessão expirou. Entre de novo.";
   return m; }
+/* mensagem do login que ainda chegue em ingles (vinda do Supabase) vira uma frase clara */
+const pareceIngles=m=>/\b(the|is|not|invalid|error|failed|password|user|email|request|should|must|unable|already|token|signup|found|allowed)\b/i.test(String(m||""));
+
 
 function sair(){ guarda.tira("token"); guarda.tira("refresh"); TOKEN=null; EU=null; telaLogin(); }
 
@@ -208,7 +217,8 @@ function telaLogin(msg){
     if(sen.length<6) return $("erro").innerHTML=`<div class="aviso err">A senha precisa ter pelo menos 6 caracteres.</div>`;
     $("entrar").disabled=true; $("entrar").textContent="Entrando…";
     try{ await entrar(tel,sen); await abrir(); }
-    catch(e){ $("erro").innerHTML=`<div class="aviso err">${esc(traduz(e.message))}</div>`; }
+    catch(e){ const t=traduz(e.message);
+      $("erro").innerHTML=`<div class="aviso err">${esc(t===e.message&&pareceIngles(t)?"Não foi possível entrar. Confira o telefone e a senha.":t)}</div>`; }
     finally{ if($("entrar")){ $("entrar").disabled=false; $("entrar").textContent="Entrar"; } }
   };
   $("entrar").onclick=vai; $("sen").onkeydown=e=>{ if(e.key==="Enter") vai(); };
