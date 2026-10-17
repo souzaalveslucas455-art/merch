@@ -13,19 +13,19 @@
   "theme_color": "#FFFFFF",
   "icons": [
     {
-      "src": "icones/lider-192.png",
+      "src": "lider-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icones/lider-512.png",
+      "src": "lider-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icones/lider-maskable-512.png",
+      "src": "lider-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

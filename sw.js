@@ -4,11 +4,11 @@
    - Os DADOS (Supabase) nunca passam por aqui: vao direto, como sempre.
    - Icones, arquivos de identidade e a biblioteca do mapa: guardados depois do 1o uso.
    Para forcar todos os celulares a renovarem a copia, mude a VERSAO abaixo. */
-const VERSAO = "merch-2026-10-16a";
+const VERSAO = "merch-2026-10-17a";
 const CASCA = ["./app.html", "./lideranca.html",
   "./manifest-repositor.webmanifest", "./manifest-lideranca.webmanifest",
-  "./icones/repositor-192.png", "./icones/repositor-512.png", "./icones/repositor-maskable-512.png",
-  "./icones/lider-192.png", "./icones/lider-512.png", "./icones/lider-maskable-512.png"];
+  "./repositor-192.png", "./repositor-512.png", "./repositor-maskable-512.png",
+  "./lider-192.png", "./lider-512.png", "./lider-maskable-512.png"];
 const BIBLIOTECAS = ["https://cdnjs.cloudflare.com/"];
 
 self.addEventListener("install", ev => {
