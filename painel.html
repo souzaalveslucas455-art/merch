@@ -141,6 +141,7 @@ dialog::backdrop{background:rgba(20,22,26,.45)}
 .login h2{margin:0 0 4px}
 @media (max-width:980px){ .app{grid-template-columns:1fr} aside{display:none} .lin4{grid-template-columns:1fr 1fr} .kpis{grid-template-columns:1fr 1fr} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.livre{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;cursor:pointer}.livre.aberto{display:block;-webkit-line-clamp:unset!important;overflow:visible}
 </style>
 </head>
 <body>
@@ -161,6 +162,14 @@ const LOGO={coca:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAbgAAADLCAMAAAAr
 const CFG={url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local"};
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* TEXTO LIVRE (18/10): o que o repositor digita aparece em no maximo N linhas,
+   quebrando dentro da coluna, sem esticar a tabela. O texto inteiro aparece ao
+   passar o mouse e ao tocar ou clicar nele (abre e fecha). */
+const livre=(t,n=3,aspas=false)=>`<span class="livre" style="-webkit-line-clamp:${n}" title="${esc(t)}">${aspas?"“":""}${esc(t)}${aspas?"”":""}</span>`;
+document.addEventListener("click",e=>{ const l=e.target.closest&&e.target.closest(".livre"); if(!l) return;
+  if(!l.classList.contains("aberto")&&l.scrollHeight<=l.clientHeight+1) return;
+  l.classList.toggle("aberto"); e.stopPropagation(); e.preventDefault(); },true);
+
 const guarda={ler:k=>{try{return localStorage.getItem("lid_"+k);}catch(e){return null;}},
               por:(k,v)=>{try{localStorage.setItem("lid_"+k,v);}catch(e){}}, tira:k=>{try{localStorage.removeItem("lid_"+k);}catch(e){}}};
 /* Mesma limpeza do banco (_so_tel) e do app do lider: o telefone vira o login. */
@@ -395,7 +404,7 @@ function modOport(){
       rs.map(x=>`<tr><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}</span></td>
         <td><span class="tag ${x.ruptura?"t-verm":x.classe==="excesso"?"t-azul":x.classe==="nunca"?"t-roxo":"t-amb"}">${x.ruptura?"Não tem":esc(CLASSE[x.classe]||x.classe)}</span></td>
         <td class="num">${x.caixas>0?`<span class="cel">${fmt(x.caixas)} cx</span>`:"—"}</td>
-        <td>${x.motivo?`<b>${esc(MOTIVO[x.motivo]||x.motivo)}</b>`:""}${x.obs?`<span class="sub">"${esc(x.obs)}"</span>`:""}</td>
+        <td>${x.motivo?`<b>${esc(MOTIVO[x.motivo]||x.motivo)}</b>`:""}${x.obs?`<span class="sub">${livre(x.obs,3,true)}</span>`:""}</td>
         <td>${dataBr(x.data)}</td><td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`),
       "Nenhum registro nesta aba no período.")}`;
 }
@@ -617,7 +626,7 @@ function modDem(){
       rec.map((x,i)=>`<tr><td><b>${esc(curto(x.de))}</b><span class="sub">líder ${esc(curto(x.lider))}</span></td><td>${esc(x.loja||"—")}</td>
         <td style="max-width:380px">${x.contexto&&x.contexto.assunto?`<span class="tag t-azul">${esc(x.contexto.assunto)}</span> ${x.contexto.motivo?`<span class="tag t-amb">${esc(x.contexto.motivo)}</span>`:""}
             ${x.contexto.item_texto?`<div style="font-weight:600;margin-top:4px">${esc(x.contexto.item_texto)}</div>`:""}${x.contexto.obs?`<div style="white-space:pre-line;margin-top:3px">${esc(x.contexto.obs)}</div>`:""}`
-          :`<div style="white-space:pre-line">${esc(x.texto)}</div>`}
+          :`<div style="white-space:pre-line">${livre(x.texto,6)}</div>`}
           ${x.foto_url?`<button class="bt" style="margin-top:6px;padding:4px 10px" onclick="verFoto('${esc(x.foto_url)}')">Ver foto</button>`:""}<span class="sub">${quando(x.criado_em)}</span></td>
         <td><span class="tag ${x.resolvida_em?"t-verde":x.resposta?"t-azul":"t-verm"}">${x.resolvida_em?"Resolvida":x.resposta?"Respondida":`Aberta há ${x.dias} d`}</span></td>
         <td>${x.resposta?`<b>${esc(curto(x.respondido_por))}:</b> ${esc(x.resposta)}`:""}${!x.resolvida_em?`<textarea id="rt${i}" rows="2" style="width:100%;margin-top:6px;border:1px solid #D1D5DB;border-radius:8px;padding:6px 8px" placeholder="Responder"></textarea>
@@ -629,7 +638,7 @@ function modDem(){
       env.map(x=>`<tr><td><b>${esc(x.titulo)}</b>${x.descricao?`<span class="sub">${esc(x.descricao)}</span>`:""}${x.loja?`<span class="sub">loja ${esc(x.loja)}</span>`:""}</td>
         <td>${esc(curto(x.de))}<span class="sub">${quando(x.criado_em)}</span></td><td>${esc(x.para==="toda a equipe"||x.para==="quem visitar a loja"?x.para:tit(x.para))}</td>
         <td>${x.prazo?dataBr(x.prazo):"—"}${x.vencida?` <span class="tag t-verm">vencida</span>`:""}</td>
-        <td>${(x.respostas||[]).length?x.respostas.map(r=>`<div style="font-size:12.5px"><span class="tag ${r.situacao==="nao_feita"?"t-amb":"t-verde"}">${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}</span> ${esc(curto(r.repositor))}${r.comentario?` · ${esc(r.comentario)}`:""}</div>`).join(""):'<span class="mut">sem resposta</span>'}</td></tr>`),
+        <td>${(x.respostas||[]).length?x.respostas.map(r=>`<div style="font-size:12.5px"><span class="tag ${r.situacao==="nao_feita"?"t-amb":"t-verde"}">${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}</span> ${esc(curto(r.repositor))}${r.comentario?livre(r.comentario,3):""}</div>`).join(""):'<span class="mut">sem resposta</span>'}</td></tr>`),
       "Nenhuma demanda enviada nos últimos 30 dias.");
   }
   return `<h2>Demandas</h2>${abas(lista)}
@@ -759,7 +768,7 @@ function corpoCampanhas(){
       ${c.descricao?`<div class="alerta ok" style="margin-bottom:10px">${esc(c.descricao)}</div>`:""}
       ${tabela("<th>Loja</th><th>Repositor</th><th>Situação</th><th>O que foi conferido</th><th>Fotos</th><th>Respondido</th>",
         ls.map((l,i)=>`<tr><td><b>${esc(l.loja)}</b><span class="sub">${esc(l.codigo)}${l.cidade?` · ${esc(l.cidade)}`:""}</span></td><td>${esc(l.repositores||"—")}<span class="sub">líder ${esc(curto(l.lider))}</span></td>
-          <td><span class="tag ${l.situacao==="feita"?"t-verde":l.situacao==="nao_feita"?"t-amb":c.prazo&&c.prazo<hoje()?"t-verm":"t-cinza"}">${l.situacao==="feita"?"Fez a ativação":l.situacao==="nao_feita"?"Não conseguiu":c.prazo&&c.prazo<hoje()?"Vencida":"Sem resposta"}</span>${l.comentario?`<span class="sub">"${esc(l.comentario)}"</span>`:""}</td>
+          <td><span class="tag ${l.situacao==="feita"?"t-verde":l.situacao==="nao_feita"?"t-amb":c.prazo&&c.prazo<hoje()?"t-verm":"t-cinza"}">${l.situacao==="feita"?"Fez a ativação":l.situacao==="nao_feita"?"Não conseguiu":c.prazo&&c.prazo<hoje()?"Vencida":"Sem resposta"}</span>${l.comentario?`<span class="sub">${livre(l.comentario,3,true)}</span>`:""}</td>
           <td>${l.checklist?Object.entries(l.checklist).map(([k,v])=>`<div style="font-size:12.5px">${v?'<b style="color:var(--verde)">✓</b>':'<b style="color:var(--verm-esc)">✗</b>'} ${esc(k)}</div>`).join(""):'<span class="mut">—</span>'}</td>
           <td>${(l.fotos||[]).length?`<button class="bt" data-cf="${(c.lojas||[]).indexOf((c.lojas||[]).find(x=>x.tarefa===l.tarefa))}" style="padding:4px 10px">Ver ${l.fotos.length}</button>`:'<span class="mut">—</span>'}</td>
           <td>${l.em?`${esc(curto(l.por))}<span class="sub">${quando(l.em)}</span>`:"—"}</td></tr>`),"Nenhuma loja neste filtro.")}`;
@@ -857,7 +866,7 @@ function modEquip(){
       rs.map((x,i)=>{ const st=situacaoGel(x), fs=fotos(x), falhas=Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>k);
         return `<tr><td><b>${esc(x.loja)}</b><span class="sub">${esc(x.codigo)}${x.cidade?` · ${esc(x.cidade)}`:""}</span></td>
           <td>${esc(x.modelo)}${x.item>1?` · un. ${x.item}`:""}<span class="sub">${esc(MARCA_EQ[x.marca]||x.marca||"")}${x.portas?` · ${esc(x.portas)} portas`:""} · contrato ${esc(x.contrato)}</span></td>
-          <td><span class="tag ${st.cls}">${st.t}</span>${x.encontrado===false&&x.observacao?`<span class="sub">${esc(x.observacao)}</span>`:""}</td>
+          <td><span class="tag ${st.cls}">${st.t}</span>${x.encontrado===false&&x.observacao?`<span class="sub">${livre(x.observacao,3)}</span>`:""}</td>
           <td>${falhas.length?falhas.map(f=>`<div style="font-size:12.5px"><b style="color:var(--verm-esc)">✗</b> ${esc(f)}</div>`).join(""):'<span class="mut">—</span>'}</td>
           <td>${x.ptm?esc(x.ptm):'<span class="mut">sem registro</span>'}${x.ptm_status==="diferente"?`<span class="sub" style="color:var(--verm-esc)">lido ${esc(x.ptm_lido)}</span>`:""}</td>
           <td>${fs.length?`<button class="bt" data-gf="${i}" style="padding:4px 10px">Ver ${fs.length}</button>`:'<span class="mut">—</span>'}</td>

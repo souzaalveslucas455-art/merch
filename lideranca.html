@@ -124,6 +124,7 @@ main{max-width:1120px;margin:0 auto;padding:16px 18px 40px}
 @media (min-width:640px){ .kpis{grid-template-columns:repeat(4,minmax(0,1fr))} }
 @media (min-width:900px){ main{padding-top:22px} .grade{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grade .sec{margin-bottom:0} }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.livre{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;cursor:pointer}.livre.aberto{display:block;-webkit-line-clamp:unset!important;overflow:visible}
 </style>
 </head>
 <body>
@@ -143,6 +144,14 @@ const LOGO={coca:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAbgAAADLCAMAAAAr
 const CFG = { url:"https://kqpdledhaghuzuwjkvrf.supabase.co", chave:"sb_publishable_dMdB5b_G5X5TnXemexGIXQ_GWXS6cid", dominio:"merch.local" };
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* TEXTO LIVRE (18/10): o que o repositor digita aparece em no maximo N linhas,
+   quebrando dentro da coluna, sem esticar a tabela. O texto inteiro aparece ao
+   passar o mouse e ao tocar ou clicar nele (abre e fecha). */
+const livre=(t,n=3,aspas=false)=>`<span class="livre" style="-webkit-line-clamp:${n}" title="${esc(t)}">${aspas?"“":""}${esc(t)}${aspas?"”":""}</span>`;
+document.addEventListener("click",e=>{ const l=e.target.closest&&e.target.closest(".livre"); if(!l) return;
+  if(!l.classList.contains("aberto")&&l.scrollHeight<=l.clientHeight+1) return;
+  l.classList.toggle("aberto"); e.stopPropagation(); e.preventDefault(); },true);
+
 const guarda={ler:k=>{try{return localStorage.getItem("lid_"+k);}catch(e){return null;}},
               por:(k,v)=>{try{localStorage.setItem("lid_"+k,v);}catch(e){}},
               tira:k=>{try{localStorage.removeItem("lid_"+k);}catch(e){}}};
@@ -338,7 +347,7 @@ function secNaoTem(max){
   return secao("var(--amb)", titulo, ns.length?`em ${plural(lojas,"loja","lojas")}, nos últimos ${DIAS} dias`:"", lista(ns, x=>`<div class="lin">
       <div><b>${esc(x.produto)}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
       <span class="selo" style="background:var(--amb-bg);color:var(--amb)">${esc(MOTIVO[x.motivo]||"Sem motivo")}</span>
-      <div class="det">${x.obs?`"${esc(x.obs)}" · `:""}desde ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div></div>`,
+      <div class="det">${x.obs?livre(x.obs,2,true):""}desde ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div></div>`,
     "Nenhum produto em falta registrado na última contagem das lojas.", max), "s-naotem");
 }
 
@@ -351,7 +360,7 @@ function cartaoRecebida(x,i){
       ${x.contexto.motivo?`<span class="selo" style="background:var(--amb-bg);color:var(--amb)">${esc(x.contexto.motivo)}</span>`:""}</div>
       ${x.contexto.item_texto?`<div style="margin-top:6px;font-weight:600">${esc(x.contexto.item_texto)}</div>`:""}
       ${x.contexto.obs?`<div class="txt">${esc(x.contexto.obs)}</div>`:""}`
-    :`<div class="txt">${esc(x.texto)}</div>`}
+    :`<div class="txt">${livre(x.texto,6)}</div>`}
     ${x.foto_url?`<button class="bt peq sec" onclick="verFoto('${esc(x.foto_url)}')" style="margin:4px 0 6px">Ver foto</button>`:""}
     <div class="mut" style="font-size:13px">${quando(x.criado_em)}${x.modulo?` · ${esc(MODULO[x.modulo]||x.modulo)}`:""}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div>
     ${x.resposta?`<div class="resp"><b>${esc(nomeCurto(x.respondido_por))}:</b> ${esc(x.resposta)}</div>`:""}
@@ -367,7 +376,7 @@ function cartaoEnviada(x){
       <span class="selo" style="background:${venc?"var(--verm-bg)":rs.length?"var(--verde-bg)":"var(--fundo)"};color:${venc?"var(--verm-esc)":rs.length?"var(--verde)":"var(--ink2)"}">${venc?"Prazo vencido sem resposta":rs.length?plural(rs.length,"resposta","respostas"):"Sem resposta"}</span></div>
     ${x.descricao?`<div class="txt mut">${esc(x.descricao)}</div>`:""}
     <div class="mut" style="font-size:13px">Para ${esc(x.para==="toda a equipe"||x.para==="quem visitar a loja"?x.para:tit(x.para))}${x.loja?` · ${esc(x.loja)}`:""}${x.prazo?` · prazo ${dataBr(x.prazo)}`:""} · ${quando(x.criado_em)}${MODO==="painel"?` · de ${esc(nomeCurto(x.de))}`:""}</div>
-    ${rs.map(r=>`<div class="resp" style="background:${r.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"}"><b>${esc(nomeCurto(r.repositor))}:</b> ${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}${r.comentario?` · ${esc(r.comentario)}`:""} <span class="mut">· ${quando(r.criado_em)}</span></div>`).join("")}
+    ${rs.map(r=>`<div class="resp" style="background:${r.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"}"><b>${esc(nomeCurto(r.repositor))}:</b> ${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}${r.comentario?livre(r.comentario,3):""} <span class="mut">· ${quando(r.criado_em)}</span></div>`).join("")}
   </div>`;
 }
 /* As demandas do gerente para o lider: ele responde Feito ou Nao consegui. */
@@ -379,7 +388,7 @@ function secParaMim(){
       <span class="selo" style="background:${x.resposta?(x.resposta.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"):x.vencida?"var(--verm-bg)":"var(--fundo)"};color:${x.resposta?(x.resposta.situacao==="nao_feita"?"var(--amb)":"var(--verde)"):x.vencida?"var(--verm-esc)":"var(--ink2)"}">${x.resposta?(x.resposta.situacao==="nao_feita"?"Não consegui":"Feito"):x.vencida?"Prazo vencido":"Responder"}</span></div>
       ${x.descricao?`<div class="txt mut">${esc(x.descricao)}</div>`:""}
       <div class="mut" style="font-size:13px">De ${esc(nomeCurto(x.de))} · ${quando(x.criado_em)}${x.prazo?` · prazo ${dataBr(x.prazo)}`:""}</div>
-      ${x.resposta&&x.resposta.comentario?`<div class="resp">Você: ${esc(x.resposta.comentario)}</div>`:""}
+      ${x.resposta&&x.resposta.comentario?`<div class="resp">Você: ${livre(x.resposta.comentario,3)}</div>`:""}
       ${!x.resposta?`<textarea id="pm${i}" placeholder="Comentário (obrigatório se não conseguiu)"></textarea>
         <div class="acoes"><button class="bt peq" data-pmf="${i}">Feito</button><button class="bt peq sec" data-pmn="${i}">Não consegui</button></div><div id="pme${i}"></div>`:""}</div>`).join(""), "s-paramim");
 }
@@ -461,7 +470,7 @@ function secGeladeiras(){
     const st=x.encontrado===false?["Não encontrada","var(--verm-bg)","var(--verm-esc)"]:x.ptm_status==="diferente"?["PTM diferente","var(--verm-bg)","var(--verm-esc)"]:[`${falhas.length} ${falhas.length===1?"problema":"problemas"}`,"var(--amb-bg)","var(--amb)"];
     return `<div class="lin"><div><b>${esc(x.modelo)}</b><div class="mut" style="font-size:14px">${esc(x.loja)} · ${esc(MARCA[x.marca]||x.marca||"")} · contrato ${esc(x.contrato)}</div></div>
       <span class="selo" style="background:${st[1]};color:${st[2]}">${st[0]}</span>
-      <div class="det">${x.encontrado===false?esc(x.observacao||"sem motivo"):x.ptm_status==="diferente"?`registrado ${esc(x.ptm)}, lido ${esc(x.ptm_lido)}`:falhas.map(esc).join(" · ")} · ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}
+      <div class="det">${x.encontrado===false?livre(x.observacao||"sem motivo",2):x.ptm_status==="diferente"?`registrado ${esc(x.ptm)}, lido ${esc(x.ptm_lido)}`:falhas.map(esc).join(" · ")} · ${dataBr(x.data)} · ${esc(nomeCurto(x.repositor))}
         ${fs.length?` · <a href="#" data-gfl="${esc(fs.join("|"))}">ver ${fs.length===1?"a foto":"as fotos"}</a>`:""}</div></div>`; },
     xs.length?"Todas as geladeiras conferidas estão na loja e dentro do padrão.":"Nenhuma geladeira em comodato nas lojas da equipe.", 8), "s-gel");
 }
@@ -474,7 +483,7 @@ function secMateriais(){
   return secao("var(--roxo)", ms.length?`${plural(ms.length,"geladeira ou material","geladeiras ou materiais")} com problema`:"Nenhuma geladeira ou material com problema", ms.length?`no censo dos últimos ${DIAS} dias`:"",
     lista(ms, x=>`<div class="lin"><div><b>${esc(TIPO_ATIVO[x.tipo]||tit(x.tipo))}${x.patrimonio?` · PTM ${esc(x.patrimonio)}`:""}</b><div class="mut" style="font-size:14px">${esc(x.loja)}</div></div>
       <span class="selo" style="background:var(--roxo-bg);color:var(--roxo)">${dataBr(x.data)}</span>
-      <div class="det">${(x.problemas||[]).map(p=>esc(NOME[p]||p)).join(", ")}${x.observacao?` · "${esc(x.observacao)}"`:""} · ${esc(nomeCurto(x.repositor))}</div></div>`,
+      <div class="det">${(x.problemas||[]).map(p=>esc(NOME[p]||p)).join(", ")}${x.observacao?livre(x.observacao,2,true):" · "}${esc(nomeCurto(x.repositor))}</div></div>`,
       "Nenhum problema no censo do período.", 8), "s-mat");
 }
 function secNaoTrabalha(){
@@ -598,7 +607,7 @@ function secCampanhas(){
             <div style="display:flex;justify-content:space-between;gap:8px"><span><b>${esc(l.loja)}</b><br><span class="mut" style="font-size:12.5px">${esc(l.repositores||"sem repositor")}</span></span>
               <span class="selo" style="background:${l.situacao==="feita"?"var(--verde-bg)":l.situacao==="nao_feita"?"var(--amb-bg)":"var(--fundo)"};color:${l.situacao==="feita"?"var(--verde)":l.situacao==="nao_feita"?"var(--amb)":"var(--ink2)"}">${l.situacao==="feita"?"Fez":l.situacao==="nao_feita"?"Não conseguiu":"Sem resposta"}</span></div>
             ${l.checklist?`<div style="font-size:12.5px;margin-top:4px">${Object.entries(l.checklist).map(([k,v])=>`${v?"✓":"✗"} ${esc(k)}`).join(" · ")}</div>`:""}
-            ${l.comentario?`<div class="mut" style="font-size:12.5px;margin-top:2px">"${esc(l.comentario)}"</div>`:""}
+            ${l.comentario?`<div class="mut" style="font-size:12.5px;margin-top:2px">${livre(l.comentario,3,true)}</div>`:""}
             ${l.fotos&&l.fotos.length?`<button class="bt peq sec" style="margin-top:6px" data-fotos="${ci}:${li}">Ver ${l.fotos.length} ${l.fotos.length===1?"foto":"fotos"}</button>`:""}</div>`).join("")}</details></div>`; }).join("")
       :`<div class="vazio">Nenhuma campanha nos últimos 60 dias.</div>`}`;
   return secao("var(--verm)", cs.length?`${plural(cs.length,"campanha","campanhas")} nas lojas`:"Campanhas nas lojas", "", corpo, "s-camp");
