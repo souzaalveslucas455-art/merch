@@ -895,6 +895,19 @@ function somaInv(xs){ const t=xs.reduce((a,x)=>({valor:a.valor+Number(x.valor||0
     cxAnt:x.caixas_ant==null?a.cxAnt:a.cxAnt+Number(x.caixas_ant), temAnt:a.temAnt||x.caixas_ant!=null, cxComp:x.caixas_ant==null?a.cxComp:a.cxComp+Number(x.caixas||0), n:a.n+1}),
     {valor:0,cx:0,rec:0,cxAnt:0,temAnt:false,cxComp:0,n:0});
   return {...t, custo:t.cx>0?t.valor/t.cx:null, var:t.temAnt?varPct(t.cxComp,t.cxAnt):null}; }
+/* 61: preco combinado na gondola e as duas comprovacoes do repositor */
+const SIT_PRECO={comprovado:["Comprovado","t-verde"], fora:["Fora do preço","t-verm"], aguardando:["Aguardando comprovação","t-cinza"], nao_comprovado:["Não comprovado","t-amb"]};
+const SIT_COMP={no_preco:"No preço", acima:"Acima do combinado", sem_etiqueta:"Sem etiqueta", em_falta:"Produto em falta"};
+const precoTxt=(un,cx)=>[un!=null?`${reais(un)} un`:"", cx!=null?`${reais(cx)} cx`:""].filter(Boolean).join(" · ");
+function celPreco(x){
+  if(x.preco_un==null&&x.preco_cx==null) return '<span class="mut">sem preço combinado</span>';
+  const s=SIT_PRECO[x.situacao_preco]||["",""], cp=x.comprovacoes||{};
+  const lin=(m,rot)=>{ const c=cp[m];
+    if(!c) return `<span class="sub">${rot}: ${m==="fim"&&x.fim_abre&&x.fim_abre>hoje()?`abre em ${dataBr(x.fim_abre).slice(0,5)}`:"sem registro"}</span>`;
+    return `<span class="sub" style="color:${c.situacao==="no_preco"?"var(--verde)":"var(--verm-esc)"}">${rot}: ${SIT_COMP[c.situacao]||c.situacao}${c.preco_un!=null||c.preco_cx!=null?` · ${precoTxt(c.preco_un,c.preco_cx)}`:""} · ${dataBr(c.data).slice(0,5)} · ${esc(curto(c.por))}
+      ${c.foto?` <a href="#" onclick="verFoto('${esc(c.foto)}');return false">foto</a>`:""}</span>`; };
+  return `<b>${precoTxt(x.preco_un,x.preco_cx)}</b>${s[0]?` <span class="tag ${s[1]}">${s[0]}</span>`:""}${lin("inicio","Início")}${lin("fim","Fim")}`;
+}
 function modInv(){
   if(!PODE_INV()) return `<h2>Investimentos nas lojas</h2><div class="alerta">Este módulo é só para o gerente de merchandising.</div>`;
   if(!D.inv||D.inv.erro) { if(!D.inv) carregarInv().then(pintar); return `<h2>Investimentos nas lojas</h2><div class="vazio">${D.inv&&D.inv.erro?esc(D.inv.erro):"Buscando os investimentos…"}</div>`; }
@@ -927,18 +940,25 @@ function modInv(){
   const alerta=`<div class="alerta ${caiu.length?"":"ok"}">${caiu.length?`<b>${plural(caiu.length,"investimento","investimentos")} com a compra em queda</b> contra o período anterior: ${caiu.slice(0,3).map(x=>`${esc(x.produto)} na ${esc(x.loja)} (▼ ${Math.abs(x.var_pct)}%)`).join("; ")}${caiu.length>3?` e mais ${caiu.length-3}`:""}.`
       :`Nenhum investimento com a compra em queda contra o período anterior.`}
     <span class="mut" style="display:block;margin-top:4px">A compra é o que a loja pediu à Bandeirantes${d.ultimo_dia?`, com pedidos carregados até ${dataBr(d.ultimo_dia)}`:""}. Não é a venda ao consumidor.</span></div>`;
+  const comPreco=xs.filter(x=>x.situacao_preco), fora=comPreco.filter(x=>x.situacao_preco==="fora"), naoComp=comPreco.filter(x=>x.situacao_preco==="nao_comprovado");
+  const alertaPreco=!comPreco.length?"":(fora.length||naoComp.length)?`<div class="alerta">${fora.length?`<b>${plural(fora.length,"investimento fora do preço combinado","investimentos fora do preço combinado")}</b>: ${fora.slice(0,3).map(x=>`${esc(x.produto)} na ${esc(x.loja)}`).join("; ")}${fora.length>3?` e mais ${fora.length-3}`:""}.`:""}
+      ${naoComp.length?`${fora.length?"<br>":""}<b>${plural(naoComp.length,"investimento terminou sem comprovação","investimentos terminaram sem comprovação")}</b>.`:""}</div>`
+    :`<div class="alerta ok">Os investimentos com preço combinado estão no preço ou aguardando a comprovação do repositor.</div>`;
   let corpo;
   if(at==="lanc"){
     const rs=ordena(xs,"inv",{campo:"valor",dir:-1});
-    EXPORTA={nome:`investimentos-${INV_PER.ini}-a-${INV_PER.fim}`, cab:["Loja","Codigo","Produto","Codigo produto","De","Ate","Tipo","Investido (R$)","Caixas no periodo","Pedidos no periodo (R$)","Caixas antes (mesmo n. de dias)","Variacao %","Custo por caixa (R$)","Observacao","Lider","Lancado por"],
-      linhas:rs.map(x=>[x.loja,x.codigo,x.produto,x.sku,dataBr(x.ini),dataBr(x.fim),TIPO_INV[x.tipo]||x.tipo,x.valor,x.caixas,x.receita,x.caixas_ant,x.var_pct,x.custo_cx,x.observacao,x.lider,x.criado_por])};
-    corpo=tabela(th("inv","loja","Loja")+th("inv","produto","Produto")+th("inv","ini","Período")+th("inv","valor","Investido",1)+th("inv","caixas","Compra no período",1)+th("inv","caixas_ant","Antes",1)+th("inv","var_pct","Variação")+th("inv","custo_cx","Custo por caixa",1)+"<th></th>",
+    EXPORTA={nome:`investimentos-${INV_PER.ini}-a-${INV_PER.fim}`, cab:["Loja","Codigo","Produto","Codigo produto","De","Ate","Tipo","Investido (R$)","Caixas no periodo","Pedidos no periodo (R$)","Caixas antes (mesmo n. de dias)","Variacao %","Custo por caixa (R$)","Preco combinado unidade (R$)","Preco combinado caixa (R$)","Situacao do preco","Inicio: situacao","Inicio: preco un","Inicio: preco cx","Inicio: data","Fim: situacao","Fim: preco un","Fim: preco cx","Fim: data","Observacao","Lider","Lancado por"],
+      linhas:rs.map(x=>[x.loja,x.codigo,x.produto,x.sku,dataBr(x.ini),dataBr(x.fim),TIPO_INV[x.tipo]||x.tipo,x.valor,x.caixas,x.receita,x.caixas_ant,x.var_pct,x.custo_cx,x.preco_un,x.preco_cx,(SIT_PRECO[x.situacao_preco]||[""])[0],
+        ...["inicio","fim"].flatMap(m=>{ const c=(x.comprovacoes||{})[m]; return c?[SIT_COMP[c.situacao]||c.situacao,c.preco_un,c.preco_cx,dataBr(c.data)]:["","","",""]; }),
+        x.observacao,x.lider,x.criado_por])};
+    corpo=tabela(th("inv","loja","Loja")+th("inv","produto","Produto")+th("inv","ini","Período")+th("inv","valor","Investido",1)+th("inv","caixas","Compra no período",1)+th("inv","caixas_ant","Antes",1)+th("inv","var_pct","Variação")+th("inv","custo_cx","Custo por caixa",1)+th("inv","situacao_preco","Preço na gôndola")+"<th></th>",
       rs.map(x=>`<tr><td><b>${esc(x.loja)}</b><span class="sub">${esc(x.codigo)} · ${esc(curto(x.lider))}</span></td>
         <td>${esc(x.produto)}<span class="sub">${esc(TIPO_INV[x.tipo]||x.tipo)}${x.observacao?` · ${esc(x.observacao)}`:""}</span></td>
         <td>${dataBr(x.ini)} a ${dataBr(x.fim)}<span class="sub">${x.dias?`${x.dias} ${x.dias===1?"dia":"dias"} com pedidos`:"ainda sem pedidos no período"}</span></td>
         <td class="num"><b>${reais(x.valor)}</b></td><td class="num">${fmt(x.caixas)} cx<span class="sub">${reais(x.receita)}</span></td>
         <td class="num">${x.caixas_ant!=null?`${fmt(x.caixas_ant)} cx`:"—"}<span class="sub">${dataBr(x.ant_ini)} a ${dataBr(x.ant_fim)}</span></td>
         <td>${varTag(Number(x.caixas),x.caixas_ant==null?null:Number(x.caixas_ant))}</td><td class="num">${x.custo_cx!=null?reais(x.custo_cx):"—"}</td>
+        <td style="min-width:230px">${celPreco(x)}</td>
         <td style="white-space:nowrap">${d.pode_lancar?`<button class="bt" data-inved="${x.id}" style="padding:4px 9px">Editar</button> <button class="bt" data-invrep="${x.id}" style="padding:4px 9px" title="Lança o mesmo investimento no mês seguinte">Repetir no mês seguinte</button> <button class="bt" data-invex="${x.id}" style="padding:4px 9px;color:var(--verm-esc)">Excluir</button>`:""}</td></tr>`),
       d.pode_lancar?"Nenhum investimento neste período. Toque em Novo investimento para lançar.":"Nenhum investimento neste período.");
   } else {
@@ -953,7 +973,7 @@ function modInv(){
         <td>${varTag(x.comp,x.ant)}</td>
         <td class="num">${x.custo!=null?reais(x.custo):"—"}</td></tr>`),"Nenhum investimento neste período.");
   }
-  return `<h2>Investimentos nas lojas</h2>${abas(lista)}${cab}${alerta}${barra(periodo)}${corpo}`;
+  return `<h2>Investimentos nas lojas</h2>${abas(lista)}${cab}${alerta}${alertaPreco}${barra(periodo)}${corpo}`;
 }
 function formInvestimento(x, repetindo){
   const d=D.inv||{}, lojas=d.lojas||[], prods=d.produtos||[], ehNovo=!x||!x.id;
@@ -966,6 +986,10 @@ function formInvestimento(x, repetindo){
     <label class="campo"><span>Produto</span><input id="iProd" list="iProds" placeholder="Digite o nome ou o código" value="${x?esc(rotP({nome:x.produto,sku:x.sku})):""}">
       <datalist id="iProds">${prods.map(p=>`<option value="${esc(rotP(p))}">`).join("")}</datalist></label>
     <label class="campo"><span>Valor investido (R$)</span><input id="iValor" type="number" inputmode="decimal" min="0" step="0.01" value="${x&&x.valor!=null?x.valor:""}"></label>
+    <div style="margin-top:10px"><b style="font-size:13.5px">Preço final combinado na gôndola</b> <span class="mut" style="font-size:12.5px">(opcional; informe ao menos um)</span>
+      <div style="display:flex;gap:10px"><label class="campo" style="flex:1"><span>Unidade (R$)</span><input id="iPun" type="number" inputmode="decimal" min="0" step="0.01" value="${x&&x.preco_un!=null?x.preco_un:""}"></label>
+        <label class="campo" style="flex:1"><span>Caixa (R$)</span><input id="iPcx" type="number" inputmode="decimal" min="0" step="0.01" value="${x&&x.preco_cx!=null?x.preco_cx:""}"></label></div>
+      <p class="mut" style="margin:2px 0 0;font-size:12.5px">Com preço, o repositor comprova no início e no fim do período, com a foto da etiqueta. Acima do preço, o líder é avisado na hora.</p></div>
     <div style="display:flex;gap:10px"><label class="campo" style="flex:1"><span>De</span><input id="iIni" type="date" value="${ini}"></label>
       <label class="campo" style="flex:1"><span>Até</span><input id="iFim" type="date" value="${fim}"></label></div>
     <label class="campo"><span>Tipo</span><select id="iTipo">${Object.entries(TIPO_INV).map(([k,t])=>`<option value="${k}" ${(x?x.tipo:"sell_out")===k?"selected":""}>${t}</option>`).join("")}</select></label>
@@ -979,8 +1003,10 @@ function formInvestimento(x, repetindo){
     const v=Number(String($("iValor").value).replace(",",".")), a=$("iIni").value, b=$("iFim").value;
     if(!l) return erro("Escolha a loja na lista."); if(!p) return erro("Escolha o produto na lista.");
     if(!(v>0)) return erro("Informe o valor investido."); if(!a||!b||b<a) return erro("O período está invertido ou incompleto.");
+    const pr=id=>{ const t=String($(id).value).trim(); return t===""?null:Number(t.replace(",",".")); }, pun=pr("iPun"), pcx=pr("iPcx");
+    if((pun!=null&&!(pun>0))||(pcx!=null&&!(pcx>0))) return erro("O preço combinado precisa ser maior que zero.");
     $("iOk").disabled=true; $("iOk").textContent="Salvando…";
-    try{ await rpc("investimento_salvar",{p_id:ehNovo?null:x.id, p_loja:l.id, p_produto:p.id, p_ini:a, p_fim:b, p_valor:v, p_tipo:$("iTipo").value, p_obs:$("iObs").value.trim()||null});
+    try{ await rpc("investimento_salvar",{p_id:ehNovo?null:x.id, p_loja:l.id, p_produto:p.id, p_ini:a, p_fim:b, p_valor:v, p_tipo:$("iTipo").value, p_obs:$("iObs").value.trim()||null, p_preco_un:pun, p_preco_cx:pcx});
       fechaDlg(); MOD="inv"; if(a>INV_PER.fim||b<INV_PER.ini) INV_PER={modo:"livre", ini:a, fim:b}; await carregarInv(); pintar();
       $("mod").insertAdjacentHTML("afterbegin",`<div class="okmsg">Investimento salvo.</div>`); }
     catch(e){ erro(esc(traduz(e.message))); $("iOk").disabled=false; $("iOk").textContent="Salvar"; } };
