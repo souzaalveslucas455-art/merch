@@ -394,8 +394,8 @@ function modOport(){
   const at=abaAtual(lista), g=grupos.find(x=>x[0]===at), rs=ordena(xs.filter(g[3]),"oport",{campo:"data",dir:-1});
   const nt=xs.filter(x=>x.ruptura), mot={}; nt.forEach(x=>mot[x.motivo||"sem motivo"]=(mot[x.motivo||"sem motivo"]||0)+1);
   const top=Object.entries(mot).sort((a,b)=>b[1]-a[1])[0];
-  EXPORTA={nome:"oportunidade-"+at, cab:["Produto","Loja","Codigo","Status","Contado (cx)","Motivo","Observacao","Data","Repositor","Lider"],
-    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,CLASSE[x.classe]||x.classe,x.caixas,MOTIVO[x.motivo]||"",x.obs||"",dataBr(x.data),x.repositor,x.lider])};
+  EXPORTA={nome:"oportunidade-"+at, cab:["Produto","Loja","Codigo","Status","Contado (cx)","Onde estava","Motivo","Observacao","Data","Repositor","Lider"],
+    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,CLASSE[x.classe]||x.classe,x.caixas,ondeOport(x,true),MOTIVO[x.motivo]||"",x.obs||"",dataBr(x.data),x.repositor,x.lider])};
   return `<h2>Oportunidade de Estoque</h2>${abas(lista)}
     ${nt.length?`<div class="alerta"><b>${plural(nt.length,"produto marcado","produtos marcados")} como não tem</b> em ${plural(new Set(nt.map(x=>x.codigo)).size,"loja","lojas")} nos últimos ${DIAS} dias. Motivo mais comum: ${esc(MOTIVO[top[0]]||top[0])} (${top[1]}).</div>`
       :`<div class="alerta ok">Nenhum produto marcado como não tem nos últimos ${DIAS} dias.</div>`}
@@ -403,7 +403,7 @@ function modOport(){
     ${tabela(th("oport","produto","Produto")+th("oport","loja","Loja")+"<th>Status</th>"+th("oport","caixas","Contado",1)+"<th>Motivo e observação</th>"+th("oport","data","Data")+th("oport","repositor","Repositor")+th("oport","lider","Líder"),
       rs.map(x=>`<tr><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}</span></td>
         <td><span class="tag ${x.ruptura?"t-verm":x.classe==="excesso"?"t-azul":x.classe==="nunca"?"t-roxo":"t-amb"}">${x.ruptura?"Não tem":esc(CLASSE[x.classe]||x.classe)}</span></td>
-        <td class="num">${x.caixas>0?`<span class="cel">${fmt(x.caixas)} cx</span>`:"—"}</td>
+        <td class="num">${x.caixas>0?`<span class="cel">${fmt(x.caixas)} cx</span>`:"—"}${ondeOport(x)?`<span class="sub" style="text-align:right">${ondeOport(x)}</span>`:""}</td>
         <td>${x.motivo?`<b>${esc(MOTIVO[x.motivo]||x.motivo)}</b>`:""}${x.obs?`<span class="sub">${livre(x.obs,3,true)}</span>`:""}</td>
         <td>${dataBr(x.data)}</td><td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`),
       "Nenhum registro nesta aba no período.")}`;
@@ -908,6 +908,12 @@ function celPreco(x){
       ${c.foto?` <a href="#" onclick="verFoto('${esc(c.foto)}');return false">foto</a>`:""}</span>`; };
   return `<b>${precoTxt(x.preco_un,x.preco_cx)}</b>${s[0]?` <span class="tag ${s[1]}">${s[0]}</span>`:""}${lin("inicio","Início")}${lin("fim","Fim")}`;
 }
+/* 62: onde o produto estava na loja (Aereo e Outros entraram em 20/10; o Outros traz o "onde") */
+const NOME_LOCAL={gondola:"gôndola",deposito:"depósito",ilha:"ilha",checkout:"checkout",aereo:"aéreo",outros:"outros"};
+function ondeOport(x,texto){ const ls=String(x.locais||"").split(",").map(t=>t.trim()).filter(Boolean);
+  if(!ls.length) return "";
+  const t=ls.map(l=>l==="outros"&&x.outros_onde?`outros (${x.outros_onde})`:(NOME_LOCAL[l]||l)).join(", ");
+  return texto?t:esc(t); }
 function modInv(){
   if(!PODE_INV()) return `<h2>Investimentos nas lojas</h2><div class="alerta">Este módulo é só para o gerente de merchandising.</div>`;
   if(!D.inv||D.inv.erro) { if(!D.inv) carregarInv().then(pintar); return `<h2>Investimentos nas lojas</h2><div class="vazio">${D.inv&&D.inv.erro?esc(D.inv.erro):"Buscando os investimentos…"}</div>`; }
