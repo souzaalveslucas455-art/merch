@@ -184,6 +184,13 @@ const tit=n=>String(n||"").toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase())
 const curto=n=>{ const p=String(n||"").split(/\s+/).filter(Boolean); return p.length>1?tit(p[0]+" "+p[p.length-1]):tit(p[0]||""); };
 const plural=(n,a,b)=>`${n} ${n===1?a:b}`;
 const fmt=n=>n==null?"—":Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1});
+/* Quantidade sem caixa quebrada (20/10): 46 un de CX06 = "7 cx + 4 un", nunca "7,7 cx".
+   Com o 63 o banco manda o total em unidades e o fator; sem ele, mostra como antes. */
+function qtdTxt(un,f){ f=Number(f)>0?Number(f):1; un=Math.round(Number(un)||0); const n=x=>x.toLocaleString("pt-BR");
+  if(f<=1) return `${n(un)} un`; const cx=Math.floor(un/f), r=un-cx*f; return cx?`${n(cx)} cx${r?` + ${n(r)} un`:""}`:`${n(r)} un`; }
+const qtdOu=(un,f,cx)=>un!=null?qtdTxt(un,f):`${fmt(cx)} cx`;
+const cxInteiras=(un,f)=>un!=null&&Number(f)>1?Math.floor(Math.round(un)/f):null;
+const unSoltas=(un,f)=>un!=null?(Number(f)>1?Math.round(un)-Math.floor(Math.round(un)/f)*f:Math.round(un)):null;
 const pct=(a,b)=>b?Math.round(100*a/b):null;
 const MOTIVO={sem_pedido:"Não pediu",pedido_nao_chegou:"Pedido não chegou",sem_espaco:"Sem espaço",concorrente_ocupou:"Concorrente ocupou",deposito_cheio:"Tem no depósito",outro:"Outro"};
 const ACAO={girar:"Mudou de lugar",troca:"Acionou troca",retirar:"Retirou da gôndola",outro:"Outro",registrar:"Só registrou",remarcar:"Remarcou"};
@@ -394,8 +401,8 @@ function modOport(){
   const at=abaAtual(lista), g=grupos.find(x=>x[0]===at), rs=ordena(xs.filter(g[3]),"oport",{campo:"data",dir:-1});
   const nt=xs.filter(x=>x.ruptura), mot={}; nt.forEach(x=>mot[x.motivo||"sem motivo"]=(mot[x.motivo||"sem motivo"]||0)+1);
   const top=Object.entries(mot).sort((a,b)=>b[1]-a[1])[0];
-  EXPORTA={nome:"oportunidade-"+at, cab:["Produto","Loja","Codigo","Status","Contado (cx)","Onde estava","Motivo","Observacao","Data","Repositor","Lider"],
-    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,CLASSE[x.classe]||x.classe,x.caixas,ondeOport(x,true),MOTIVO[x.motivo]||"",x.obs||"",dataBr(x.data),x.repositor,x.lider])};
+  EXPORTA={nome:"oportunidade-"+at, cab:["Produto","Loja","Codigo","Status","Contado (cx)","Contado: caixas","Contado: unidades soltas","Contado: total em unidades","Onde estava","Motivo","Observacao","Data","Repositor","Lider"],
+    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,CLASSE[x.classe]||x.classe,x.caixas,cxInteiras(x.unidades,x.fator),unSoltas(x.unidades,x.fator),x.unidades??"",ondeOport(x,true),MOTIVO[x.motivo]||"",x.obs||"",dataBr(x.data),x.repositor,x.lider])};
   return `<h2>Oportunidade de Estoque</h2>${abas(lista)}
     ${nt.length?`<div class="alerta"><b>${plural(nt.length,"produto marcado","produtos marcados")} como não tem</b> em ${plural(new Set(nt.map(x=>x.codigo)).size,"loja","lojas")} nos últimos ${DIAS} dias. Motivo mais comum: ${esc(MOTIVO[top[0]]||top[0])} (${top[1]}).</div>`
       :`<div class="alerta ok">Nenhum produto marcado como não tem nos últimos ${DIAS} dias.</div>`}
@@ -403,7 +410,7 @@ function modOport(){
     ${tabela(th("oport","produto","Produto")+th("oport","loja","Loja")+"<th>Status</th>"+th("oport","caixas","Contado",1)+"<th>Motivo e observação</th>"+th("oport","data","Data")+th("oport","repositor","Repositor")+th("oport","lider","Líder"),
       rs.map(x=>`<tr><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${esc(x.codigo)}</span></td>
         <td><span class="tag ${x.ruptura?"t-verm":x.classe==="excesso"?"t-azul":x.classe==="nunca"?"t-roxo":"t-amb"}">${x.ruptura?"Não tem":esc(CLASSE[x.classe]||x.classe)}</span></td>
-        <td class="num">${x.caixas>0?`<span class="cel">${fmt(x.caixas)} cx</span>`:"—"}${ondeOport(x)?`<span class="sub" style="text-align:right">${ondeOport(x)}</span>`:""}</td>
+        <td class="num">${x.caixas>0?`<span class="cel">${qtdOu(x.unidades,x.fator,x.caixas)}</span>`:"—"}${ondeOport(x)?`<span class="sub" style="text-align:right">${ondeOport(x)}</span>`:""}</td>
         <td>${x.motivo?`<b>${esc(MOTIVO[x.motivo]||x.motivo)}</b>`:""}${x.obs?`<span class="sub">${livre(x.obs,3,true)}</span>`:""}</td>
         <td>${dataBr(x.data)}</td><td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`),
       "Nenhum registro nesta aba no período.")}`;
@@ -531,27 +538,27 @@ function modEstq(){
   const aviso=sem.length?`<div class="alerta"><b>${plural(sem.length,"loja","lojas")} sem contagem de estoque nesta semana.</b> ${sem.slice(0,6).map(x=>esc(x.loja)).join(", ")}${sem.length>6?` e mais ${sem.length-6}`:""}.</div>`:`<div class="alerta ok">Todas as lojas da equipe com contagem de estoque nesta semana.</div>`;
   if(!chave){
     const rs=ordena(filtra(((D.estq||{}).itens)||[]),"estq",{campo:"total_cx",dir:-1});
-    EXPORTA={nome:"contagem-por-produto", cab:["Produto","Codigo","Total contado (cx)","Lojas contadas","Lojas sem estoque","Ultima contagem","Validade mais proxima"],
-      linhas:rs.map(x=>[x.produto,x.sku,x.total_cx,x.lojas,x.lojas_sem,dataBr(x.ultima),dataBr(x.validade)])};
+    EXPORTA={nome:"contagem-por-produto", cab:["Produto","Codigo","Total contado (cx)","Total contado (unidades)","Lojas contadas","Lojas sem estoque","Ultima contagem","Validade mais proxima"],
+      linhas:rs.map(x=>[x.produto,x.sku,x.total_cx,x.total_un??"",x.lojas,x.lojas_sem,dataBr(x.ultima),dataBr(x.validade)])};
     return `<h2>Contagem de Estoque</h2>${abas([["prod","Por produto","última contagem de cada loja"]])}${aviso}
       ${barra(`<span class="mut">Escolha um produto (ou toque nele) para ver cada loja. Escolha uma loja no filtro para ver todos os produtos dela.</span>`)}
       ${tabela(th("estq","produto","Produto")+th("estq","total_cx","Total contado",1)+th("estq","lojas","Lojas contadas",1)+th("estq","lojas_sem","Sem estoque",1)+th("estq","ultima","Última contagem")+th("estq","validade","Validade mais próxima"),
         rs.map(x=>`<tr class="clica" data-prod="${esc(x.produto)}"><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td>
-          <td class="num"><span class="cel ${x.total_cx>0?"forte":""}">${fmt(x.total_cx)} cx</span></td><td class="num">${x.lojas}</td>
+          <td class="num"><span class="cel ${x.total_cx>0?"forte":""}">${qtdOu(x.total_un,x.fator,x.total_cx)}</span></td><td class="num">${x.lojas}</td>
           <td class="num">${x.lojas_sem?`<span class="tag t-verm">${x.lojas_sem}</span>`:"0"}</td><td>${dataBr(x.ultima)}</td><td>${x.validade?dataBr(x.validade):"—"}</td></tr>`),
         "Nenhuma contagem de estoque nos últimos 30 dias.")}`;
   }
   const det=ESTQ_DET&&ESTQ_DET.chave===chave?ESTQ_DET:null, porProduto=!!alvo.p_produto;
   const rs=det?ordena(filtra(det.itens).map(x=>({...x})),"estqd",{campo:porProduto?"loja":"produto",dir:1}):[];
   const diasV=d=>d?Math.round((new Date(d+"T12:00")-new Date(hoje()+"T12:00"))/864e5):null;
-  EXPORTA={nome:"contagem-"+(porProduto?prodSel:nomeLoja(lojaSel)), cab:["Produto","Loja","Codigo","Caixas","Unidades","Total (cx)","Data","Validade mais proxima","Repositor","Lider"],
-    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,x.caixas,x.unidades,x.total_cx,dataBr(x.data),dataBr(x.validade),x.repositor,x.lider])};
+  EXPORTA={nome:"contagem-"+(porProduto?prodSel:nomeLoja(lojaSel)), cab:["Produto","Loja","Codigo","Caixas","Unidades","Total (cx)","Total (unidades)","Data","Validade mais proxima","Repositor","Lider"],
+    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,x.caixas,x.unidades,x.total_cx,x.total_un??"",dataBr(x.data),dataBr(x.validade),x.repositor,x.lider])};
   return `<h2>Contagem de Estoque</h2>${abas([["det",porProduto?esc(prodSel):esc(nomeLoja(lojaSel)),porProduto?"em cada loja":"todos os produtos da loja"]])}${aviso}
     ${barra(`<button class="bt" id="voltaEstq">← Todos os produtos</button>`)}
     ${!det?`<div class="tab"><div class="vazio">Buscando a última contagem…</div></div>`:det.erro?`<div class="alerta">${esc(det.erro)}</div>`:
       tabela((porProduto?th("estqd","loja","Loja"):th("estqd","produto","Produto"))+th("estqd","total_cx","Na última contagem",1)+th("estqd","data","Contado em")+th("estqd","validade","Validade mais próxima")+th("estqd","repositor","Repositor")+th("estqd","lider","Líder"),
         rs.map(x=>{ const dv=diasV(x.validade); return `<tr><td><b>${esc(porProduto?x.loja:x.produto)}</b><span class="sub">${esc(porProduto?x.codigo:"cód. "+x.sku)}</span></td>
-          <td class="num"><span class="cel ${x.total_cx>0?"forte":""}">${fmt(x.caixas||0)} cx${Number(x.unidades)?` + ${fmt(x.unidades)} un`:""}</span>${x.fator>1?`<span class="sub">${fmt(x.total_cx)} cx no total</span>`:""}</td>
+          <td class="num"><span class="cel ${x.total_cx>0?"forte":""}">${fmt(x.caixas||0)} cx${Number(x.unidades)?` + ${fmt(x.unidades)} un`:""}</span>${x.fator>1&&(Number(x.unidades)>=x.fator||(Number(x.caixas)>0&&Number(x.unidades)>0))?`<span class="sub">= ${qtdOu(x.total_un,x.fator,x.total_cx)}</span>`:""}</td>
           <td>${dataBr(x.data)}</td><td>${x.validade?`${dataBr(x.validade)} <span class="tag ${dv<0||dv<=20?"t-verm":dv<=30?"t-amb":"t-verde"}">${dv<0?"vencido":`${dv} dias`}</span>`:'<span class="mut">sem registro</span>'}</td>
           <td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`; }),
         "Nenhuma contagem deste filtro nos últimos 30 dias.")}`;

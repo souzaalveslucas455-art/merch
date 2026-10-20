@@ -427,7 +427,13 @@ function secCumprimento(){
    os produtos com a quantidade. E as lojas que ainda nao contaram na semana. */
 function secEstoque(max){
   const E=D.estoque||{}, cs=doFiltro(E.contagens), sem=doFiltro(E.sem_contagem_na_semana);
-  const fmtq=i=>[i.caixas!=null?`${Number(i.caixas).toLocaleString("pt-BR",{maximumFractionDigits:1})} cx`:"", i.unidades!=null?`${Math.round(i.unidades)} un`:""].filter(Boolean).join(" + ")||"0";
+  /* 20/10: caixas e unidades como foram contadas; se as unidades passam de 1 caixa,
+     a conta pronta ao lado ("265 un = 22 cx + 1 un"), nunca caixa quebrada. Fator vem do 63. */
+  const fmtq=i=>{ const f=Number(i.fator)||1, cx=Number(i.caixas)||0, un=Number(i.unidades)||0;
+    const txt=[i.caixas!=null?`${Math.round(cx).toLocaleString("pt-BR")} cx`:"", i.unidades!=null?`${Math.round(un).toLocaleString("pt-BR")} un`:""].filter(Boolean).join(" + ")||"0";
+    if(!(f>1&&(un>=f||(cx>0&&un>0)))) return txt;
+    const tot=Math.round(cx*f+un), c2=Math.floor(tot/f), r=tot-c2*f;
+    return `${txt} <span style="font-weight:400;color:var(--ink3)">= ${c2.toLocaleString("pt-BR")} cx${r?` + ${r} un`:""}</span>`; };
   const titulo=cs.length?`${plural(cs.length,"loja com contagem","lojas com contagem")} de estoque`:"Nenhuma contagem de estoque no período";
   const corpo=lista(cs, x=>`<div class="lin"><div><b>${esc(x.loja)}</b><div class="mut" style="font-size:14px">${esc(nomeCurto(x.repositor))}${MODO==="painel"&&x.lider?` · líder ${esc(nomeCurto(x.lider))}`:""}</div></div>
       <span class="selo" style="background:${x.produtos>=x.total_produtos?"var(--verde-bg)":"var(--amb-bg)"};color:${x.produtos>=x.total_produtos?"var(--verde)":"var(--amb)"}">${dataBr(x.data)} · ${x.produtos} de ${x.total_produtos}</span>
