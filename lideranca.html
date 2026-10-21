@@ -376,7 +376,7 @@ function cartaoEnviada(x){
       <span class="selo" style="background:${venc?"var(--verm-bg)":rs.length?"var(--verde-bg)":"var(--fundo)"};color:${venc?"var(--verm-esc)":rs.length?"var(--verde)":"var(--ink2)"}">${venc?"Prazo vencido sem resposta":rs.length?plural(rs.length,"resposta","respostas"):"Sem resposta"}</span></div>
     ${x.descricao?`<div class="txt mut">${esc(x.descricao)}</div>`:""}
     <div class="mut" style="font-size:13px">Para ${esc(x.para==="toda a equipe"||x.para==="quem visitar a loja"?x.para:tit(x.para))}${x.loja?` · ${esc(x.loja)}`:""}${x.prazo?` · prazo ${dataBr(x.prazo)}`:""} · ${quando(x.criado_em)}${MODO==="painel"?` · de ${esc(nomeCurto(x.de))}`:""}</div>
-    ${rs.map(r=>`<div class="resp" style="background:${r.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"}"><b>${esc(nomeCurto(r.repositor))}:</b> ${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}${r.comentario?livre(r.comentario,3):""} <span class="mut">· ${quando(r.criado_em)}</span></div>`).join("")}
+    ${rs.map(r=>`<div class="resp" style="background:${r.situacao==="nao_feita"?"var(--amb-bg)":"var(--verde-bg)"}"><b>${esc(nomeCurto(r.repositor))}:</b> ${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}${r.comentario?livre(r.comentario,3):""} <span class="mut">· ${quando(r.criado_em)}</span>${botaoFotosResp(r)}</div>`).join("")}
   </div>`;
 }
 /* As demandas do gerente para o lider: ele responde Feito ou Nao consegui. */
@@ -599,6 +599,11 @@ async function verFotos(caminhos){
   fundo.innerHTML=imgs.join("")+`<p>Toque para fechar</p>`;
 }
 window.verFotos=verFotos;
+
+/* 21/10: as fotos da resposta do repositor a uma demanda (antes a tela nao mostrava). */
+const fotosResp=r=>Array.isArray(r.fotos)&&r.fotos.length?r.fotos:(r.foto_url?[r.foto_url]:[]);
+const botaoFotosResp=r=>{ const fs=fotosResp(r); return fs.length?`<button class="bt" style="margin:4px 0 0;padding:3px 10px;font-size:12px" data-rfotos="${esc(fs.join("|"))}">Ver ${fs.length===1?"foto":fs.length+" fotos"}</button>`:""; };
+document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-rfotos]"); if(!b) return; e.preventDefault(); e.stopPropagation(); verFotos(b.dataset.rfotos.split("|")); },true);
 function secCampanhas(){
   const cs=(D.campanhas||[]).filter(c=>!filtroAtual()||(c.lojas||[]).some(l=>String(l.lider||"").includes(filtroAtual())));
   const corpo=`<div style="padding:12px 16px;border-bottom:1px solid var(--linha);display:flex;justify-content:space-between;align-items:center;gap:10px">

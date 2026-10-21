@@ -640,12 +640,12 @@ function modDem(){
           <div style="display:flex;gap:6px;margin-top:6px"><button class="bt" data-resp="${i}" data-res="0">Responder</button><button class="bt verm" data-resp="${i}" data-res="1">Resolver</button></div>`:""}</td></tr>`),
       "Nenhuma demanda dos repositores nos últimos 30 dias.");
   } else {
-    EXPORTA={nome:"demandas-enviadas", cab:["Titulo","De","Para","Loja","Prazo","Respostas","Vencida"], linhas:env.map(x=>[x.titulo,x.de,x.para,x.loja,dataBr(x.prazo),(x.respostas||[]).map(r=>`${r.repositor}: ${r.situacao}`).join(" | "),x.vencida?"sim":"nao"])};
+    EXPORTA={nome:"demandas-enviadas", cab:["Titulo","De","Para","Loja","Prazo","Respostas","Fotos","Vencida"], linhas:env.map(x=>[x.titulo,x.de,x.para,x.loja,dataBr(x.prazo),(x.respostas||[]).map(r=>`${r.repositor}: ${r.situacao==="nao_feita"?"nao conseguiu":"feito"}${r.comentario?` (${r.comentario})`:""}`).join(" | "),(x.respostas||[]).reduce((a,r)=>a+fotosResp(r).length,0),x.vencida?"sim":"nao"])};
     corpo=tabela("<th>Demanda</th><th>De</th><th>Para</th><th>Prazo</th><th>Respostas</th>",
       env.map(x=>`<tr><td><b>${esc(x.titulo)}</b>${x.descricao?`<span class="sub">${esc(x.descricao)}</span>`:""}${x.loja?`<span class="sub">loja ${esc(x.loja)}</span>`:""}</td>
         <td>${esc(curto(x.de))}<span class="sub">${quando(x.criado_em)}</span></td><td>${esc(x.para==="toda a equipe"||x.para==="quem visitar a loja"?x.para:tit(x.para))}</td>
         <td>${x.prazo?dataBr(x.prazo):"—"}${x.vencida?` <span class="tag t-verm">vencida</span>`:""}</td>
-        <td>${(x.respostas||[]).length?x.respostas.map(r=>`<div style="font-size:12.5px"><span class="tag ${r.situacao==="nao_feita"?"t-amb":"t-verde"}">${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}</span> ${esc(curto(r.repositor))}${r.comentario?livre(r.comentario,3):""}</div>`).join(""):'<span class="mut">sem resposta</span>'}</td></tr>`),
+        <td>${(x.respostas||[]).length?x.respostas.map(r=>`<div style="font-size:12.5px"><span class="tag ${r.situacao==="nao_feita"?"t-amb":"t-verde"}">${r.situacao==="nao_feita"?"Não conseguiu":"Feito"}</span> ${esc(curto(r.repositor))} <span class="mut">${quando(r.criado_em)}</span>${r.comentario?livre(r.comentario,3):""}${botaoFotosResp(r)}</div>`).join(""):'<span class="mut">sem resposta</span>'}</td></tr>`),
       "Nenhuma demanda enviada nos últimos 30 dias.");
   }
   return `<h2>Demandas</h2>${abas(lista)}
@@ -760,6 +760,11 @@ async function verFotos(caminhos){
   fundo.innerHTML=imgs.join("")+`<p>Clique para fechar</p>`;
 }
 window.verFotos=verFotos;
+
+/* 21/10: as fotos da resposta do repositor a uma demanda (antes a tela nao mostrava). */
+const fotosResp=r=>Array.isArray(r.fotos)&&r.fotos.length?r.fotos:(r.foto_url?[r.foto_url]:[]);
+const botaoFotosResp=r=>{ const fs=fotosResp(r); return fs.length?`<button class="bt" style="margin:4px 0 0;padding:3px 10px;font-size:12px" data-rfotos="${esc(fs.join("|"))}">Ver ${fs.length===1?"foto":fs.length+" fotos"}</button>`:""; };
+document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-rfotos]"); if(!b) return; e.preventDefault(); e.stopPropagation(); verFotos(b.dataset.rfotos.split("|")); },true);
 function corpoCampanhas(){
   const cs=(D.camp||[]).filter(c=>F.lideres===null||(c.lojas||[]).some(l=>(F.lideres||[]).some(n=>String(l.lider||"").includes(n))));
   ligarModulo=()=>{ document.querySelectorAll("[data-camp]").forEach(tr=>tr.onclick=()=>{ CAMP_SEL=tr.dataset.camp; pintar(); });
