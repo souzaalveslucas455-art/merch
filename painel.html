@@ -72,6 +72,7 @@ main{overflow-y:auto;min-width:0}
 .lin4{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) auto;gap:14px;align-items:end}
 .lin4 select{width:100%;border:1px solid #D1D5DB;border-radius:9px;padding:8px 10px;background:#fff}
 .campoms{min-width:0}
+.leitura{background:#F0F6FF;border:1px solid #CFE0F7;color:#1F3B63;border-radius:10px;padding:10px 14px;font-size:13.5px;line-height:1.45;margin:10px 0 4px}
 .ms{position:relative}
 .ms-bt{width:100%;text-align:left;border:1px solid #D1D5DB;border-radius:9px;padding:8px 30px 8px 10px;background:#fff;font:inherit;color:inherit;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
 .ms-bt::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid #6B7280;border-bottom:2px solid #6B7280;transform:translateY(-70%) rotate(45deg)}
@@ -211,6 +212,21 @@ const pct=(a,b)=>b?Math.round(100*a/b):null;
 const MOTIVO={sem_pedido:"Não pediu",pedido_nao_chegou:"Pedido não chegou",sem_espaco:"Sem espaço",concorrente_ocupou:"Concorrente ocupou",deposito_cheio:"Tem no depósito",outro:"Outro"};
 const ACAO={girar:"Mudou de lugar",troca:"Acionou troca",retirar:"Retirou da gôndola",outro:"Outro",registrar:"Só registrou",remarcar:"Remarcou"};
 const CLASSE={ruptura:"Ruptura",abaixo:"Abaixo do normal",excesso:"Excesso",nunca:"Nunca comprou"};
+/* 23/10: o status da Oportunidade e da COMPRA (pedidos dos ultimos 30 dias x o que a loja costuma
+   comprar num mes); o contado e o que o repositor achou NA LOJA. O painel mostra os dois separados. */
+const COMPRA={excesso:"Comprou acima do normal",abaixo:"Comprou abaixo do normal",ruptura:"Não comprou em 30 dias",nunca:"Não compra o produto"};
+const cxAprox=v=>{ v=Number(v)||0; return v<=0?"0 cx":v<1?"menos de 1 cx":`${Math.round(v).toLocaleString("pt-BR")} cx`; };
+function compraTxt(x){
+  if(x.classe==="nunca") return "lojas parecidas compram todo mês";
+  if(x.pedido_cx==null||x.normal_cx==null) return "";
+  const p=Number(x.pedido_cx), n=Number(x.normal_cx), d=Math.round(p-n);
+  return `${cxAprox(p)} em 30 dias · normal ${cxAprox(n)}/mês${x.classe==="excesso"&&d>0?` (${d.toLocaleString("pt-BR")} cx a mais)`:x.classe==="abaixo"&&d<0?` (${(-d).toLocaleString("pt-BR")} cx a menos)`:""}`; }
+const LEITURA={
+  naotem:"Produto que o repositor <b>não achou na loja</b> (contagem física). A coluna Compra mostra como estavam os pedidos da loja.",
+  achados:"A loja <b>comprou pouco ou nada</b> nos últimos 30 dias, mas o repositor <b>achou o produto na loja</b>: ainda tem estoque, por isso pediu menos.",
+  abaixo:"A loja <b>comprou abaixo do normal</b> nos últimos 30 dias. Com pouca quantidade contada, há risco de faltar; com bastante, ainda tem estoque.",
+  excesso:"A loja <b>comprou acima do normal</b> nos últimos 30 dias. Pouca quantidade contada quer dizer que o produto <b>já girou</b>; muita quantidade quer dizer <b>produto parado na loja</b>: ajudar a girar.",
+  nunca:"Produto que <b>lojas parecidas compram</b> todo mês e esta loja não compra: oportunidade de venda."};
 
 /* --------------------------- acesso --------------------------- */
 let TOKEN=guarda.ler("token"), EU=null;
@@ -479,25 +495,26 @@ const tabela=(cab,linhas,vazio)=>`<div class="tab">${linhas.length?`<table><thea
 /* --------------------------- 1. oportunidade --------------------------- */
 function modOport(){
   const xs=filtra(D.oport);
-  const grupos=[["naotem","Não tem","produto em falta",x=>x.ruptura],
-    ["achados","Encontrados","ruptura ou abaixo, com estoque",x=>!x.ruptura&&(x.classe==="ruptura"||x.classe==="abaixo")&&x.caixas>0],
-    ["abaixo","Abaixo do normal","registrados",x=>x.classe==="abaixo"&&!x.ruptura],
-    ["excesso","Excesso","registrados",x=>x.classe==="excesso"&&!x.ruptura],   /* 21/10: o "Não tem" fica so na aba Não tem */
-    ["nunca","Não trabalha","oportunidade de venda",x=>x.classe==="nunca"&&!x.ruptura&&!(x.caixas>0)]];
+  const grupos=[["naotem","Não tem","não estava na loja",x=>x.ruptura],
+    ["achados","Encontrados","comprou pouco, mas tem na loja",x=>!x.ruptura&&(x.classe==="ruptura"||x.classe==="abaixo")&&x.caixas>0],
+    ["abaixo","Abaixo do normal","comprou abaixo do normal",x=>x.classe==="abaixo"&&!x.ruptura],
+    ["excesso","Excesso","comprou acima do normal",x=>x.classe==="excesso"&&!x.ruptura],   /* 21/10: o "Não tem" fica so na aba Não tem */
+    ["nunca","Não trabalha","lojas parecidas compram",x=>x.classe==="nunca"&&!x.ruptura&&!(x.caixas>0)]];
   const lista=grupos.map(([k,t,s,f])=>[k,`${t} · ${xs.filter(f).length}`,s]);
   const at=abaAtual(lista), g=grupos.find(x=>x[0]===at), rs=ordena(xs.filter(g[3]),"oport",{campo:"data",dir:-1});
   const nt=xs.filter(x=>x.ruptura), mot={}; nt.forEach(x=>mot[x.motivo||"sem motivo"]=(mot[x.motivo||"sem motivo"]||0)+1);
   const top=Object.entries(mot).sort((a,b)=>b[1]-a[1])[0];
-  EXPORTA={nome:"oportunidade-"+at, cab:["Produto","Loja","Codigo","Status","Contado (cx)","Contado: caixas","Contado: unidades soltas","Contado: total em unidades","Onde estava","Motivo","Observacao","Data","Repositor","Lider"],
-    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,CLASSE[x.classe]||x.classe,x.caixas,cxInteiras(x.unidades,x.fator),unSoltas(x.unidades,x.fator),x.unidades??"",ondeOport(x,true),MOTIVO[x.motivo]||"",x.obs||"",dataBr(x.data),x.repositor,x.lider])};
+  EXPORTA={nome:"oportunidade-"+at, cab:["Produto","Loja","Codigo","Compra (status)","Comprou em 30 dias (cx)","Normal por mes (cx)","Contado na loja (cx)","Contado: caixas","Contado: unidades soltas","Contado: total em unidades","Onde estava","Motivo","Observacao","Data","Repositor","Lider"],
+    linhas:rs.map(x=>[x.produto,x.loja,x.codigo,COMPRA[x.classe]||x.classe,x.pedido_cx??"",x.normal_cx??"",x.caixas,cxInteiras(x.unidades,x.fator),unSoltas(x.unidades,x.fator),x.unidades??"",ondeOport(x,true),MOTIVO[x.motivo]||"",x.obs||"",dataBr(x.data),x.repositor,x.lider])};
   return `<h2>Oportunidade de Estoque</h2>${abas(lista)}
     ${nt.length?`<div class="alerta"><b>${plural(nt.length,"produto marcado","produtos marcados")} como não tem</b> em ${plural(new Set(nt.map(x=>x.codigo)).size,"loja","lojas")} nos últimos ${DIAS} dias. Motivo mais comum: ${esc(MOTIVO[top[0]]||top[0])} (${top[1]}).</div>`
       :`<div class="alerta ok">Nenhum produto marcado como não tem nos últimos ${DIAS} dias.</div>`}
-    ${barra(`<span class="mut">O que o repositor registrou na última contagem de cada produto, em cada loja.</span>`)}
-    ${tabela(th("oport","produto","Produto")+th("oport","loja","Loja")+"<th>Status</th>"+th("oport","caixas","Contado",1)+"<th>Motivo e observação</th>"+th("oport","data","Data")+th("oport","repositor","Repositor")+th("oport","lider","Líder"),
+    <div class="leitura"><b>Como ler:</b> a coluna <b>Compra</b> vem dos <b>pedidos</b> da loja nos últimos 30 dias, comparados com o que ela costuma comprar num mês. A coluna <b>Contado na loja</b> é o que o repositor achou fisicamente no dia. ${LEITURA[at]||""}</div>
+    ${barra(`<span class="mut">A última contagem de cada produto, em cada loja.</span>`)}
+    ${tabela(th("oport","produto","Produto")+th("oport","loja","Loja")+"<th>Compra da loja <span class=\"mut\" style=\"font-weight:400\">(pedidos de 30 dias)</span></th>"+th("oport","caixas","Contado na loja",1)+"<th>Motivo e observação</th>"+th("oport","data","Data")+th("oport","repositor","Repositor")+th("oport","lider","Líder"),
       rs.map(x=>`<tr><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${lojaSub(x)}</span></td>
-        <td><span class="tag ${x.ruptura?"t-verm":x.classe==="excesso"?"t-azul":x.classe==="nunca"?"t-roxo":"t-amb"}">${x.ruptura?"Não tem":esc(CLASSE[x.classe]||x.classe)}</span></td>
-        <td class="num">${x.caixas>0?`<span class="cel">${qtdOu(x.unidades,x.fator,x.caixas)}</span>`:"—"}${ondeOport(x)?`<span class="sub" style="text-align:right">${ondeOport(x)}</span>`:""}</td>
+        <td><span class="tag ${x.classe==="excesso"?"t-azul":x.classe==="nunca"?"t-roxo":x.classe==="ruptura"?"t-verm":"t-amb"}">${esc(COMPRA[x.classe]||CLASSE[x.classe]||x.classe)}</span>${compraTxt(x)?`<span class="sub">${esc(compraTxt(x))}</span>`:""}</td>
+        <td class="num">${x.ruptura?`<span class="tag t-verm">Não tem na loja</span>`:x.caixas>0?`<span class="cel">${qtdOu(x.unidades,x.fator,x.caixas)}</span>`:"—"}${ondeOport(x)?`<span class="sub" style="text-align:right">${ondeOport(x)}</span>`:""}</td>
         <td>${x.motivo?`<b>${esc(MOTIVO[x.motivo]||x.motivo)}</b>`:""}${x.obs?`<span class="sub">${livre(x.obs,3,true)}</span>`:""}</td>
         <td>${dataBr(x.data)}</td><td>${esc(curto(x.repositor))}</td><td>${esc(curto(x.lider))}</td></tr>`),
       "Nenhum registro nesta aba no período.")}`;
