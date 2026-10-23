@@ -71,6 +71,22 @@ main{overflow-y:auto;min-width:0}
 .chips label.off{border-color:var(--linha);color:var(--ink3)}
 .lin4{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) auto;gap:14px;align-items:end}
 .lin4 select{width:100%;border:1px solid #D1D5DB;border-radius:9px;padding:8px 10px;background:#fff}
+.campoms{min-width:0}
+.ms{position:relative}
+.ms-bt{width:100%;text-align:left;border:1px solid #D1D5DB;border-radius:9px;padding:8px 30px 8px 10px;background:#fff;font:inherit;color:inherit;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.ms-bt::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid #6B7280;border-bottom:2px solid #6B7280;transform:translateY(-70%) rotate(45deg)}
+.ms.tem .ms-bt{border-color:#C00000;background:#FFF5F5;font-weight:600}
+.ms-bt:disabled{color:#9CA3AF;background:#F9FAFB;cursor:default}
+.ms-pop{display:none;position:absolute;z-index:40;left:0;top:calc(100% + 4px);min-width:100%;width:max-content;max-width:420px;background:#fff;border:1px solid #D1D5DB;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.14);padding:8px}
+.ms.aberto .ms-pop{display:block}
+.ms-topo{display:flex;gap:8px;align-items:center}
+.ms-busca{flex:1;min-width:0;border:1px solid #D1D5DB;border-radius:8px;padding:7px 9px;font:inherit}
+.ms-topo a{font-size:13px;color:#C00000;cursor:pointer;text-decoration:underline;white-space:nowrap}
+.ms-lista{max-height:280px;overflow:auto;margin-top:6px}
+.ms-lista label{display:flex;gap:8px;align-items:flex-start;padding:6px 6px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1.3}
+.ms-lista label:hover{background:#F3F4F6}
+.ms-lista input{margin-top:2px;accent-color:#C00000}
+.ms-pe{border-top:1px solid #E5E7EB;margin-top:6px;padding-top:6px;font-size:12.5px;color:#6B7280}
 
 /* modulo */
 .mod{padding:20px 26px 40px}
@@ -255,7 +271,10 @@ function telaLogin(msg){
 /* --------------------------- dados --------------------------- */
 let D={}, ERROS=[], CARREGADO_EM=null;
 let MOD=guarda.ler("p_mod")||"venc", ABA={}, DIAS=Number(guarda.ler("p_dias")||7), BUSCA="";
-let F={lideres:null, repositor:"", loja:"", produto:"", gc:"", ka:""};   // lideres: null = todos
+/* 23/10: os filtros sao de multipla escolha. Cada um guarda uma lista (vazia = todos).
+   Dentro de um filtro vale qualquer um dos escolhidos; entre filtros, todos ao mesmo tempo. */
+const F_VAZIO=()=>({lideres:null, repositor:[], loja:[], produto:[], gc:[], ka:[]});
+let F=F_VAZIO();   // lideres: null = todos
 let ORD={};   // ordenacao por modulo: {campo, dir}
 
 async function abrir(){
@@ -283,9 +302,10 @@ const lideresTodos=()=>(EU.lideres||[]).map(l=>l.nome);
 const ligado=l=>F.lideres===null||F.lideres.includes(l);
 /* 21/10: filtro por gerencia comercial (GC. AP, GC. AN, GC. AT...), do painel_listas (65).
    Linha com loja: vale a loja; sem loja: vale a pessoa (repositor ou lider). */
-const gcSel=()=>F.gc?(((D.listas&&D.listas.gerencias)||[]).find(g=>g.sigla===F.gc)||{lojas:[],pessoas:[]}):null;
+const uniao=gs=>({lojas:[...new Set(gs.flatMap(g=>g.lojas||[]))], pessoas:[...new Set(gs.flatMap(g=>g.pessoas||[]))]});
+const gcSel=()=>F.gc.length?uniao(((D.listas&&D.listas.gerencias)||[]).filter(g=>F.gc.includes(g.sigla))):null;
 /* 23/10: key account (rede) das lojas, do painel_listas (66): o mesmo jeito da gerencia. */
-const kaSel=()=>F.ka?(((D.listas&&D.listas.key_accounts)||[]).find(k=>k.nome===F.ka)||{lojas:[],pessoas:[]}):null;
+const kaSel=()=>F.ka.length?uniao(((D.listas&&D.listas.key_accounts)||[]).filter(k=>F.ka.includes(k.nome))):null;
 const naKa=x=>naGrupo(kaSel(),x);
 const pessoaNaKa=n=>{ const k=kaSel(); return !k||(k.pessoas||[]).includes(n); };
 function naGc(x){ return naGrupo(gcSel(),x); }
@@ -299,9 +319,9 @@ const pessoaNaGc=n=>{ const g=gcSel(); return !g||(g.pessoas||[]).includes(n); }
 function filtra(xs){ return (xs||[]).filter(x=>
   naGc(x) && naKa(x) &&
   (x.lider==null||ligado(x.lider)) &&
-  (!F.repositor||x.repositor===F.repositor||x.nome===F.repositor||x.de===F.repositor) &&
-  (!F.loja||x.codigo===F.loja||x.loja===nomeLoja(F.loja)) &&
-  (!F.produto||x.produto===F.produto) &&
+  (!F.repositor.length||[x.repositor,x.nome,x.de].some(n=>n&&F.repositor.includes(n))) &&
+  (!F.loja.length||F.loja.includes(x.codigo)||F.loja.some(c=>x.loja===nomeLoja(c))) &&
+  (!F.produto.length||F.produto.includes(x.produto)) &&
   (!BUSCA||JSON.stringify(x).toLowerCase().includes(BUSCA.toLowerCase()))); }
 const nomeLoja=c=>((D.listas&&D.listas.lojas)||[]).find(l=>l.codigo===c)?.nome||"";
 /* 21/10: embaixo do nome da loja, o codigo, o bairro e a cidade (as lojas Atacadao Dia a Dia
@@ -363,6 +383,37 @@ function pintaLado(){
       <div class="mini"><div><b>${(EU.lideres||[]).filter(l=>ligado(l.nome)).length}</b><span>líderes</span></div><div><b>${filtra(EU.repositores).length}</b><span>repositores</span></div><div><b>${((D.listas||{}).lojas||[]).length}</b><span>lojas</span></div></div></div>`;
   $("lado").querySelectorAll("[data-mod]").forEach(b=>b.onclick=()=>{ MOD=b.dataset.mod; guarda.por("p_mod",MOD); BUSCA=""; pintar(); });
 }
+/* ---------- filtro de multipla escolha: botao que abre uma lista com caixinhas ----------
+   Marcar ou desmarcar vale na hora e a lista continua aberta (MS_ABERTO guarda qual, a busca e
+   a rolagem); fecha ao clicar fora ou no Esc. Limpar volta para "todos". */
+let MS_ABERTO=null;
+function caixaMulti(k,rot,ops,sel,[todos,um,varios],desligado){
+  const marcado=new Set(sel), n=sel.length;
+  const resumo=desligado||(!n?todos:n===1?((ops.find(o=>o.v===sel[0])||{}).r||sel[0]):`${n} ${varios}`);
+  return `<div class="campoms"><div class="rot" style="margin-top:0">${rot}</div>
+    <div class="ms ${n?"tem":""}" data-ms="${k}"><button type="button" class="ms-bt" ${desligado?"disabled":""} title="${esc(resumo)}">${esc(resumo)}</button>
+      <div class="ms-pop"><div class="ms-topo"><input class="ms-busca" placeholder="Procurar ${esc(um)}" autocomplete="off">
+        <a data-ms-limpa="${k}">Limpar</a></div>
+        <div class="ms-lista">${ops.map(o=>`<label data-t="${esc(String(o.t).toLowerCase())}"><input type="checkbox" value="${esc(o.v)}" ${marcado.has(o.v)?"checked":""}><span>${esc(o.t)}</span></label>`).join("")||`<div class="mut" style="padding:8px">Nenhuma opção com os outros filtros.</div>`}</div>
+        <div class="ms-pe">${n?plural(n,"marcado","marcados"):todos}</div></div></div></div>`;
+}
+function ligaMulti(){
+  document.querySelectorAll("[data-ms]").forEach(box=>{ const k=box.dataset.ms, bt=box.querySelector(".ms-bt"), busca=box.querySelector(".ms-busca"), lista=box.querySelector(".ms-lista");
+    const filtraLista=()=>{ const t=busca.value.trim().toLowerCase(); lista.querySelectorAll("label").forEach(l=>l.style.display=!t||l.dataset.t.includes(t)?"":"none"); };
+    bt.onclick=e=>{ e.stopPropagation(); const abre=!box.classList.contains("aberto");
+      document.querySelectorAll(".ms.aberto").forEach(x=>x.classList.remove("aberto"));
+      MS_ABERTO=abre?{k,busca:"",rol:0}:null; if(abre){ box.classList.add("aberto"); busca.focus(); } };
+    busca.oninput=()=>{ if(MS_ABERTO) MS_ABERTO.busca=busca.value; filtraLista(); };
+    lista.querySelectorAll("input[type=checkbox]").forEach(c=>c.onchange=()=>{
+      const v=c.value; F[k]=c.checked?[...new Set([...F[k],v])]:F[k].filter(x=>x!==v);
+      MS_ABERTO={k,busca:busca.value,rol:lista.scrollTop}; ESTQ_DET=null; pintar(); });
+    box.querySelector("[data-ms-limpa]").onclick=e=>{ e.preventDefault(); F[k]=[]; MS_ABERTO={k,busca:"",rol:0}; ESTQ_DET=null; pintar(); };
+    box.querySelector(".ms-pop").onclick=e=>e.stopPropagation();
+    if(MS_ABERTO&&MS_ABERTO.k===k){ box.classList.add("aberto"); busca.value=MS_ABERTO.busca||""; filtraLista(); lista.scrollTop=MS_ABERTO.rol||0; }
+  });
+}
+document.addEventListener("click",()=>{ if(MS_ABERTO){ MS_ABERTO=null; document.querySelectorAll(".ms.aberto").forEach(x=>x.classList.remove("aberto")); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&MS_ABERTO){ MS_ABERTO=null; document.querySelectorAll(".ms.aberto").forEach(x=>x.classList.remove("aberto")); } });
 function pintaMain(){
   ligarModulo=()=>{};   /* cada modulo liga o que e dele; o do modulo anterior nao pode rodar aqui */
   const gcs=(D.listas&&D.listas.gerencias)||[], g=gcSel(), kas=(D.listas&&D.listas.key_accounts)||[], k=kaSel();
@@ -370,29 +421,32 @@ function pintaMain(){
      (quem atende cada loja vem do painel_listas do 66; sem ele, como antes). */
   const LJ=(D.listas&&D.listas.lojas)||[], temRep=LJ.some(l=>Array.isArray(l.repositores));
   const okG=l=>!g||(g.lojas||[]).includes(l.codigo), okK=l=>!k||(k.lojas||[]).includes(l.codigo),
-        okR=l=>!F.repositor||!temRep||(l.repositores||[]).includes(F.repositor);
+        okR=l=>!F.repositor.length||!temRep||(l.repositores||[]).some(n=>F.repositor.includes(n));
   const lojaDe=c=>LJ.find(l=>l.codigo===c);
-  const repsDasLojas=temRep&&(g||k||F.loja)?new Set(LJ.filter(l=>okG(l)&&okK(l)&&(!F.loja||l.codigo===F.loja)).flatMap(l=>l.repositores||[])):null;
+  const repsDasLojas=temRep&&(g||k||F.loja.length)?new Set(LJ.filter(l=>okG(l)&&okK(l)&&(!F.loja.length||F.loja.includes(l.codigo))).flatMap(l=>l.repositores||[])):null;
   const lideres=lideresTodos().filter(n=>pessoaNaGc(n)&&pessoaNaKa(n)),
         reps=(EU.repositores||[]).filter(r=>ligado(r.lider)&&pessoaNaGc(r.nome)&&pessoaNaKa(r.nome)&&(!repsDasLojas||repsDasLojas.has(r.nome))).map(r=>r.nome).sort();
-  const gcsOp=gcs.filter(x=>x.sigla===F.gc||!(k||(F.repositor&&temRep))||(x.lojas||[]).some(c=>{ const l=lojaDe(c); return l&&okK(l)&&okR(l); }));
-  const kasOp=kas.filter(x=>x.nome===F.ka||!(g||(F.repositor&&temRep))||(x.lojas||[]).some(c=>{ const l=lojaDe(c); return l&&okG(l)&&okR(l); }));
-  const lojas=LJ.filter(l=>okG(l)&&okK(l)&&okR(l)), prods=[...new Set([...(D.oport||[]).map(x=>x.produto),...(((D.venc||{}).lotes)||[]).map(x=>x.produto),...((D.listas&&D.listas.produtos)||[]).map(p=>p.nome)])].sort();
+  const gcsOp=gcs.filter(x=>F.gc.includes(x.sigla)||!(k||(F.repositor.length&&temRep))||(x.lojas||[]).some(c=>{ const l=lojaDe(c); return l&&okK(l)&&okR(l); }));
+  const kasOp=kas.filter(x=>F.ka.includes(x.nome)||!(g||(F.repositor.length&&temRep))||(x.lojas||[]).some(c=>{ const l=lojaDe(c); return l&&okG(l)&&okR(l); }));
+  if(temRep&&F.repositor.length) F.loja=F.loja.filter(c=>{ const l=lojaDe(c); return !l||okR(l); });
+  if(repsDasLojas) F.repositor=F.repositor.filter(n=>repsDasLojas.has(n));
+  if(g||k) F.loja=F.loja.filter(c=>{ const l=lojaDe(c); return !l||(okG(l)&&okK(l)); });
+  const lojas=LJ.filter(l=>okG(l)&&okK(l)&&okR(l)||F.loja.includes(l.codigo)), prods=[...new Set([...(D.oport||[]).map(x=>x.produto),...(((D.venc||{}).lotes)||[]).map(x=>x.produto),...((D.listas&&D.listas.produtos)||[]).map(p=>p.nome)])].sort();
   $("main").innerHTML=`
     <div class="cab"><img src="${LOGO.coca}" alt="Coca-Cola Bandeirantes" style="height:44px;width:auto;flex:none"><div><h1>Painel de merchandising</h1>
       <p>Resultados dos repositores e líderes ${EU.perfil==="admin"?"de todas as equipes":"da sua equipe"}: ${esc(tit(EU.nome))}. Atualizado às ${CARREGADO_EM?CARREGADO_EM.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"}.</p></div>
       <div class="acoes"><a class="bt" href="lideranca.html" style="text-decoration:none">App do líder</a><button class="bt" id="pAtual">Atualizar</button><button class="bt" onclick="novaCampanha()">Nova campanha</button><button class="bt escuro" id="pNova">Nova demanda</button><button class="bt" id="pSai">Sair</button></div></div>
     ${ERROS.length?`<div class="alerta" style="margin:14px 26px 0">Parte dos dados não carregou: ${esc(ERROS[0])}. Toque em Atualizar.</div>`:""}
     <div class="filtros">
-      <div class="tt"><span class="ic">${IC.filtro}</span><div><b>Filtros</b><span>Key account, gerência comercial, líder, repositor, loja e produto valem para todos os módulos. Um filtro restringe as opções dos outros.</span></div></div>
+      <div class="tt"><span class="ic">${IC.filtro}</span><div><b>Filtros</b><span>Key account, gerência comercial, líder, repositor, loja e produto valem para todos os módulos. Dá para marcar mais de um em cada filtro, e um filtro restringe as opções dos outros.</span></div></div>
       <div class="rot">LÍDERES <a id="fTodos">Selecionar todos</a><a id="fNenhum">Limpar seleção</a><span class="mut" style="font-weight:400">${F.lideres===null?"todos os líderes":plural(F.lideres.length,"líder","líderes")}</span></div>
       <div class="chips">${lideres.map(l=>`<label class="${ligado(l)?"":"off"}"><input type="checkbox" data-lid="${esc(l)}" ${ligado(l)?"checked":""}>${esc(curto(l))}</label>`).join("")||`<span class="mut">Nenhum líder na sua equipe.</span>`}</div>
       <div class="lin4" style="margin-top:12px">
-        <label><div class="rot" style="margin-top:0">KEY ACCOUNT</div><select id="fKa" ${kas.length?"":"disabled"}><option value="">${kas.length?"Todos os key accounts":"Ainda não veio do portal"}</option>${kasOp.map(x=>`<option ${x.nome===F.ka?"selected":""} value="${esc(x.nome)}">${esc(x.nome)} (${plural((x.lojas||[]).length,"loja","lojas")})</option>`).join("")}</select></label>
-        <label><div class="rot" style="margin-top:0">GERÊNCIA COMERCIAL</div><select id="fGc"><option value="">Todas as gerências</option>${gcsOp.map(x=>`<option ${x.sigla===F.gc?"selected":""} value="${esc(x.sigla)}">${esc(x.sigla)}${x.nome?` · ${esc(tit(x.nome))}`:""}</option>`).join("")}</select></label>
-        <label><div class="rot" style="margin-top:0">REPOSITOR</div><select id="fRep"><option value="">Todos os repositores</option>${reps.map(n=>`<option ${n===F.repositor?"selected":""} value="${esc(n)}">${esc(tit(n))}</option>`).join("")}</select></label>
-        <label><div class="rot" style="margin-top:0">LOJA</div><select id="fLoja"><option value="">Todas as lojas</option>${lojas.map(l=>`<option ${l.codigo===F.loja?"selected":""} value="${esc(l.codigo)}">${esc(l.nome)} (${esc(l.codigo)}${l.bairro?` · ${esc(l.bairro)}`:""})</option>`).join("")}</select></label>
-        <label><div class="rot" style="margin-top:0">PRODUTO</div><select id="fProd"><option value="">Todos os produtos</option>${prods.map(n=>`<option ${n===F.produto?"selected":""} value="${esc(n)}">${esc(n)}</option>`).join("")}</select></label>
+        ${caixaMulti("ka","KEY ACCOUNT",kasOp.map(x=>({v:x.nome,t:`${x.nome} (${plural((x.lojas||[]).length,"loja","lojas")})`,r:x.nome})),F.ka,["Todos os key accounts","key account","key accounts"],kas.length?"":"Ainda não veio do portal")}
+        ${caixaMulti("gc","GERÊNCIA COMERCIAL",gcsOp.map(x=>({v:x.sigla,t:`${x.sigla}${x.nome?` · ${tit(x.nome)}`:""}`,r:x.sigla})),F.gc,["Todas as gerências","gerência","gerências"])}
+        ${caixaMulti("repositor","REPOSITOR",[...new Set([...reps,...F.repositor])].map(n=>({v:n,t:tit(n),r:tit(n)})),F.repositor,["Todos os repositores","repositor","repositores"])}
+        ${caixaMulti("loja","LOJA",lojas.map(l=>({v:l.codigo,t:`${l.nome} (${l.codigo}${l.bairro?` · ${l.bairro}`:""})`,r:l.nome})),F.loja,["Todas as lojas","loja","lojas"])}
+        ${caixaMulti("produto","PRODUTO",[...new Set([...prods,...F.produto])].map(n=>({v:n,t:n,r:n})),F.produto,["Todos os produtos","produto","produtos"])}
         <label><div class="rot" style="margin-top:0">PERÍODO</div><select id="fDias">${[7,15,30].map(n=>`<option ${n===DIAS?"selected":""} value="${n}">Últimos ${n} dias</option>`).join("")}</select></label>
         <button class="bt" id="fLimpa">Limpar</button></div>
     </div>
@@ -405,15 +459,9 @@ function ligar(){
   $("fTodos").onclick=()=>{ F.lideres=null; pintar(); }; $("fNenhum").onclick=()=>{ F.lideres=[]; pintar(); };
   document.querySelectorAll("[data-lid]").forEach(c=>c.onchange=()=>{ const l=c.dataset.lid; let s=F.lideres===null?lideresTodos():F.lideres.slice();
     s=c.checked?[...new Set([...s,l])]:s.filter(x=>x!==l); F.lideres=s.length===lideresTodos().length?null:s; pintar(); });
-  $("fGc").onchange=e=>{ F.gc=e.target.value; F.repositor=""; F.loja=""; ESTQ_DET=null; pintar(); };
-  $("fKa").onchange=e=>{ F.ka=e.target.value; F.repositor=""; F.loja=""; ESTQ_DET=null; pintar(); };
-  /* repositor e loja: escolher um tira o outro se ele nao combinar (a loja que o repositor nao atende) */
-  const repsDa=c=>(((D.listas&&D.listas.lojas)||[]).find(l=>l.codigo===c)||{}).repositores;
-  $("fRep").onchange=e=>{ F.repositor=e.target.value; const r=repsDa(F.loja); if(F.repositor&&F.loja&&Array.isArray(r)&&!r.includes(F.repositor)) F.loja=""; pintar(); };
-  $("fLoja").onchange=e=>{ F.loja=e.target.value; const r=repsDa(F.loja); if(F.loja&&F.repositor&&Array.isArray(r)&&!r.includes(F.repositor)) F.repositor=""; ESTQ_DET=null; pintar(); };
-  $("fProd").onchange=e=>{ F.produto=e.target.value; ESTQ_DET=null; pintar(); };
+  ligaMulti();
   $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("p_dias",DIAS); carregar(); };
-  $("fLimpa").onclick=()=>{ F={lideres:null,repositor:"",loja:"",produto:"",gc:"",ka:""}; BUSCA=""; ESTQ_DET=null; pintar(); };
+  $("fLimpa").onclick=()=>{ F=F_VAZIO(); MS_ABERTO=null; BUSCA=""; ESTQ_DET=null; pintar(); };
   document.querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA[MOD]=b.dataset.aba; pintar(); });
   document.querySelectorAll("th[data-ord]").forEach(h=>h.onclick=()=>{ const m=h.dataset.mod, c=h.dataset.ord, o=ORD[m];
     ORD[m]={campo:c, dir:o&&o.campo===c?-o.dir:1}; pintar(); });
@@ -566,12 +614,12 @@ function modEntr(){
 /* --------------------------- 4. contagem de estoque --------------------------- */
 let ESTQ_DET=null;   // {chave, itens}: o detalhe buscado para um produto ou uma loja
 function modEstq(){
-  const lojaSel=F.loja, prodSel=F.produto, sem=filtra((D.estqSem||{}).sem_contagem_na_semana);
+  const lojaSel=F.loja.length===1?F.loja[0]:"", prodSel=F.produto.length===1?F.produto[0]:"", sem=filtra((D.estqSem||{}).sem_contagem_na_semana);
   const listaP=(D.listas&&D.listas.produtos)||[], listaL=(D.listas&&D.listas.lojas)||[];
   const alvo=lojaSel?{p_loja:(listaL.find(l=>l.codigo===lojaSel)||{}).id}:prodSel?{p_produto:(listaP.find(p=>p.nome===prodSel)||{}).id}:null;
   const chave=alvo?JSON.stringify(alvo):null;
-  ligarModulo=()=>{ document.querySelectorAll("[data-prod]").forEach(tr=>tr.onclick=()=>{ F.produto=tr.dataset.prod; ESTQ_DET=null; pintar(); });
-    if($("voltaEstq")) $("voltaEstq").onclick=()=>{ F.produto=""; F.loja=""; ESTQ_DET=null; pintar(); };
+  ligarModulo=()=>{ document.querySelectorAll("[data-prod]").forEach(tr=>tr.onclick=()=>{ F.produto=[tr.dataset.prod]; F.loja=[]; ESTQ_DET=null; pintar(); });
+    if($("voltaEstq")) $("voltaEstq").onclick=()=>{ F.produto=[]; F.loja=[]; ESTQ_DET=null; pintar(); };
     if(chave&&(!ESTQ_DET||ESTQ_DET.chave!==chave)&&(alvo.p_loja||alvo.p_produto)){ const k=chave;
       rpc("painel_estoque",{p_dias:30,...alvo}).then(r=>{ if(chave===k){ ESTQ_DET={chave:k, itens:(r&&r.itens)||[]}; pintar(); } }).catch(e=>{ ESTQ_DET={chave:k, itens:[], erro:traduz(e.message)}; pintar(); }); } };
   const aviso=sem.length?`<div class="alerta"><b>${plural(sem.length,"loja","lojas")} sem contagem de estoque nesta semana.</b> ${sem.slice(0,6).map(x=>esc(x.loja)).join(", ")}${sem.length>6?` e mais ${sem.length-6}`:""}.</div>`:`<div class="alerta ok">Todas as lojas da equipe com contagem de estoque nesta semana.</div>`;
@@ -580,7 +628,8 @@ function modEstq(){
     EXPORTA={nome:"contagem-por-produto", cab:["Produto","Codigo","Total contado (cx)","Total contado (unidades)","Lojas contadas","Lojas sem estoque","Ultima contagem","Validade mais proxima"],
       linhas:rs.map(x=>[x.produto,x.sku,x.total_cx,x.total_un??"",x.lojas,x.lojas_sem,dataBr(x.ultima),dataBr(x.validade)])};
     return `<h2>Contagem de Estoque</h2>${abas([["prod","Por produto","última contagem de cada loja"]])}${aviso}
-      ${barra(`<span class="mut">Escolha um produto (ou toque nele) para ver cada loja. Escolha uma loja no filtro para ver todos os produtos dela.</span>`)}
+      ${F.loja.length>1?`<div class="alerta">Com ${F.loja.length} lojas escolhidas, os totais abaixo são de todas as lojas. Para ver o detalhe, escolha uma loja só.</div>`:""}
+      ${barra(`<span class="mut">Escolha um produto (ou toque nele) para ver cada loja. Escolha uma loja só no filtro para ver todos os produtos dela.</span>`)}
       ${tabela(th("estq","produto","Produto")+th("estq","total_cx","Total contado",1)+th("estq","lojas","Lojas contadas",1)+th("estq","lojas_sem","Sem estoque",1)+th("estq","ultima","Última contagem")+th("estq","validade","Validade mais próxima"),
         rs.map(x=>`<tr class="clica" data-prod="${esc(x.produto)}"><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td>
           <td class="num"><span class="cel ${x.total_cx>0?"forte":""}">${qtdOu(x.total_un,x.fator,x.total_cx)}</span></td><td class="num">${x.lojas}</td>
