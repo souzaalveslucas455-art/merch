@@ -958,10 +958,13 @@ function modEquip(){
     ${kpi("Não encontradas",xs.filter(x=>x.encontrado===false).length,xs.some(x=>x.encontrado===false)?"var(--verm)":null,"na última conferência")}
     ${kpi("Fora do padrão",xs.filter(x=>x.encontrado!==false&&x.problemas>0).length,null,"algum requisito com Não")}
     ${kpi("PTM diferente",xs.filter(x=>x.ptm_status==="diferente").length,null,"do registrado na primeira vez")}</div>`;
-  const fotos=x=>[x.foto_equip,x.foto_ptm].filter(Boolean);
+  const fotos=x=>[x.foto_equip,x.foto_ptm,x.foto_depois].filter(Boolean);
+  /* 27/10 (71): o que o repositor fez em cada requisito com Nao (sensibilizacao) */
+  const acaoTxt=(x,q)=>{ const a=(x.acoes||{})[q]||{}; return a.acao==="corrigi"?"corrigido na hora":a.acao==="nao_consegui"?`não conseguiu${a.motivo?`: ${a.motivo}`:""}`:""; };
+  const precisaAjuda=x=>Object.entries(x.respostas||{}).some(([q,v])=>v===false&&((x.acoes||{})[q]||{}).acao!=="corrigi");
   if(at==="extra"){
     /* 27/10: o botao Ver das fotos desta aba nunca era ligado (a aba voltava antes do ligarModulo) */
-    ligarModulo=()=>{ document.querySelectorAll("[data-gfx]").forEach(b=>b.onclick=()=>verFotos([ex[+b.dataset.gfx].foto_equip].filter(Boolean))); };
+    ligarModulo=()=>{ document.querySelectorAll("[data-gfx]").forEach(b=>b.onclick=()=>verFotos([ex[+b.dataset.gfx].foto_equip,ex[+b.dataset.gfx].foto_depois].filter(Boolean))); };
     EXPORTA={nome:"geladeiras-fora-da-base", cab:["Loja","Codigo","Ultima conferencia","Primeira","Vezes conferida","Descricao","PTM","Repositor","Observacao"],
       linhas:ex.map(x=>[x.loja,x.codigo,dataBr(x.data),dataBr(x.primeira||x.data),x.vezes||1,(x.extra||{}).modelo,x.ptm,x.repositor,x.observacao])};
     return `<h2>Geladeiras</h2>${abas(lista)}${cab}
@@ -973,10 +976,10 @@ function modEquip(){
   }
   const g=grupos.find(x=>x[0]===at), rs=ordena(xs.filter(g[3]),"equip",{campo:"loja",dir:1});
   ligarModulo=()=>{ document.querySelectorAll("[data-gf]").forEach(b=>b.onclick=()=>verFotos(fotos(rs[+b.dataset.gf])));
-    document.querySelectorAll("[data-gfx]").forEach(b=>b.onclick=()=>verFotos([ex[+b.dataset.gfx].foto_equip].filter(Boolean))); };
+    document.querySelectorAll("[data-gfx]").forEach(b=>b.onclick=()=>verFotos([ex[+b.dataset.gfx].foto_equip,ex[+b.dataset.gfx].foto_depois].filter(Boolean))); };
   EXPORTA={nome:"geladeiras-"+at, cab:["Loja","Codigo","Cidade","Modelo","Marca","Portas","Contrato","Unidade","Situacao","Requisitos com problema","PTM registrado","PTM lido","Conferida em","Repositor","Lider","Venda da marca no mes (cx)","Meta do mes da marca na loja (cx)","% da meta do mes","Esperado ate a data (cx)","% do ritmo"],
     linhas:rs.map(x=>[x.loja,x.codigo,x.cidade,x.modelo,MARCA_EQ[x.marca]||x.marca,x.portas,x.contrato,x.item,situacaoGel(x).t,
-      Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>k).join(" | "),x.ptm,x.ptm_lido,dataBr(x.data),x.repositor,x.lider,x.venda_mes,x.meta_loja,x.pct_meta,x.esperado,x.ritmo])};
+      Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>acaoTxt(x,k)?`${k} (${acaoTxt(x,k)})`:k).join(" | "),x.ptm,x.ptm_lido,dataBr(x.data),x.repositor,x.lider,x.venda_mes,x.meta_loja,x.pct_meta,x.esperado,x.ritmo])};
   const sumiu=xs.filter(x=>x.encontrado===false);
   return `<h2>Geladeiras</h2>${abas(lista)}${cab}
     ${sumiu.length?`<div class="alerta"><b>${plural(sumiu.length,"geladeira não foi encontrada","geladeiras não foram encontradas")} na loja</b>: ${sumiu.slice(0,4).map(x=>`${esc(x.modelo)} em ${esc(x.loja)}`).join("; ")}${sumiu.length>4?` e mais ${sumiu.length-4}`:""}.</div>`
@@ -986,8 +989,9 @@ function modEquip(){
       rs.map((x,i)=>{ const st=situacaoGel(x), fs=fotos(x), falhas=Object.entries(x.respostas||{}).filter(([,v])=>v===false).map(([k])=>k);
         return `<tr><td><b>${esc(x.loja)}</b><span class="sub">${lojaSub(x)}</span></td>
           <td>${esc(x.modelo)}${x.item>1?` · un. ${x.item}`:""}<span class="sub">${esc(MARCA_EQ[x.marca]||x.marca||"")}${x.portas?` · ${esc(x.portas)} portas`:""} · contrato ${esc(x.contrato)}</span></td>
-          <td><span class="tag ${st.cls}">${st.t}</span>${x.encontrado===false&&x.observacao?`<span class="sub">${livre(x.observacao,3)}</span>`:""}</td>
-          <td>${falhas.length?falhas.map(f=>`<div style="font-size:12.5px"><b style="color:var(--verm-esc)">✗</b> ${esc(f)}</div>`).join(""):'<span class="mut">—</span>'}</td>
+          <td><span class="tag ${st.cls}">${st.t}</span>${x.encontrado===false&&x.observacao?`<span class="sub">${livre(x.observacao,3)}</span>`:""}
+            ${falhas.length&&x.acoes?`<span class="sub" style="color:${precisaAjuda(x)?"var(--verm-esc)":"var(--verde)"};font-weight:600">${precisaAjuda(x)?"precisa de ajuda":"corrigido na hora"}</span>`:""}</td>
+          <td>${falhas.length?falhas.map(f=>`<div style="font-size:12.5px"><b style="color:var(--verm-esc)">✗</b> ${esc(f)}${acaoTxt(x,f)?`<span class="sub" style="color:${((x.acoes||{})[f]||{}).acao==="corrigi"?"var(--verde)":"var(--verm-esc)"}">${esc(acaoTxt(x,f))}</span>`:""}</div>`).join(""):'<span class="mut">—</span>'}</td>
           <td>${x.ptm?esc(x.ptm):'<span class="mut">sem registro</span>'}${x.ptm_status==="diferente"?`<span class="sub" style="color:var(--verm-esc)">lido ${esc(x.ptm_lido)}</span>`:""}</td>
           <td>${fs.length?`<button class="bt" data-gf="${i}" style="padding:4px 10px">Ver ${fs.length}</button>`:'<span class="mut">—</span>'}</td>
           <td>${x.data?`${dataBr(x.data)}<span class="sub">${esc(curto(x.repositor))}</span>`:'<span class="mut">nunca</span>'}</td>
