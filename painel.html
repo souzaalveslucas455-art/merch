@@ -948,9 +948,9 @@ function modEquip(){
   const sem=xs.filter(x=>!x.conferido_semana), sit=x=>situacaoGel(x).k;
   const grupos=[["sumiu","Não encontradas","possível perda",x=>x.encontrado===false],["prob","Fora do padrão","requisito com Não",x=>x.encontrado!==false&&x.problemas>0],
     ["ptm","PTM diferente","outro equipamento?",x=>x.ptm_status==="diferente"],
-    ["meta","Abaixo do ritmo","menos de 70% do esperado até hoje",x=>x.ritmo!=null&&x.ritmo<70],["semana","Sem conferência","nesta semana",x=>!x.conferido_semana],
+    ["meta","Abaixo do ritmo","menos de 70% do esperado até hoje",x=>x.ritmo!=null&&x.ritmo<70],   /* 27/10: a aba "Sem conferência" saiu */
     ["ok","Conformes","tudo Sim",x=>sit(x)==="ok"],["todas","Todas","na base",x=>true]];
-  const lista=[...grupos.map(([k,t,s,f])=>[k,`${t} · ${xs.filter(f).length}`,s]),["extra",`Fora da base · ${ex.length}`,"achadas na loja"]];
+  const lista=[...grupos.map(([k,t,s,f])=>[k,`${t} · ${xs.filter(f).length}`,s]),["extra",`Fora da base · ${ex.length}`,"Coca-Cola achada na loja"]];
   const at=abaAtual(lista);
   const kpi=(n,v,c,sub)=>`<div class="kpi"><span>${n}</span><b style="color:${c||"var(--ink)"}">${v}</b><small>${sub}</small></div>`;
   const pSem=pct(xs.length-sem.length,xs.length);
@@ -960,13 +960,16 @@ function modEquip(){
     ${kpi("PTM diferente",xs.filter(x=>x.ptm_status==="diferente").length,null,"do registrado na primeira vez")}</div>`;
   const fotos=x=>[x.foto_equip,x.foto_ptm].filter(Boolean);
   if(at==="extra"){
-    EXPORTA={nome:"geladeiras-fora-da-base", cab:["Loja","Codigo","Data","Descricao","Marca","PTM","Repositor","Observacao"],
-      linhas:ex.map(x=>[x.loja,x.codigo,dataBr(x.data),(x.extra||{}).modelo,MARCA_EQ[(x.extra||{}).marca]||(x.extra||{}).marca,x.ptm,x.repositor,x.observacao])};
+    /* 27/10: o botao Ver das fotos desta aba nunca era ligado (a aba voltava antes do ligarModulo) */
+    ligarModulo=()=>{ document.querySelectorAll("[data-gfx]").forEach(b=>b.onclick=()=>verFotos([ex[+b.dataset.gfx].foto_equip].filter(Boolean))); };
+    EXPORTA={nome:"geladeiras-fora-da-base", cab:["Loja","Codigo","Ultima conferencia","Primeira","Vezes conferida","Descricao","PTM","Repositor","Observacao"],
+      linhas:ex.map(x=>[x.loja,x.codigo,dataBr(x.data),dataBr(x.primeira||x.data),x.vezes||1,(x.extra||{}).modelo,x.ptm,x.repositor,x.observacao])};
     return `<h2>Geladeiras</h2>${abas(lista)}${cab}
-      <div class="alerta ${ex.length?"":"ok"}">${ex.length?`<b>${plural(ex.length,"geladeira foi achada","geladeiras foram achadas")} na loja sem estar na base de comodato</b> nos últimos ${DIAS} dias.`:"Nenhuma geladeira fora da base nos últimos "+DIAS+" dias."}</div>
-      ${barra()}${tabela("<th>Loja</th><th>Geladeira</th><th>PTM</th><th>Fotos</th><th>Registrada</th><th>Observação</th>",
-        ex.map((x,i)=>`<tr><td><b>${esc(x.loja)}</b><span class="sub">${lojaSub(x)}</span></td><td>${esc((x.extra||{}).modelo||"—")}<span class="sub">${esc(MARCA_EQ[(x.extra||{}).marca]||(x.extra||{}).marca||"")}</span></td>
-          <td>${esc(x.ptm||"—")}</td><td>${x.foto_equip?`<button class="bt" data-gfx="${i}" style="padding:4px 10px">Ver</button>`:"—"}</td><td>${dataBr(x.data)}<span class="sub">${esc(curto(x.repositor))}</span></td><td>${esc(x.observacao||"")}</td></tr>`),"Nenhuma.")}`;
+      <div class="leitura"><b>O que é:</b> geladeira <b>Coca-Cola</b> que o repositor achou na loja e que <b>não está na base de comodato</b> (ele registra pelo "Geladeira Coca-Cola que não está na lista", no app). Cada geladeira aparece uma vez, pelo PTM, com a última conferência e quantas vezes foi conferida. Vale conferir o contrato: pode ser geladeira sem comodato ou com o cadastro errado na base.</div>
+      <div class="alerta ${ex.length?"":"ok"}">${ex.length?`<b>${plural(ex.length,"geladeira Coca-Cola foi achada","geladeiras Coca-Cola foram achadas")} na loja sem estar na base de comodato</b> nos últimos ${DIAS} dias.`:"Nenhuma geladeira fora da base nos últimos "+DIAS+" dias."}</div>
+      ${barra()}${tabela("<th>Loja</th><th>Geladeira</th><th>PTM</th><th>Fotos</th><th>Última conferência</th><th>Observação</th>",
+        ex.map((x,i)=>`<tr><td><b>${esc(x.loja)}</b><span class="sub">${lojaSub(x)}</span></td><td>${esc((x.extra||{}).modelo||"—")}<span class="sub">Coca-Cola</span></td>
+          <td>${esc(x.ptm||"—")}</td><td>${x.foto_equip?`<button class="bt" data-gfx="${i}" style="padding:4px 10px">Ver</button>`:"—"}</td><td>${dataBr(x.data)}<span class="sub">${esc(curto(x.repositor))}${(x.vezes||1)>1?` · conferida ${x.vezes} vezes desde ${dataBr(x.primeira)}`:""}</span></td><td>${x.observacao?livre(x.observacao,3):""}</td></tr>`),"Nenhuma.")}`;
   }
   const g=grupos.find(x=>x[0]===at), rs=ordena(xs.filter(g[3]),"equip",{campo:"loja",dir:1});
   ligarModulo=()=>{ document.querySelectorAll("[data-gf]").forEach(b=>b.onclick=()=>verFotos(fotos(rs[+b.dataset.gf])));
