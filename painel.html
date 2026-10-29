@@ -110,6 +110,11 @@ main{overflow-y:auto;min-width:0}
 .tab{background:var(--papel);border:1px solid var(--linha);border-radius:12px;overflow:auto}
 table{border-collapse:collapse;width:100%;min-width:760px}
 th{position:sticky;top:0;background:#FAFAFB;text-align:left;font-size:12px;color:var(--ink2);font-weight:600;padding:10px 12px;border-bottom:1px solid var(--linha);white-space:nowrap;cursor:default}
+th .redim{position:absolute;top:0;right:-5px;width:10px;height:100%;cursor:col-resize;z-index:3}
+th .redim::after{content:"";position:absolute;top:22%;bottom:22%;left:4px;width:2px;border-radius:2px;background:#D1D5DB;opacity:0;transition:opacity .15s}
+th:hover .redim::after{opacity:1}
+th .redim:hover::after,body.redimensionando th .redim::after{background:#C00000;opacity:1}
+body.redimensionando{cursor:col-resize;user-select:none}
 th[data-ord]{cursor:pointer} th[data-ord]:hover{color:var(--ink)}
 td{padding:10px 12px;border-bottom:1px solid #EEF0F2;vertical-align:top}
 tr:last-child td{border-bottom:none}
@@ -299,16 +304,33 @@ async function abrir(){
   if(!EU) return telaLogin("Seu acesso não está ligado a nenhum líder ou gerente da base.");
   await carregar();
 }
+/* 28/10: o painel nao dispara mais as 15 consultas ao mesmo tempo. Juntas elas disputavam o banco (plano
+   gratuito) e as mais pesadas passavam de 8 s ("canceling statement due to statement timeout"), embora
+   sozinhas levem ate 2 s. Agora: no maximo 3 por vez; primeiro as listas e os dados do modulo da tela (que
+   ja aparece assim que eles chegam); a que falhar e tentada de novo no fim, sozinha. */
+const DADOS_DO_MODULO={oport:["oport"], venc:["venc"], equip:["equip"], entr:["entr"], estq:["estq","estqSem"], vis:["vis"],
+  desemp:["desemp","desempAntes","desempHoje"], dem:["dem","camp"], arv:[], inv:["inv"], acess:[]};
+let CARREGANDO=false;
 async function carregar(){
-  const H=hoje(), chamadas={
-    oport:rpc("painel_oportunidades",{p_dias:DIAS}), venc:rpc("painel_vencimentos"), entr:rpc("entregas_da_equipe",{p_dias:DIAS}),
-    estq:rpc("painel_estoque",{p_dias:30}), estqSem:rpc("estoque_da_equipe",{p_dias:7}), listas:rpc("painel_listas"),
-    desemp:rpc("desempenho_da_equipe",{p_dias:DIAS}), desempAntes:rpc("desempenho_da_equipe",{p_dias:DIAS,p_fim:menosDias(H,DIAS)}),
-    desempHoje:rpc("desempenho_da_equipe",{p_dias:1}), dem:rpc("demandas_da_equipe",{p_dias:30}), eu:rpc("eu_sou"),
-    vis:rpc("painel_visitas",{p_dias:DIAS}), camp:rpc("campanhas_da_equipe",{p_dias:60}), equip:rpc("painel_equipamentos",{p_dias:DIAS}),
-    ...(EU&&["gerente","admin"].includes(EU.perfil)?{inv:rpc("painel_investimentos",{p_ini:INV_PER.ini,p_fim:INV_PER.fim})}:{})};
-  const ks=Object.keys(chamadas), r=await Promise.allSettled(Object.values(chamadas));
-  ERROS=[]; ks.forEach((k,i)=>{ if(r[i].status==="fulfilled") D[k]=r[i].value; else ERROS.push(traduz(r[i].reason.message)); });
+  const H=hoje(), fab={
+    listas:()=>rpc("painel_listas"),
+    oport:()=>rpc("painel_oportunidades",{p_dias:DIAS}), venc:()=>rpc("painel_vencimentos"), entr:()=>rpc("entregas_da_equipe",{p_dias:DIAS}),
+    estq:()=>rpc("painel_estoque",{p_dias:30}), estqSem:()=>rpc("estoque_da_equipe",{p_dias:7}),
+    desemp:()=>rpc("desempenho_da_equipe",{p_dias:DIAS}), desempAntes:()=>rpc("desempenho_da_equipe",{p_dias:DIAS,p_fim:menosDias(H,DIAS)}),
+    desempHoje:()=>rpc("desempenho_da_equipe",{p_dias:1}), dem:()=>rpc("demandas_da_equipe",{p_dias:30}), eu:()=>rpc("eu_sou"),
+    vis:()=>rpc("painel_visitas",{p_dias:DIAS}), camp:()=>rpc("campanhas_da_equipe",{p_dias:60}), equip:()=>rpc("painel_equipamentos",{p_dias:DIAS}),
+    ...(EU&&["gerente","admin"].includes(EU.perfil)?{inv:()=>rpc("painel_investimentos",{p_ini:INV_PER.ini,p_fim:INV_PER.fim})}:{})};
+  const daTela=["listas",...(DADOS_DO_MODULO[MOD]||[])].filter(k=>fab[k]);
+  const ordem=[...new Set([...daTela,...Object.keys(fab)])];
+  const falhou=[]; let i=0, faltaTela=new Set(daTela);
+  CARREGANDO=true;
+  const roda=async()=>{ while(i<ordem.length){ const k=ordem[i++];
+    try{ D[k]=await fab[k](); }catch(e){ falhou.push(k); }
+    if(faltaTela.delete(k)&&!faltaTela.size) pintar(); } };   /* o modulo da tela aparece assim que os dados dele chegam */
+  await Promise.all([roda(),roda(),roda()]);
+  ERROS=[];
+  for(const k of falhou){ try{ D[k]=await fab[k](); }catch(e){ ERROS.push(traduz(e.message)); } }   /* segunda tentativa, sozinha */
+  CARREGANDO=false;
   if(D.eu) EU=D.eu; CARREGADO_EM=new Date();
   pintar();
 }
@@ -450,7 +472,7 @@ function pintaMain(){
   const lojas=LJ.filter(l=>okG(l)&&okK(l)&&okR(l)||F.loja.includes(l.codigo)), prods=[...new Set([...(D.oport||[]).map(x=>x.produto),...(((D.venc||{}).lotes)||[]).map(x=>x.produto),...((D.listas&&D.listas.produtos)||[]).map(p=>p.nome)])].sort();
   $("main").innerHTML=`
     <div class="cab"><img src="${LOGO.coca}" alt="Coca-Cola Bandeirantes" style="height:44px;width:auto;flex:none"><div><h1>Painel de merchandising</h1>
-      <p>Resultados dos repositores e líderes ${EU.perfil==="admin"?"de todas as equipes":"da sua equipe"}: ${esc(tit(EU.nome))}. Atualizado às ${CARREGADO_EM?CARREGADO_EM.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"}.</p></div>
+      <p>Resultados dos repositores e líderes ${EU.perfil==="admin"?"de todas as equipes":"da sua equipe"}: ${esc(tit(EU.nome))}. ${CARREGANDO?"Carregando os outros módulos…":""} Atualizado às ${CARREGADO_EM?CARREGADO_EM.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"—"}.</p></div>
       <div class="acoes"><a class="bt" href="lideranca.html" style="text-decoration:none">App do líder</a><button class="bt" id="pAtual">Atualizar</button><button class="bt" onclick="novaCampanha()">Nova campanha</button><button class="bt escuro" id="pNova">Nova demanda</button><button class="bt" id="pSai">Sair</button></div></div>
     ${ERROS.length?`<div class="alerta" style="margin:14px 26px 0">Parte dos dados não carregou: ${esc(ERROS[0])}. Toque em Atualizar.</div>`:""}
     <div class="filtros">
@@ -479,13 +501,38 @@ function ligar(){
   $("fDias").onchange=e=>{ DIAS=Number(e.target.value); guarda.por("p_dias",DIAS); carregar(); };
   $("fLimpa").onclick=()=>{ F=F_VAZIO(); MS_ABERTO=null; BUSCA=""; ESTQ_DET=null; pintar(); };
   document.querySelectorAll("[data-aba]").forEach(b=>b.onclick=()=>{ ABA[MOD]=b.dataset.aba; pintar(); });
-  document.querySelectorAll("th[data-ord]").forEach(h=>h.onclick=()=>{ const m=h.dataset.mod, c=h.dataset.ord, o=ORD[m];
+  document.querySelectorAll("th[data-ord]").forEach(h=>h.onclick=()=>{ if(Date.now()-REDIM_FIM<400) return; const m=h.dataset.mod, c=h.dataset.ord, o=ORD[m];
     ORD[m]={campo:c, dir:o&&o.campo===c?-o.dir:1}; pintar(); });
   const b=$("busca"); if(b){ b.oninput=()=>{ BUSCA=b.value; const p=b.selectionStart; pintar(); const n=$("busca"); n.focus(); n.setSelectionRange(p,p); }; }
   if($("xls")) $("xls").onclick=baixar;
   ligarModulo();
+  redimColunas();
 }
 let ligarModulo=()=>{};
+/* 28/10: alargar as colunas: arraste a borda direita do cabecalho; duplo clique volta ao automatico.
+   A largura fica guardada neste computador, por modulo, aba e coluna. */
+let REDIM_FIM=0;
+function redimColunas(){
+  let L={}; try{ L=JSON.parse(guarda.ler("larguras")||"{}"); }catch(e){}
+  const salva=()=>guarda.por("larguras",JSON.stringify(L));
+  document.querySelectorAll("#main .tab table").forEach((tb,ti)=>{
+    tb.querySelectorAll("thead th").forEach((th,i)=>{
+      const k=`${MOD}|${ABA[MOD]||""}|${ti}|${i}|${th.textContent.trim().slice(0,30)}`;
+      if(L[k]){ th.style.minWidth=L[k]+"px"; th.style.width=L[k]+"px"; }
+      if(th.querySelector(".redim")) return;
+      const h=document.createElement("span"); h.className="redim"; h.title="Arraste para alargar a coluna (duplo clique: volta ao automático)"; th.appendChild(h);
+      h.addEventListener("click",e=>e.stopPropagation());
+      h.addEventListener("dblclick",e=>{ e.stopPropagation(); delete L[k]; salva(); th.style.minWidth=""; th.style.width=""; });
+      h.addEventListener("mousedown",e=>{ e.preventDefault(); e.stopPropagation();
+        const x0=e.clientX, w0=th.getBoundingClientRect().width; document.body.classList.add("redimensionando");
+        const mv=ev=>{ const w=Math.max(60,Math.round(w0+ev.clientX-x0)); th.style.minWidth=w+"px"; th.style.width=w+"px"; };
+        const up=()=>{ document.removeEventListener("mousemove",mv); document.removeEventListener("mouseup",up);
+          document.body.classList.remove("redimensionando"); REDIM_FIM=Date.now();
+          L[k]=Math.round(th.getBoundingClientRect().width); salva(); };
+        document.addEventListener("mousemove",mv); document.addEventListener("mouseup",up); });
+    });
+  });
+}
 const abas=(lista)=>{ const at=ABA[MOD]||lista[0][0];
   return `<div class="abas" role="tablist">${lista.map(([k,t,sub])=>`<button role="tab" data-aba="${k}" aria-selected="${at===k}"><b>${t}</b><span>${sub}</span></button>`).join("")}</div>`; };
 const abaAtual=lista=>ABA[MOD]||lista[0][0];
@@ -839,13 +886,24 @@ function modVis(){
           <td class="num">${(x.tempo_min??x.duracao_min)!=null?(x.tempo_min??x.duracao_min)+" min":"—"}${x.reaberturas?`<span class="sub">reaberta ${x.reaberturas}x</span>`:""}</td><td>${esc(curto(x.lider))}</td></tr>`),
         "Nenhuma visita nesta aba.")}`;
 }
+/* 28/10: le a foto do armazenamento renovando o login se ele expirou (antes, com o painel aberto ha mais de
+   1 hora, toda foto aparecia como "ainda nao subiu", mesmo estando la). */
+async function buscaFoto(c){
+  const tenta=()=>fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+c,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
+  let r=await tenta();
+  if(!r.ok&&r.status!==404&&guarda.ler("refresh")){
+    try{ const d=await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:guarda.ler("refresh")})},false,true);
+      TOKEN=d.access_token; guarda.por("token",TOKEN); guarda.por("refresh",d.refresh_token); r=await tenta(); }catch(e){} }
+  return r;
+}
+const msgFoto=r=>r.status===401||r.status===403?"Não deu para abrir uma foto: o login expirou. Toque em Atualizar e tente de novo.":"Uma foto ainda não subiu do celular do repositor.";
 /* A foto de uma demanda fica no armazenamento protegido: so abre com o login. */
 async function verFoto(caminho){
   const fundo=document.createElement("div");
   fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.85);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px;color:#fff;cursor:pointer";
   fundo.textContent="Abrindo a foto…"; fundo.onclick=()=>fundo.remove(); document.body.appendChild(fundo);
-  try{ const r=await fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+caminho,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
-    if(!r.ok) throw new Error("A foto ainda não subiu do celular do repositor, ou não está mais guardada.");
+  try{ const r=await buscaFoto(caminho);
+    if(!r.ok) throw new Error(msgFoto(r));
     fundo.innerHTML=`<img src="${URL.createObjectURL(await r.blob())}" alt="Foto da demanda" style="max-width:100%;max-height:100%;border-radius:12px">`; }
   catch(e){ fundo.textContent=e.message+" Clique para fechar."; }
 }
@@ -859,8 +917,8 @@ async function verFotos(caminhos){
   fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.9);z-index:50;overflow:auto;padding:24px;color:#fff;text-align:center;cursor:pointer";
   fundo.textContent=`Abrindo ${caminhos.length} ${caminhos.length===1?"foto":"fotos"}…`; fundo.onclick=()=>fundo.remove(); document.body.appendChild(fundo);
   const imgs=[];
-  for(const c of caminhos){ try{ const r=await fetch(CFG.url+"/storage/v1/object/authenticated/fotos/"+c,{headers:{"apikey":CFG.chave,"Authorization":"Bearer "+TOKEN}});
-      imgs.push(r.ok?`<img src="${URL.createObjectURL(await r.blob())}" alt="Foto" style="max-width:min(100%,720px);border-radius:12px;margin:8px">`:`<p>Uma foto ainda não subiu do celular do repositor.</p>`); }
+  for(const c of caminhos){ try{ const r=await buscaFoto(c);
+      imgs.push(r.ok?`<img src="${URL.createObjectURL(await r.blob())}" alt="Foto" style="max-width:min(100%,720px);border-radius:12px;margin:8px">`:`<p>${msgFoto(r)}</p>`); }
     catch(e){ imgs.push(`<p>Não abriu uma das fotos.</p>`); } }
   fundo.innerHTML=imgs.join("")+`<p>Clique para fechar</p>`;
 }
