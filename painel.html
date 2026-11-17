@@ -308,13 +308,15 @@ async function abrir(){
    gratuito) e as mais pesadas passavam de 8 s ("canceling statement due to statement timeout"), embora
    sozinhas levem ate 2 s. Agora: no maximo 3 por vez; primeiro as listas e os dados do modulo da tela (que
    ja aparece assim que eles chegam); a que falhar e tentada de novo no fim, sozinha. */
-const DADOS_DO_MODULO={oport:["oport"], venc:["venc"], equip:["equip"], entr:["entr"], estq:["estq","estqSem"], vis:["vis"],
+const DADOS_DO_MODULO={oport:["oport"], venc:["venc","vprecos"], equip:["equip"], entr:["entr"], estq:["estq","estqSem"], vis:["vis"],
   desemp:["desemp","desempAntes","desempHoje"], dem:["dem","camp"], arv:[], inv:["inv"], acess:[]};
 let CARREGANDO=false;
 async function carregar(){
   const H=hoje(), fab={
     listas:()=>rpc("painel_listas"),
-    oport:()=>rpc("painel_oportunidades",{p_dias:DIAS}), venc:()=>rpc("painel_vencimentos"), entr:()=>rpc("entregas_da_equipe",{p_dias:DIAS}),
+    oport:()=>rpc("painel_oportunidades",{p_dias:DIAS}), venc:()=>rpc("painel_vencimentos"),
+    vprecos:()=>rpc("vencimentos_precos").catch(()=>null),   /* 17/11: preco de venda na loja (arquivo m01); sem ele, o painel fica como antes */
+    entr:()=>rpc("entregas_da_equipe",{p_dias:DIAS}),
     estq:()=>rpc("painel_estoque",{p_dias:30}), estqSem:()=>rpc("estoque_da_equipe",{p_dias:7}),
     desemp:()=>rpc("desempenho_da_equipe",{p_dias:DIAS}), desempAntes:()=>rpc("desempenho_da_equipe",{p_dias:DIAS,p_fim:menosDias(H,DIAS)}),
     desempHoje:()=>rpc("desempenho_da_equipe",{p_dias:1}), dem:()=>rpc("demandas_da_equipe",{p_dias:30}), eu:()=>rpc("eu_sou"),
@@ -610,10 +612,62 @@ function graficoLote(tr){
     ${proj}<polyline points="${linha}" fill="none" stroke="${cor}" stroke-width="2"/>
     ${ps.map(p=>`<circle cx="${X(p.d).toFixed(1)}" cy="${Y(p.q).toFixed(1)}" r="2.2" fill="${cor}"/>`).join("")}</svg>`;
 }
+/* 17/11: preco de venda na loja. O repositor informa no registro do lote e em cada contagem, com foto.
+   Daqui saem o preco de agora, o do registro, a variacao e as fotos. */
+function precoLote(x){
+  const p=((D.vprecos||{})[x.id])||{}, pts=[];
+  if(p.registro) pts.push({...p.registro, d:String(p.registro.data).slice(0,10), registro:true});
+  (p.contagens||[]).forEach(c=>pts.push({...c, d:String(c.data).slice(0,10)}));
+  const com=pts.filter(c=>c.preco!=null).map(c=>({...c, preco:Number(c.preco)}));
+  const atual=com.length?com[com.length-1]:null, primeiro=com.length?com[0]:null;
+  return {pts, com, atual, primeiro, fotoLote:p.foto||null,
+    variacao:atual&&primeiro&&primeiro.preco>0&&atual.preco!==primeiro.preco?(atual.preco-primeiro.preco)/primeiro.preco:null,
+    semEtiqueta:!atual&&pts.some(c=>c.sem_etiqueta)};
+}
+const varTxt=v=>`${v<0?"▼ baixou":"▲ subiu"} ${Math.abs(v*100).toLocaleString("pt-BR",{maximumFractionDigits:0})}%`;
+/* O cartao do lote: as duas fotos, o preco em destaque e o historico de quantidade e preco. */
+function cartaoLote(x){
+  const pr=x.pr, t=x.tr, porDia=new Map();
+  t.pts.forEach((p,i)=>porDia.set(p.d,{d:p.d, q:p.q, registro:i===0&&!!x.registrado_em}));
+  pr.pts.forEach(c=>porDia.set(c.d,{...(porDia.get(c.d)||{d:c.d}), preco:c.preco, sem:c.sem_etiqueta, foto:c.foto}));
+  const dias=[...porDia.values()].sort((a,b)=>a.d<b.d?-1:1);
+  const fotoPreco=pr.com.slice().reverse().find(c=>c.foto);
+  const fundo=document.createElement("div");
+  fundo.style.cssText="position:fixed;inset:0;background:rgba(15,16,20,.6);z-index:50;overflow:auto;padding:28px 16px;display:flex;align-items:flex-start;justify-content:center";
+  const caixa=(rot,id,tem)=>`<div style="flex:1;min-width:200px"><div class="mut" style="font-size:12px;margin-bottom:4px">${rot}</div>
+    <div id="${id}" style="background:#F1F2F4;border-radius:10px;min-height:150px;display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:12.5px;text-align:center;padding:8px;overflow:hidden">${tem?"Abrindo a foto…":"Sem foto"}</div></div>`;
+  fundo.innerHTML=`<div role="dialog" aria-modal="true" aria-label="Lote ${esc(x.produto)}" style="background:var(--papel);border-radius:14px;max-width:760px;width:100%;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+    <div style="display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><h3 style="margin:0;font-size:17px">${esc(x.produto)}</h3>
+      <div class="mut" style="font-size:13px;margin-top:2px">${esc(x.loja)} · ${lojaSub(x)}<br>Lote ${esc(x.lote||"sem lote")} · vence ${dataBr(x.vence_em)}/${String(x.vence_em).slice(0,4)} · ${x.quantidade!=null?fmt(x.quantidade)+" un na loja":"sem contagem"}</div></div>
+      <button class="bt" data-fecha style="flex:none">Fechar</button></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin:14px 0;align-items:stretch">
+      <div style="flex:1;min-width:200px;border:1px solid var(--linha);border-radius:12px;padding:12px 14px">
+        <div class="mut" style="font-size:12px">Preço de venda na loja</div>
+        <div style="font-size:30px;font-weight:800;line-height:1.15;margin-top:2px">${pr.atual?reais(pr.atual.preco):"—"}</div>
+        <div style="font-size:12.5px;margin-top:3px" class="mut">${pr.atual?`informado em ${dataBr(pr.atual.d)}`:pr.semEtiqueta?"O repositor marcou: sem etiqueta de preço":"Ainda não informado pelo repositor"}</div>
+        ${pr.variacao!=null?`<div style="margin-top:6px"><span class="tag ${pr.variacao<0?"t-verde":"t-verm"}">${varTxt(pr.variacao)}</span><span class="mut" style="font-size:12.5px"> era ${reais(pr.primeiro.preco)} em ${dataBr(pr.primeiro.d)}</span></div>`:""}
+        ${x.valor!=null&&x.valor>0?`<div style="margin-top:8px;font-size:13px"><b>${reais(x.valor)}</b> <span class="mut">${t.k==="vencido"?"vencidos na loja":"previstos no vencimento"}, a este preço</span></div>`:""}</div>
+      ${caixa("Foto do preço","cl_fp",!!fotoPreco)}${caixa("Foto do lote","cl_fl",!!pr.fotoLote)}</div>
+    <div class="tab" style="margin:0"><table><thead><tr><th>Data</th><th style="text-align:right">Quantidade</th><th style="text-align:right">Preço na loja</th><th>Foto do preço</th></tr></thead><tbody>
+      ${dias.map((p,i)=>`<tr><td>${dataBr(p.d)}${p.registro?' <span class="mut">· registro</span>':""}</td><td class="num">${p.q!=null?fmt(p.q)+" un":"—"}</td>
+        <td class="num">${p.preco!=null?reais(p.preco):p.sem?'<span class="tag t-cinza">sem etiqueta</span>':"—"}</td>
+        <td>${p.foto?`<button class="bt" data-f="${i}">Ver</button>`:""}</td></tr>`).join("")||`<tr><td colspan="4" class="mut">Sem contagens.</td></tr>`}</tbody></table></div></div>`;
+  const fecha=()=>{ fundo.remove(); document.removeEventListener("keydown",tecla); }, tecla=e=>{ if(e.key==="Escape") fecha(); };
+  fundo.onclick=e=>{ if(e.target===fundo||e.target.closest("[data-fecha]")) return fecha();
+    const b=e.target.closest("[data-f]"); if(b) verFoto(dias[+b.dataset.f].foto); };
+  document.addEventListener("keydown",tecla); document.body.appendChild(fundo);
+  fundo.querySelector("[data-fecha]").focus();
+  const poe=async(id,c)=>{ const el=fundo.querySelector("#"+id); if(!c||!el) return;
+    try{ const r=await buscaFoto(c); if(!r.ok) throw new Error(msgFoto(r));
+      el.innerHTML=`<img src="${URL.createObjectURL(await r.blob())}" alt="" style="max-width:100%;max-height:260px;border-radius:8px;cursor:zoom-in">`; el.onclick=()=>verFoto(c); }
+    catch(e){ el.textContent=e.message; } };
+  poe("cl_fp",fotoPreco&&fotoPreco.foto); poe("cl_fl",pr.fotoLote);
+}
 function modVenc(){
   const v=D.venc||{}, da=v.dias_alerta||30, hj=hoje();
-  const xs=filtra(v.lotes).map(x=>{ const tr=tendenciaLote(x,hj);
-    return {...x, tr, tendencia:tr.k, sobra:tr.sobra??null, giro:tr.giro??null,
+  const xs=filtra(v.lotes).map(x=>{ const tr=tendenciaLote(x,hj), pr=precoLote(x), pa=pr.atual?pr.atual.preco:null;
+    return {...x, tr, pr, preco:pa, valor:pa!=null&&(tr.k==="risco"||tr.k==="vencido")?Math.round((tr.sobra||0)*pa*100)/100:null,
+            tendencia:tr.k, sobra:tr.sobra??null, giro:tr.giro??null,
             risco:tr.k==="vencido"?4e6+(tr.sobra||0):tr.k==="risco"?3e6+(tr.sobra||0):tr.k==="sem"?2e6-(x.dias||0):1e6-(tr.folga||0)}; });
   const nivel=x=>x.dias<0?"vencido":x.dias<=da?"atencao":"ok";
   const lista=[["vencido",`Vencidos · ${xs.filter(x=>nivel(x)==="vencido").length}`,"ainda na loja"],
@@ -621,6 +675,15 @@ function modVenc(){
   const at=abaAtual(lista), rs=ordena(at==="todos"?xs:xs.filter(x=>nivel(x)===at),"venc",{campo:"risco",dir:-1});
   const ab=xs.filter(x=>x.dias>=0), ok=ab.filter(x=>x.tendencia==="ok"), risco=ab.filter(x=>x.tendencia==="risco"), sem=ab.filter(x=>x.tendencia==="sem");
   const vencidos=xs.filter(x=>x.dias<0), unV=vencidos.reduce((a,x)=>a+(Number(x.quantidade)||0),0), unR=risco.reduce((a,x)=>a+(x.sobra||0),0);
+  /* 17/11: quanto vale, pelo preco da gondola, o que vai vencer; e onde a loja ainda nao baixou o preco */
+  const temPrecos=!!D.vprecos, comPreco=risco.filter(x=>x.preco!=null), valR=comPreco.reduce((a,x)=>a+(x.valor||0),0), valV=vencidos.reduce((a,x)=>a+(x.valor||0),0);
+  const naoBaixou=x=>x.tendencia==="risco"&&x.pr.com.length>=2&&x.pr.atual.preco>=x.pr.primeiro.preco;
+  const semBaixar=risco.filter(naoBaixou);
+  const celPreco=(x,i)=>{ const p=x.pr;
+    const abre=`<button class="bt" data-lote="${i}" style="padding:3px 9px;font-size:12px;margin-top:4px">Fotos e histórico</button>`;
+    if(!p.atual) return `${p.semEtiqueta?'<span class="tag t-cinza">sem etiqueta</span>':'<span class="mut">sem preço</span>'}${p.fotoLote?`<br>${abre}`:""}`;
+    return `<b>${reais(p.atual.preco)}</b>${p.variacao!=null?`<span class="sub" style="color:${p.variacao<0?"var(--verde)":"var(--verm-esc)"};font-weight:700">${varTxt(p.variacao)}</span><span class="sub">era ${reais(p.primeiro.preco)}</span>`:""}
+      ${naoBaixou(x)?'<span class="tag t-amb" style="margin-top:3px">preço não baixou</span>':""}${x.valor?`<span class="sub">${reais(x.valor)} ${x.tendencia==="vencido"?"vencidos":"no vencimento"}</span>`:""}<br>${abre}`; };
   const kpi=(n,val,c,sub)=>`<div class="kpi"><span>${n}</span><b style="color:${c}">${val}</b><small>${sub}</small></div>`;
   const prev=x=>{ const t=x.tr;
     if(t.k==="vencido") return `<span class="tag t-verm">Venceu com ${fmt(t.qtd)} un</span>`;
@@ -628,25 +691,33 @@ function modVenc(){
     if(t.k==="sem") return `<span class="tag t-cinza">Sem tendência</span><span class="sub">precisa de mais uma contagem</span>`;
     if(t.k==="ok") return `<span class="tag t-azul">Acaba antes de vencer</span><span class="sub">acaba ~${dataBr(t.acaba)}${t.folga>0?`, ${t.folga} ${t.folga===1?"dia":"dias"} antes`:""} · giro ${fmt(t.giro)} un/dia</span>`;
     return `<span class="tag" style="background:#C8102E;color:#fff">ALERTA · vai vencer com ~${fmt(t.sobra)} un</span><span class="sub">${t.parado?"não está girando":`giro ${fmt(t.giro)} un/dia; precisaria de ${fmt(t.qtd/Math.max(t.restam,1))} un/dia`}</span>`; };
-  EXPORTA={nome:"vencimentos-"+at, cab:["Produto","Loja","Codigo","Lote","Vence em","Dias","Quantidade inicial (un)","Quantidade agora (un)","Contagens","Giro por dia (un)","Tendencia","Previsao","Sobra prevista no vencimento (un)","Sem contar ha (dias)","Repositor","Lider"],
+  EXPORTA={nome:"vencimentos-"+at, cab:["Produto","Loja","Codigo","Lote","Vence em","Dias","Quantidade inicial (un)","Quantidade agora (un)","Contagens","Giro por dia (un)","Tendencia","Previsao","Sobra prevista no vencimento (un)","Sem contar ha (dias)","Repositor","Lider",
+      "Preco na loja (R$)","Preco no registro (R$)","Variacao do preco (%)","Valor previsto no vencimento (R$)","Precos por data"],
     linhas:rs.map(x=>{ const t=x.tr; return [x.produto,x.loja,x.codigo,x.lote,dataBr(x.vence_em),x.dias,x.inicial,x.quantidade,
       t.pts.map(p=>`${dataBr(p.d)}: ${p.q}`).join(" | "), t.giro!=null?Math.round(t.giro*10)/10:"",
       {ok:"acaba antes de vencer",risco:"vai vencer com produto",sem:"sem tendencia",vencido:"vencido",acabou:"acabou"}[t.k],
-      t.acaba?dataBr(t.acaba):"", t.sobra??"", x.sem_atualizar, x.repositor, x.lider]; })};
+      t.acaba?dataBr(t.acaba):"", t.sobra??"", x.sem_atualizar, x.repositor, x.lider,
+      x.preco!=null?String(x.preco).replace(".",","):(x.pr.semEtiqueta?"sem etiqueta":""), x.pr.primeiro?String(x.pr.primeiro.preco).replace(".",","):"",
+      x.pr.variacao!=null?String(Math.round(x.pr.variacao*1000)/10).replace(".",","):"", x.valor!=null?String(x.valor).replace(".",","):"",
+      x.pr.pts.map(p=>`${dataBr(p.d)}: ${p.preco!=null?String(p.preco).replace(".",","):"sem etiqueta"}`).join(" | ")]; })};
   const tag=x=>`<span class="tag ${x.dias<0?"t-verm":x.dias<=da?"t-amb":"t-cinza"}">${x.dias<0?`vencido há ${-x.dias}d`:x.dias===0?"vence hoje":`vence em ${x.dias}d`}</span>`;
   const piores=risco.slice().sort((a,b)=>b.sobra-a.sobra).slice(0,3);
+  ligarModulo=()=>{ document.querySelectorAll("[data-lote]").forEach(b=>b.onclick=()=>cartaoLote(rs[+b.dataset.lote])); };
   return `<h2>Controle de Vencimentos</h2>${abas(lista)}
-    <div class="kpis">${kpi("Vão vencer com produto",risco.length,risco.length?"#C8102E":"var(--ink)",`~${fmt(unR)} un previstas no vencimento`)}
+    <div class="kpis">${kpi("Vão vencer com produto",risco.length,risco.length?"#C8102E":"var(--ink)",`~${fmt(unR)} un previstas no vencimento${valR?` · ${reais(valR)} a preço de gôndola`:""}`)}
       ${kpi("Acabam antes de vencer",ok.length,"#1E6FD9","pelo giro das contagens")}
       ${kpi("Sem tendência",sem.length,"var(--ink3)","só uma contagem até agora")}
-      ${kpi("Vencidos na loja",vencidos.length,vencidos.length?"#C8102E":"var(--ink)",`${fmt(unV)} un`)}</div>
-    ${risco.length?`<div class="alerta"><b>${plural(risco.length,"lote vai vencer","lotes vão vencer")} com produto na loja</b>, cerca de ${fmt(unR)} unidades, pelo giro das contagens. ${piores.map(x=>`${esc(x.produto)} em ${esc(x.loja)} (~${fmt(x.sobra)} un)`).join("; ")}.</div>`
+      ${kpi("Vencidos na loja",vencidos.length,vencidos.length?"#C8102E":"var(--ink)",`${fmt(unV)} un${valV?` · ${reais(valV)}`:""}`)}</div>
+    ${risco.length?`<div class="alerta"><b>${plural(risco.length,"lote vai vencer","lotes vão vencer")} com produto na loja</b>, cerca de ${fmt(unR)} unidades, pelo giro das contagens. ${piores.map(x=>`${esc(x.produto)} em ${esc(x.loja)} (~${fmt(x.sobra)} un)`).join("; ")}.${
+        temPrecos?(comPreco.length?`<br><b>Pelo preço da gôndola, isso vale cerca de ${reais(valR)}</b> (${comPreco.length} de ${plural(risco.length,"lote tem","lotes têm")} o preço informado).${semBaixar.length?` Em ${plural(semBaixar.length,"deles a loja ainda não baixou o preço: vale negociar","deles a loja ainda não baixou o preço: vale negociar")}.`:""}`
+          :`<br>Nenhum desses lotes tem o preço de venda informado ainda. O app do repositor passa a pedir o preço na próxima contagem.`):""}</div>`
       :`<div class="alerta ok">Pelo giro das contagens, todos os lotes com tendência acabam antes de vencer.</div>`}
     ${barra(`<span class="mut">A tendência usa o registro do lote e cada contagem das visitas. <b style="color:#1E6FD9">Azul</b>: acaba antes de vencer. <b style="color:#C8102E">Vermelho</b>: vai vencer com produto.</span>`)}
-    ${tabela(th("venc","produto","Produto")+th("venc","loja","Loja")+"<th>Lote</th>"+th("venc","dias","Vence")+th("venc","quantidade","Na loja",1)+"<th>Contagens</th>"+th("venc","risco","Tendência")+th("venc","sem_atualizar","Sem contar",1)+th("venc","repositor","Repositor")+th("venc","lider","Líder"),
-      rs.map(x=>{ const t=x.tr, cls=t.k==="ok"?"tend-ok":(t.k==="risco"||t.k==="vencido")?"tend-risco":"";
+    ${tabela(th("venc","produto","Produto")+th("venc","loja","Loja")+"<th>Lote</th>"+th("venc","dias","Vence")+th("venc","quantidade","Na loja",1)+(temPrecos?th("venc","preco","Preço na loja",1):"")+"<th>Contagens</th>"+th("venc","risco","Tendência")+th("venc","sem_atualizar","Sem contar",1)+th("venc","repositor","Repositor")+th("venc","lider","Líder"),
+      rs.map((x,i)=>{ const t=x.tr, cls=t.k==="ok"?"tend-ok":(t.k==="risco"||t.k==="vencido")?"tend-risco":"";
         return `<tr class="${cls}"><td><b>${esc(x.produto)}</b><span class="sub">cód. ${esc(x.sku)}</span></td><td>${esc(x.loja)}<span class="sub">${lojaSub(x)}</span></td><td>${esc(x.lote||"sem lote")}</td>
         <td>${dataBr(x.vence_em)} ${tag(x)}</td><td class="num">${x.quantidade!=null?`<span class="cel ${x.dias<0?"forte":""}">${fmt(x.quantidade)} un</span>`:"—"}</td>
+        ${temPrecos?`<td class="num">${celPreco(x,i)}</td>`:""}
         <td>${graficoLote(t)}<details><summary style="cursor:pointer;font-size:12px" class="mut">${t.pts.map(p=>fmt(p.q)).join(" → ")} un</summary>
           ${t.pts.map((p,i)=>`<div style="font-size:12px;margin-top:2px">${dataBr(p.d)} · <b>${fmt(p.q)} un</b>${i===0&&x.registrado_em?" · registro":""}</div>`).join("")}</details></td>
         <td>${prev(x)}</td><td class="num">${Number(x.sem_atualizar)>7?`<span class="tag t-verm">${x.sem_atualizar} dias</span>`:`${x.sem_atualizar??"—"} d`}</td>
